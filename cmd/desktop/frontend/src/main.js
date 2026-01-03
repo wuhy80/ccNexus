@@ -6,6 +6,7 @@ import { setLanguage } from './i18n/index.js'
 import { initUI, changeLanguage } from './modules/ui.js'
 import { loadConfig } from './modules/config.js'
 import { loadStats, switchStatsPeriod, loadStatsByPeriod, getCurrentPeriod } from './modules/stats.js'
+import { initTokenChart } from './modules/chart.js'
 import { renderEndpoints, toggleEndpointPanel, initEndpointSuccessListener, checkAllEndpointsOnStartup, switchEndpointViewMode, initEndpointViewMode, isDropdownOpen } from './modules/endpoints.js'
 import { loadLogs, toggleLogPanel, changeLogLevel, copyLogs, clearLogs } from './modules/logs.js'
 import { showDataSyncDialog } from './modules/webdav.js'
@@ -87,6 +88,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Load initial data
     await loadConfigAndRender();
     loadStatsByPeriod('daily'); // Load today's stats by default
+
+    // Initialize token chart (delayed to allow data loading)
+    setTimeout(() => {
+        initTokenChart('daily');
+    }, 500);
 
     // Restore log level from config
     try {

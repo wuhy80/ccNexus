@@ -379,6 +379,10 @@ func (a *App) GetDailyRequestDetails(limit, offset int) string {
 	return a.stats.GetDailyRequestDetails(limit, offset)
 }
 
+func (a *App) GetTokenTrendData(granularity string, period string) string {
+	return a.stats.GetTokenTrendData(granularity, period)
+}
+
 // ========== Endpoint Bindings ==========
 
 func (a *App) AddEndpoint(name, apiUrl, apiKey, transformer, model, remark string) error {

@@ -269,6 +269,125 @@ body {
     color: rgba(255, 255, 255, 0.8);
 }
 
+/* Compressed Stats Grid */
+.stats-compact-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+/* Compressed Stat Box */
+.stat-box-compact {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    text-align: center;
+    transition: transform 0.2s;
+    position: relative;
+}
+
+.stat-box-compact:hover {
+    transform: translateY(-2px);
+}
+
+.stat-box-compact .stat-header {
+    margin-bottom: 6px;
+    min-height: 16px;
+    text-align: center;
+}
+
+.stat-box-compact .stat-label {
+    font-size: 11px;
+    font-weight: normal;
+    opacity: 0.95;
+}
+
+.stat-box-compact .stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    margin: 4px 0;
+    line-height: 1.2;
+}
+
+.stat-box-compact .stat-primary {
+    font-size: 26px;
+}
+
+.stat-box-compact .stat-secondary {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.65);
+    margin: 0 4px;
+}
+
+.stat-box-compact .stat-detail {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.75);
+    margin-top: 6px;
+    -webkit-font-smoothing: antialiased;
+}
+
+.stat-box-compact .stat-text {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.stat-box-compact .stat-divider {
+    color: rgba(255, 255, 255, 0.6);
+    margin: 0;
+}
+
+.stat-box-compact .trend {
+    top: 12px;
+    right: 12px;
+    font-size: 10px;
+    padding: 2px 6px;
+}
+
+/* Chart Container */
+.chart-container {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    height: 420px;
+}
+
+.chart-controls {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.granularity-btn {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: white;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #666;
+}
+
+.granularity-btn:hover {
+    border-color: #667eea;
+    color: #667eea;
+}
+
+.granularity-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-color: transparent;
+}
+
+.granularity-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 /* Statistics Tabs */
 .stats-tabs {
     display: flex;

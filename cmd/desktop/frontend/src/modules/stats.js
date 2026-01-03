@@ -189,4 +189,15 @@ export async function switchStatsPeriod(period) {
     if (window.loadConfig) {
         window.loadConfig();
     }
+
+    // Sync chart with period change
+    try {
+        const { switchChartPeriod } = await import('./chart.js');
+        if (switchChartPeriod) {
+            await switchChartPeriod(period);
+        }
+    } catch (error) {
+        console.error('Failed to sync chart:', error);
+        // Chart module may not be loaded yet, this is not critical
+    }
 }

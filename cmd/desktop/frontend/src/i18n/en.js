@@ -219,6 +219,19 @@ export default {
         noData: 'No data available',
         loadFailed: 'Failed to load data'
     },
+    chart: {
+        minutes: 'min',
+        perRequest: 'Per Request',
+        tokenUsage: 'Token Usage Trend',
+        inputTokens: 'Input',
+        outputTokens: 'Output',
+        total: 'Total',
+        loading: 'Loading chart...',
+        noData: 'No data available for the selected period',
+        noDataHint: 'Data will appear when requests are made',
+        loadFailed: 'Failed to load chart data',
+        libraryFailed: 'Failed to load Chart.js library'
+    },
     history: {
         title: 'Historical Statistics',
         selectMonth: 'Select Month',

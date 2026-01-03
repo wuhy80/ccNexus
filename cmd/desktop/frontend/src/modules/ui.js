@@ -64,51 +64,68 @@ export function initUI() {
 
                 <!-- Current Stats View -->
                 <div id="currentStatsView">
-                    <div class="stats-grid">
-                    <div class="stat-box">
-                        <div class="stat-header">
-                            <div class="stat-label">${t('statistics.endpoints')}</div>
+                    <!-- Compressed Stats Grid -->
+                    <div class="stats-compact-grid">
+                        <div class="stat-box-compact">
+                            <div class="stat-header">
+                                <div class="stat-label">${t('statistics.endpoints')}</div>
+                            </div>
+                            <div class="stat-value">
+                                <span id="activeEndpointsDisplay" class="stat-primary">0</span>
+                                <span class="stat-secondary"> / </span>
+                                <span id="totalEndpointsDisplay" class="stat-secondary">0</span>
+                            </div>
+                            <div class="stat-detail">${t('statistics.activeTotal')}</div>
                         </div>
-                        <div class="stat-value">
-                            <span id="activeEndpointsDisplay" class="stat-primary">0</span>
-                            <span class="stat-secondary"> / </span>
-                            <span id="totalEndpointsDisplay" class="stat-secondary">0</span>
+                        <div class="stat-box-compact">
+                            <div class="stat-header">
+                                <div class="stat-label">${t('statistics.totalRequests')}</div>
+                                <span class="trend" id="requestsTrend">→ 0%</span>
+                            </div>
+                            <div class="stat-value">
+                                <span id="periodTotalRequests">0</span>
+                            </div>
+                            <div class="stat-detail">
+                                <span id="periodSuccess">0</span>
+                                <span class="stat-text"> ${t('statistics.success')}</span>
+                                <span class="stat-divider">/</span>
+                                <span id="periodFailed">0</span>
+                                <span class="stat-text"> ${t('statistics.failed')}</span>
+                            </div>
                         </div>
-                        <div class="stat-detail">${t('statistics.activeTotal')}</div>
+                        <div class="stat-box-compact">
+                            <div class="stat-header">
+                                <div class="stat-label">${t('statistics.totalTokens')}</div>
+                                <span class="trend" id="tokensTrend">→ 0%</span>
+                            </div>
+                            <div class="stat-value">
+                                <span id="periodTotalTokens">0</span>
+                            </div>
+                            <div class="stat-detail">
+                                <span id="periodInputTokens">0</span>
+                                <span class="stat-text"> ${t('statistics.in')}</span>
+                                <span class="stat-divider">/</span>
+                                <span id="periodOutputTokens">0</span>
+                                <span class="stat-text"> ${t('statistics.out')}</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="stat-box">
-                        <div class="stat-header">
-                            <div class="stat-label">${t('statistics.totalRequests')}</div>
-                            <span class="trend" id="requestsTrend">→ 0%</span>
+
+                    <!-- Token Trend Chart -->
+                    <div class="chart-container">
+                        <div class="chart-controls">
+                            <button class="granularity-btn active" data-granularity="5min" onclick="window.switchGranularity('5min')">
+                                5${t('chart.minutes') || '分钟'}
+                            </button>
+                            <button class="granularity-btn" data-granularity="30min" onclick="window.switchGranularity('30min')">
+                                30${t('chart.minutes') || '分钟'}
+                            </button>
+                            <button class="granularity-btn" data-granularity="request" onclick="window.switchGranularity('request')">
+                                ${t('chart.perRequest') || '每次请求'}
+                            </button>
                         </div>
-                        <div class="stat-value">
-                            <span id="periodTotalRequests">0</span>
-                        </div>
-                        <div class="stat-detail">
-                            <span id="periodSuccess">0</span>
-                            <span class="stat-text"> ${t('statistics.success')}</span>
-                            <span class="stat-divider">/</span>
-                            <span id="periodFailed">0</span>
-                            <span class="stat-text"> ${t('statistics.failed')}</span>
-                        </div>
+                        <canvas id="tokenChartContainer"></canvas>
                     </div>
-                    <div class="stat-box">
-                        <div class="stat-header">
-                            <div class="stat-label">${t('statistics.totalTokens')}</div>
-                            <span class="trend" id="tokensTrend">→ 0%</span>
-                        </div>
-                        <div class="stat-value">
-                            <span id="periodTotalTokens">0</span>
-                        </div>
-                        <div class="stat-detail">
-                            <span id="periodInputTokens">0</span>
-                            <span class="stat-text"> ${t('statistics.in')}</span>
-                            <span class="stat-divider">/</span>
-                            <span id="periodOutputTokens">0</span>
-                            <span class="stat-text"> ${t('statistics.out')}</span>
-                        </div>
-                    </div>
-                </div>
 
                 <!-- Hidden cumulative stats for endpoint cards -->
                 <div style="display: none;">

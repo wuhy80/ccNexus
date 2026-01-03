@@ -219,6 +219,19 @@ export default {
         noData: '暂无数据',
         loadFailed: '加载数据失败'
     },
+    chart: {
+        minutes: '分钟',
+        perRequest: '每次请求',
+        tokenUsage: 'Token使用趋势',
+        inputTokens: '输入',
+        outputTokens: '输出',
+        total: '汇总',
+        loading: '加载图表中...',
+        noData: '所选周期暂无数据',
+        noDataHint: '发起请求后将显示数据',
+        loadFailed: '加载图表数据失败',
+        libraryFailed: '加载图表库失败'
+    },
     history: {
         title: '历史统计',
         selectMonth: '选择月份',

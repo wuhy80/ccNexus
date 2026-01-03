@@ -95,6 +95,8 @@ export function GetTheme():Promise<string>;
 
 export function GetThemeAuto():Promise<boolean>;
 
+export function GetTokenTrendData(arg1:string,arg2:string):Promise<string>;
+
 export function GetUpdateSettings():Promise<string>;
 
 export function GetVersion():Promise<string>;

@@ -190,6 +190,10 @@ export function GetThemeAuto() {
   return window['go']['main']['App']['GetThemeAuto']();
 }
 
+export function GetTokenTrendData(arg1, arg2) {
+  return window['go']['main']['App']['GetTokenTrendData'](arg1, arg2);
+}
+
 export function GetUpdateSettings() {
   return window['go']['main']['App']['GetUpdateSettings']();
 }

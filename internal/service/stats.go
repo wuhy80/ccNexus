@@ -274,3 +274,248 @@ func (s *StatsService) getRequestDetailsByDate(date string, limit, offset int) s
 	data, _ := json.Marshal(result)
 	return string(data)
 }
+
+// GetTokenTrendData returns token usage trend data for charting
+func (s *StatsService) GetTokenTrendData(granularity string, period string) string {
+	if s.storage == nil {
+		return jsonError("Storage not initialized")
+	}
+
+	// Calculate date range based on period
+	var startDate, endDate string
+	now := time.Now()
+
+	switch period {
+	case "yesterday":
+		startDate = now.AddDate(0, 0, -1).Format("2006-01-02")
+		endDate = startDate
+	case "weekly":
+		weekday := int(now.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+		startDate = now.AddDate(0, 0, -(weekday - 1)).Format("2006-01-02")
+		endDate = now.Format("2006-01-02")
+	case "monthly":
+		startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+		endDate = now.Format("2006-01-02")
+	default: // daily
+		startDate = now.Format("2006-01-02")
+		endDate = startDate
+	}
+
+	// Fetch request stats from storage
+	requests, err := s.storage.GetRequestStats("", startDate, endDate, 10000, 0)
+	if err != nil {
+		return jsonError("Failed to get request stats: " + err.Error())
+	}
+
+	// Validate granularity for multi-day periods
+	// 5min and 30min granularity only make sense for single-day views
+	if (period == "weekly" || period == "monthly") && (granularity == "5min" || granularity == "30min") {
+		return jsonError("Time-based granularity (5min/30min) is not supported for multi-day periods. Use 'request' granularity instead.")
+	}
+
+	// Aggregate data based on granularity
+	var result map[string]interface{}
+	switch granularity {
+	case "5min":
+		result = s.aggregateBy5Minutes(requests, startDate, endDate, period)
+	case "30min":
+		result = s.aggregateBy30Minutes(requests, startDate, endDate, period)
+	case "request":
+		result = s.aggregateByRequest(requests, period)
+	default:
+		return jsonError("Invalid granularity: " + granularity)
+	}
+
+	data, _ := json.Marshal(result)
+	return string(data)
+}
+
+// aggregateBy5Minutes aggregates requests into 5-minute time slots (288 slots per day)
+func (s *StatsService) aggregateBy5Minutes(requests []storage.RequestStat, startDate, endDate, period string) map[string]interface{} {
+	timeSlots := generateTimeSlots(5)
+	endpointData := make(map[string]map[string][]int)
+	totalInput := make([]int, len(timeSlots))
+	totalOutput := make([]int, len(timeSlots))
+
+	for _, req := range requests {
+		slotIndex := getTimeSlotIndex(req.Timestamp, 5)
+		if slotIndex < 0 || slotIndex >= len(timeSlots) {
+			continue
+		}
+
+		// Initialize endpoint data if not exists
+		if _, exists := endpointData[req.EndpointName]; !exists {
+			endpointData[req.EndpointName] = map[string][]int{
+				"inputTokens":  make([]int, len(timeSlots)),
+				"outputTokens": make([]int, len(timeSlots)),
+			}
+		}
+
+		// Merge cache tokens into input
+		inputTotal := req.InputTokens + req.CacheCreationTokens + req.CacheReadTokens
+
+		endpointData[req.EndpointName]["inputTokens"][slotIndex] += inputTotal
+		endpointData[req.EndpointName]["outputTokens"][slotIndex] += req.OutputTokens
+		totalInput[slotIndex] += inputTotal
+		totalOutput[slotIndex] += req.OutputTokens
+	}
+
+	return map[string]interface{}{
+		"success":     true,
+		"granularity": "5min",
+		"period":      period,
+		"dateRange":   map[string]string{"start": startDate, "end": endDate},
+		"data": map[string]interface{}{
+			"timestamps": timeSlots,
+			"endpoints":  endpointData,
+			"total": map[string][]int{
+				"inputTokens":  totalInput,
+				"outputTokens": totalOutput,
+			},
+		},
+	}
+}
+
+// aggregateBy30Minutes aggregates requests into 30-minute time slots (48 slots per day)
+func (s *StatsService) aggregateBy30Minutes(requests []storage.RequestStat, startDate, endDate, period string) map[string]interface{} {
+	timeSlots := generateTimeSlots(30)
+	endpointData := make(map[string]map[string][]int)
+	totalInput := make([]int, len(timeSlots))
+	totalOutput := make([]int, len(timeSlots))
+
+	for _, req := range requests {
+		slotIndex := getTimeSlotIndex(req.Timestamp, 30)
+		if slotIndex < 0 || slotIndex >= len(timeSlots) {
+			continue
+		}
+
+		// Initialize endpoint data if not exists
+		if _, exists := endpointData[req.EndpointName]; !exists {
+			endpointData[req.EndpointName] = map[string][]int{
+				"inputTokens":  make([]int, len(timeSlots)),
+				"outputTokens": make([]int, len(timeSlots)),
+			}
+		}
+
+		// Merge cache tokens into input
+		inputTotal := req.InputTokens + req.CacheCreationTokens + req.CacheReadTokens
+
+		endpointData[req.EndpointName]["inputTokens"][slotIndex] += inputTotal
+		endpointData[req.EndpointName]["outputTokens"][slotIndex] += req.OutputTokens
+		totalInput[slotIndex] += inputTotal
+		totalOutput[slotIndex] += req.OutputTokens
+	}
+
+	return map[string]interface{}{
+		"success":     true,
+		"granularity": "30min",
+		"period":      period,
+		"dateRange":   map[string]string{"start": startDate, "end": endDate},
+		"data": map[string]interface{}{
+			"timestamps": timeSlots,
+			"endpoints":  endpointData,
+			"total": map[string][]int{
+				"inputTokens":  totalInput,
+				"outputTokens": totalOutput,
+			},
+		},
+	}
+}
+
+// aggregateByRequest aggregates by individual requests (max 200 points)
+func (s *StatsService) aggregateByRequest(requests []storage.RequestStat, period string) map[string]interface{} {
+	maxRequests := 200
+	if len(requests) > maxRequests {
+		requests = requests[:maxRequests]
+	}
+
+	// Reverse the requests slice to get chronological order (database returns DESC)
+	// This ensures the chart displays oldest to newest from left to right
+	for i, j := 0, len(requests)-1; i < j; i, j = i+1, j-1 {
+		requests[i], requests[j] = requests[j], requests[i]
+	}
+
+	numRequests := len(requests)
+	timestamps := make([]string, numRequests)
+
+	// First pass: collect all unique endpoint names
+	endpointNames := make(map[string]bool)
+	for _, req := range requests {
+		endpointNames[req.EndpointName] = true
+	}
+
+	// Initialize data structures with correct length for all endpoints
+	endpointData := make(map[string]map[string][]int)
+	for name := range endpointNames {
+		endpointData[name] = map[string][]int{
+			"inputTokens":  make([]int, numRequests),
+			"outputTokens": make([]int, numRequests),
+		}
+	}
+
+	totalInput := make([]int, numRequests)
+	totalOutput := make([]int, numRequests)
+
+	// Second pass: fill in the data
+	for i, req := range requests {
+		timestamps[i] = req.Timestamp.Format("15:04:05")
+
+		// Merge cache tokens into input
+		inputTotal := req.InputTokens + req.CacheCreationTokens + req.CacheReadTokens
+
+		// Only the current endpoint has data, others remain 0
+		endpointData[req.EndpointName]["inputTokens"][i] = inputTotal
+		endpointData[req.EndpointName]["outputTokens"][i] = req.OutputTokens
+
+		totalInput[i] = inputTotal
+		totalOutput[i] = req.OutputTokens
+	}
+
+	return map[string]interface{}{
+		"success":     true,
+		"granularity": "request",
+		"period":      period,
+		"data": map[string]interface{}{
+			"timestamps": timestamps,
+			"endpoints":  endpointData,
+			"total": map[string][]int{
+				"inputTokens":  totalInput,
+				"outputTokens": totalOutput,
+			},
+		},
+	}
+}
+
+// generateTimeSlots generates time slot labels for a given interval in minutes
+func generateTimeSlots(intervalMinutes int) []string {
+	slotsPerDay := (24 * 60) / intervalMinutes
+	slots := make([]string, slotsPerDay)
+	for i := 0; i < slotsPerDay; i++ {
+		totalMinutes := i * intervalMinutes
+		hour := totalMinutes / 60
+		minute := totalMinutes % 60
+		slots[i] = time.Date(0, 1, 1, hour, minute, 0, 0, time.UTC).Format("15:04")
+	}
+	return slots
+}
+
+// getTimeSlotIndex calculates which time slot a timestamp belongs to
+func getTimeSlotIndex(timestamp time.Time, intervalMinutes int) int {
+	hour := timestamp.Hour()
+	minute := timestamp.Minute()
+	totalMinutes := hour*60 + minute
+	return totalMinutes / intervalMinutes
+}
+
+// jsonError returns a JSON error response
+func jsonError(message string) string {
+	result := map[string]interface{}{
+		"success": false,
+		"message": message,
+	}
+	data, _ := json.Marshal(result)
+	return string(data)
+}
