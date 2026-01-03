@@ -18,7 +18,7 @@ import (
 )
 
 // handleStreamingResponse processes streaming SSE responses
-func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Response, endpoint config.Endpoint, trans transformer.Transformer, transformerName string, thinkingEnabled bool, modelName string, bodyBytes []byte) (int, int, string) {
+func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Response, endpoint config.Endpoint, trans transformer.Transformer, transformerName string, thinkingEnabled bool, modelName string, bodyBytes []byte) (transformer.TokenUsageDetail, string) {
 	// Copy response headers except Content-Length and Content-Encoding
 	for key, values := range resp.Header {
 		if key == "Content-Length" || key == "Content-Encoding" {
@@ -34,7 +34,7 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 	if !ok {
 		logger.Error("[%s] ResponseWriter does not support flushing", endpoint.Name)
 		resp.Body.Close()
-		return 0, 0, ""
+		return transformer.TokenUsageDetail{}, ""
 	}
 
 	// Handle gzip-encoded response body
@@ -44,7 +44,7 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 		if err != nil {
 			logger.Error("[%s] Failed to create gzip reader: %v", endpoint.Name, err)
 			resp.Body.Close()
-			return 0, 0, ""
+			return transformer.TokenUsageDetail{}, ""
 		}
 		defer gzipReader.Close()
 		reader = gzipReader
@@ -69,7 +69,7 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024)
 
-	var inputTokens, outputTokens int
+	var usage transformer.TokenUsageDetail
 	var buffer bytes.Buffer
 	var outputText strings.Builder
 	eventCount := 0
@@ -112,7 +112,7 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 			} else if len(transformedEvent) > 0 {
 				logger.DebugLog("[%s] SSE Event #%d (Transformed): %s", endpoint.Name, eventCount, string(transformedEvent))
 
-				p.extractTokensFromEvent(transformedEvent, &inputTokens, &outputTokens)
+				p.extractTokensFromEvent(transformedEvent, &usage)
 				p.extractTextFromEvent(transformedEvent, &outputText)
 
 				if _, writeErr := w.Write(transformedEvent); writeErr != nil {
@@ -136,7 +136,7 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 	}
 
 	resp.Body.Close()
-	return inputTokens, outputTokens, outputText.String()
+	return usage, outputText.String()
 }
 
 // transformStreamEvent transforms a single SSE event
@@ -174,8 +174,8 @@ func (p *Proxy) transformStreamEvent(eventData []byte, trans transformer.Transfo
 	}
 }
 
-// extractTokensFromEvent extracts token counts from SSE event
-func (p *Proxy) extractTokensFromEvent(eventData []byte, inputTokens, outputTokens *int) {
+// extractTokensFromEvent extracts detailed token usage from SSE event
+func (p *Proxy) extractTokensFromEvent(eventData []byte, usage *transformer.TokenUsageDetail) {
 	scanner := bufio.NewScanner(bytes.NewReader(eventData))
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -192,16 +192,17 @@ func (p *Proxy) extractTokensFromEvent(eventData []byte, inputTokens, outputToke
 		eventType, _ := event["type"].(string)
 		if eventType == "message_start" {
 			if message, ok := event["message"].(map[string]interface{}); ok {
-				if usage, ok := message["usage"].(map[string]interface{}); ok {
-					if input, ok := usage["input_tokens"].(float64); ok {
-						*inputTokens = int(input)
-					}
+				if usageMap, ok := message["usage"].(map[string]interface{}); ok {
+					detail := transformer.ExtractTokenUsageDetail(usageMap)
+					usage.InputTokens = detail.InputTokens
+					usage.CacheCreationInputTokens = detail.CacheCreationInputTokens
+					usage.CacheReadInputTokens = detail.CacheReadInputTokens
 				}
 			}
 		} else if eventType == "message_delta" {
-			if usage, ok := event["usage"].(map[string]interface{}); ok {
-				if output, ok := usage["output_tokens"].(float64); ok {
-					*outputTokens = int(output)
+			if usageMap, ok := event["usage"].(map[string]interface{}); ok {
+				if output, ok := usageMap["output_tokens"].(float64); ok {
+					usage.OutputTokens = int(output)
 				}
 			}
 		}

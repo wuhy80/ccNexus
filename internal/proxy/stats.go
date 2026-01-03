@@ -6,60 +6,88 @@ import (
 	"time"
 
 	"github.com/lich0821/ccNexus/internal/logger"
+	"github.com/lich0821/ccNexus/internal/transformer"
 )
 
 // DailyStats represents statistics for a single day
 type DailyStats struct {
-	Date         string `json:"date"` // Format: "2006-01-02"
-	Requests     int    `json:"requests"`
-	Errors       int    `json:"errors"`
-	InputTokens  int    `json:"inputTokens"`
-	OutputTokens int    `json:"outputTokens"`
+	Date                string `json:"date"` // Format: "2006-01-02"
+	Requests            int    `json:"requests"`
+	Errors              int    `json:"errors"`
+	InputTokens         int    `json:"inputTokens"`
+	CacheCreationTokens int    `json:"cacheCreationTokens"` // 新增
+	CacheReadTokens     int    `json:"cacheReadTokens"`     // 新增
+	OutputTokens        int    `json:"outputTokens"`
 }
 
 // EndpointStats represents statistics for a single endpoint
 type EndpointStats struct {
-	Requests     int                    `json:"requests"`     // Computed from DailyHistory
-	Errors       int                    `json:"errors"`       // Computed from DailyHistory
-	InputTokens  int                    `json:"inputTokens"`  // Computed from DailyHistory
-	OutputTokens int                    `json:"outputTokens"` // Computed from DailyHistory
-	LastUsed     time.Time              `json:"lastUsed"`
-	DailyHistory map[string]*DailyStats `json:"dailyHistory"` // Key: date string (source of truth)
+	Requests            int                    `json:"requests"`            // Computed from DailyHistory
+	Errors              int                    `json:"errors"`              // Computed from DailyHistory
+	InputTokens         int                    `json:"inputTokens"`         // Computed from DailyHistory
+	CacheCreationTokens int                    `json:"cacheCreationTokens"` // 新增
+	CacheReadTokens     int                    `json:"cacheReadTokens"`     // 新增
+	OutputTokens        int                    `json:"outputTokens"`        // Computed from DailyHistory
+	LastUsed            time.Time              `json:"lastUsed"`
+	DailyHistory        map[string]*DailyStats `json:"dailyHistory"` // Key: date string (source of truth)
 }
 
 // StatsStorage defines the interface for stats persistence
 type StatsStorage interface {
 	RecordDailyStat(stat interface{}) error
+	RecordRequestStat(stat interface{}) error // 新增
 	GetTotalStats() (int, map[string]interface{}, error)
 	GetDailyStats(endpointName, startDate, endDate string) ([]interface{}, error)
 }
 
 // StatRecord represents a stat record for storage
 type StatRecord struct {
-	EndpointName string
-	Date         string
-	Requests     int
-	Errors       int
-	InputTokens  int
-	OutputTokens int
-	DeviceID     string
+	EndpointName        string
+	Date                string
+	Requests            int
+	Errors              int
+	InputTokens         int
+	CacheCreationTokens int // 新增
+	CacheReadTokens     int // 新增
+	OutputTokens        int
+	DeviceID            string
+}
+
+// RequestStatRecord represents a request-level stat record (新增)
+type RequestStatRecord struct {
+	EndpointName        string
+	RequestID           string
+	Timestamp           time.Time
+	Date                string
+	InputTokens         int
+	CacheCreationTokens int
+	CacheReadTokens     int
+	OutputTokens        int
+	Model               string
+	IsStreaming         bool
+	Success             bool
+	DeviceID            string
 }
 
 // StatsData represents aggregated stats data
 type StatsData struct {
-	Requests     int
-	Errors       int
-	InputTokens  int64
-	OutputTokens int64
+	Requests            int
+	Errors              int
+	InputTokens         int64
+	CacheCreationTokens int64 // 新增
+	CacheReadTokens     int64 // 新增
+	OutputTokens        int64
 }
 
 // DailyRecord represents daily stats
 type DailyRecord struct {
-	Date         string
-	Requests     int
-	Errors       int
-	InputTokens  int
-	OutputTokens int
+	Date                string
+	Requests            int
+	Errors              int
+	InputTokens         int
+	CacheCreationTokens int // 新增
+	CacheReadTokens     int // 新增
+	OutputTokens        int
 }
 
 // Stats represents overall proxy statistics
@@ -124,22 +152,39 @@ func (s *Stats) RecordError(endpointName string) {
 }
 
 // RecordTokens records token usage for an endpoint
-func (s *Stats) RecordTokens(endpointName string, inputTokens, outputTokens int) {
+func (s *Stats) RecordTokens(endpointName string, usage transformer.TokenUsageDetail) {
 	date := time.Now().Format("2006-01-02")
 
 	stat := &StatRecord{
-		EndpointName: endpointName,
-		Date:         date,
-		Requests:     0,
-		Errors:       0,
-		InputTokens:  inputTokens,
-		OutputTokens: outputTokens,
-		DeviceID:     s.deviceID,
+		EndpointName:        endpointName,
+		Date:                date,
+		Requests:            0,
+		Errors:              0,
+		InputTokens:         usage.InputTokens,
+		CacheCreationTokens: usage.CacheCreationInputTokens,
+		CacheReadTokens:     usage.CacheReadInputTokens,
+		OutputTokens:        usage.OutputTokens,
+		DeviceID:            s.deviceID,
 	}
 
 	if err := s.storage.RecordDailyStat(stat); err != nil {
 		logger.Error("Failed to record tokens: %v", err)
 	}
+}
+
+// RecordRequestStat records a request-level statistic (新增)
+func (s *Stats) RecordRequestStat(record *RequestStatRecord) {
+	record.DeviceID = s.deviceID
+	record.Date = record.Timestamp.Format("2006-01-02")
+
+	if err := s.storage.RecordRequestStat(record); err != nil {
+		logger.Error("Failed to record request stat: %v", err)
+	}
+}
+
+// GetStorage returns the storage interface (新增 - for cleanup operations)
+func (s *Stats) GetStorage() StatsStorage {
+	return s.storage
 }
 
 // scheduleSave schedules a save operation with debounce to avoid frequent writes
@@ -187,12 +232,14 @@ func (s *Stats) GetStats() (int, map[string]*EndpointStats) {
 		}
 
 		result[name] = &EndpointStats{
-			Requests:     int(v.FieldByName("Requests").Int()),
-			Errors:       int(v.FieldByName("Errors").Int()),
-			InputTokens:  int(v.FieldByName("InputTokens").Int()),
-			OutputTokens: int(v.FieldByName("OutputTokens").Int()),
-			LastUsed:     time.Now(),
-			DailyHistory: make(map[string]*DailyStats),
+			Requests:            int(v.FieldByName("Requests").Int()),
+			Errors:              int(v.FieldByName("Errors").Int()),
+			InputTokens:         int(v.FieldByName("InputTokens").Int()),
+			CacheCreationTokens: int(v.FieldByName("CacheCreationTokens").Int()),
+			CacheReadTokens:     int(v.FieldByName("CacheReadTokens").Int()),
+			OutputTokens:        int(v.FieldByName("OutputTokens").Int()),
+			LastUsed:            time.Now(),
+			DailyHistory:        make(map[string]*DailyStats),
 		}
 	}
 
@@ -258,6 +305,8 @@ func (s *Stats) GetPeriodStats(startDate, endDate string) map[string]*DailyStats
 			aggregated.Requests += int(v.FieldByName("Requests").Int())
 			aggregated.Errors += int(v.FieldByName("Errors").Int())
 			aggregated.InputTokens += int(v.FieldByName("InputTokens").Int())
+			aggregated.CacheCreationTokens += int(v.FieldByName("CacheCreationTokens").Int())
+			aggregated.CacheReadTokens += int(v.FieldByName("CacheReadTokens").Int())
 			aggregated.OutputTokens += int(v.FieldByName("OutputTokens").Int())
 		}
 
@@ -295,11 +344,13 @@ func (s *Stats) GetDailyStats(date string) map[string]*DailyStats {
 			}
 
 			result[endpointName] = &DailyStats{
-				Date:         v.FieldByName("Date").String(),
-				Requests:     int(v.FieldByName("Requests").Int()),
-				Errors:       int(v.FieldByName("Errors").Int()),
-				InputTokens:  int(v.FieldByName("InputTokens").Int()),
-				OutputTokens: int(v.FieldByName("OutputTokens").Int()),
+				Date:                v.FieldByName("Date").String(),
+				Requests:            int(v.FieldByName("Requests").Int()),
+				Errors:              int(v.FieldByName("Errors").Int()),
+				InputTokens:         int(v.FieldByName("InputTokens").Int()),
+				CacheCreationTokens: int(v.FieldByName("CacheCreationTokens").Int()),
+				CacheReadTokens:     int(v.FieldByName("CacheReadTokens").Int()),
+				OutputTokens:        int(v.FieldByName("OutputTokens").Int()),
 			}
 		}
 	}

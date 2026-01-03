@@ -35,7 +35,7 @@ type OpenAIMessage struct {
 type OpenAIRequest struct {
 	Model               string          `json:"model"`
 	Messages            []OpenAIMessage `json:"messages"`
-	MaxTokens           int             `json:"max_tokens,omitempty"`           // Legacy field
+	MaxTokens           int             `json:"max_tokens,omitempty"` // Legacy field
 	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"`
 	Temperature         *float64        `json:"temperature,omitempty"`
 	Stream              bool            `json:"stream,omitempty"`
@@ -97,6 +97,71 @@ type OpenAIStreamChunk struct {
 
 // Claude API structures
 
+// ClaudeUsage captures all usage counters returned by Claude, including prompt cache fields.
+type ClaudeUsage struct {
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
+}
+
+// TotalInputTokens returns the combined prompt tokens, including cache reads/writes.
+func (u ClaudeUsage) TotalInputTokens() int {
+	return u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
+}
+
+// ExtractInputTokens sums Claude usage data represented as a generic map (e.g. SSE events).
+func ExtractInputTokens(usage map[string]interface{}) int {
+	if usage == nil {
+		return 0
+	}
+
+	total := 0
+	if val, ok := usage["input_tokens"].(float64); ok {
+		total += int(val)
+	}
+	if val, ok := usage["cache_creation_input_tokens"].(float64); ok {
+		total += int(val)
+	}
+	if val, ok := usage["cache_read_input_tokens"].(float64); ok {
+		total += int(val)
+	}
+	return total
+}
+
+// TokenUsageDetail represents detailed token usage breakdown
+type TokenUsageDetail struct {
+	InputTokens              int // Standard input tokens
+	CacheCreationInputTokens int // Tokens used for cache creation
+	CacheReadInputTokens     int // Tokens read from cache
+	OutputTokens             int // Output tokens
+}
+
+// TotalInputTokens returns the sum of all input token types
+func (t *TokenUsageDetail) TotalInputTokens() int {
+	return t.InputTokens + t.CacheCreationInputTokens + t.CacheReadInputTokens
+}
+
+// ExtractTokenUsageDetail extracts detailed token usage from API response
+func ExtractTokenUsageDetail(usage map[string]interface{}) TokenUsageDetail {
+	detail := TokenUsageDetail{}
+
+	if val, ok := usage["input_tokens"].(float64); ok {
+		detail.InputTokens = int(val)
+	}
+	if val, ok := usage["cache_creation_input_tokens"].(float64); ok {
+		detail.CacheCreationInputTokens = int(val)
+	}
+	if val, ok := usage["cache_read_input_tokens"].(float64); ok {
+		detail.CacheReadInputTokens = int(val)
+	}
+	if val, ok := usage["output_tokens"].(float64); ok {
+		detail.OutputTokens = int(val)
+	}
+
+	return detail
+}
+
 // ClaudeMessage represents a message in Claude format
 type ClaudeMessage struct {
 	Role         string      `json:"role"`
@@ -133,10 +198,7 @@ type ClaudeResponse struct {
 	Model        string        `json:"model"`
 	StopReason   string        `json:"stop_reason"`
 	StopSequence string        `json:"stop_sequence,omitempty"`
-	Usage        struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
-	} `json:"usage"`
+	Usage        ClaudeUsage   `json:"usage"`
 }
 
 // ClaudeStreamEvent represents a Claude streaming event
@@ -159,12 +221,9 @@ type ClaudeStreamEvent struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"content"`
-		Model      string `json:"model"`
-		StopReason string `json:"stop_reason"`
-		Usage      struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
-		} `json:"usage"`
+		Model      string      `json:"model"`
+		StopReason string      `json:"stop_reason"`
+		Usage      ClaudeUsage `json:"usage"`
 	} `json:"message,omitempty"`
 	Usage struct {
 		OutputTokens int `json:"output_tokens"`
@@ -319,8 +378,8 @@ type GeminiStreamChunk struct {
 
 // OpenAI2InputItem represents an input item for Responses API
 type OpenAI2InputItem struct {
-	Type    string              `json:"type"`              // "message"
-	Role    string              `json:"role,omitempty"`    // "user", "assistant", "system"
+	Type    string               `json:"type"`              // "message"
+	Role    string               `json:"role,omitempty"`    // "user", "assistant", "system"
 	Content []OpenAI2ContentPart `json:"content,omitempty"` // content parts
 }
 
@@ -329,9 +388,9 @@ type OpenAI2ContentPart struct {
 	Type string `json:"type"` // "input_text", "output_text", "tool_use", "tool_result"
 	Text string `json:"text,omitempty"`
 	// Tool use fields
-	ID        string                 `json:"id,omitempty"`
-	Name      string                 `json:"name,omitempty"`
-	Arguments string                 `json:"arguments,omitempty"`
+	ID        string `json:"id,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
 	// Tool result fields
 	ToolUseID string `json:"tool_use_id,omitempty"`
 	Output    string `json:"output,omitempty"`
@@ -347,20 +406,20 @@ type OpenAI2Tool struct {
 
 // OpenAI2Request represents an OpenAI Responses API request
 type OpenAI2Request struct {
-	Model        string             `json:"model"`
-	Input        interface{}        `json:"input"`                   // string or []OpenAI2InputItem
-	Instructions string             `json:"instructions,omitempty"`  // system prompt
-	Tools        []OpenAI2Tool      `json:"tools,omitempty"`
-	Stream       bool               `json:"stream,omitempty"`
-	MaxOutputTokens int             `json:"max_output_tokens,omitempty"`
-	Temperature  *float64           `json:"temperature,omitempty"`
+	Model           string        `json:"model"`
+	Input           interface{}   `json:"input"`                  // string or []OpenAI2InputItem
+	Instructions    string        `json:"instructions,omitempty"` // system prompt
+	Tools           []OpenAI2Tool `json:"tools,omitempty"`
+	Stream          bool          `json:"stream,omitempty"`
+	MaxOutputTokens int           `json:"max_output_tokens,omitempty"`
+	Temperature     *float64      `json:"temperature,omitempty"`
 }
 
 // OpenAI2OutputItem represents an output item in Responses API response
 type OpenAI2OutputItem struct {
-	Type    string              `json:"type"`              // "message", "function_call"
-	ID      string              `json:"id,omitempty"`
-	Role    string              `json:"role,omitempty"`
+	Type    string               `json:"type"` // "message", "function_call"
+	ID      string               `json:"id,omitempty"`
+	Role    string               `json:"role,omitempty"`
 	Content []OpenAI2ContentPart `json:"content,omitempty"`
 	// Function call fields
 	Name      string `json:"name,omitempty"`
@@ -383,11 +442,11 @@ type OpenAI2Response struct {
 
 // OpenAI2StreamEvent represents a streaming event from Responses API
 type OpenAI2StreamEvent struct {
-	Type         string             `json:"type"` // "response.created", "response.output_item.added", "response.content_part.delta", etc.
-	Response     *OpenAI2Response   `json:"response,omitempty"`
-	OutputIndex  int                `json:"output_index,omitempty"`
-	ContentIndex int                `json:"content_index,omitempty"`
-	Item         *OpenAI2OutputItem `json:"item,omitempty"`
+	Type         string              `json:"type"` // "response.created", "response.output_item.added", "response.content_part.delta", etc.
+	Response     *OpenAI2Response    `json:"response,omitempty"`
+	OutputIndex  int                 `json:"output_index,omitempty"`
+	ContentIndex int                 `json:"content_index,omitempty"`
+	Item         *OpenAI2OutputItem  `json:"item,omitempty"`
 	Part         *OpenAI2ContentPart `json:"part,omitempty"`
-	Delta        string             `json:"delta,omitempty"` // Direct string for text delta
+	Delta        string              `json:"delta,omitempty"` // Direct string for text delta
 }

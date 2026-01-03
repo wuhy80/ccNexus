@@ -17,22 +17,43 @@ type Endpoint struct {
 }
 
 type DailyStat struct {
-	ID           int64
-	EndpointName string
-	Date         string
-	Requests     int
-	Errors       int
-	InputTokens  int
-	OutputTokens int
-	DeviceID     string
-	CreatedAt    time.Time
+	ID                  int64
+	EndpointName        string
+	Date                string
+	Requests            int
+	Errors              int
+	InputTokens         int
+	CacheCreationTokens int // 新增：缓存创建 token
+	CacheReadTokens     int // 新增：缓存读取 token
+	OutputTokens        int
+	DeviceID            string
+	CreatedAt           time.Time
 }
 
 type EndpointStats struct {
-	Requests     int
-	Errors       int
-	InputTokens  int64
-	OutputTokens int64
+	Requests            int
+	Errors              int
+	InputTokens         int64
+	CacheCreationTokens int64 // 新增：缓存创建 token
+	CacheReadTokens     int64 // 新增：缓存读取 token
+	OutputTokens        int64
+}
+
+// RequestStat 请求级别统计（新增）
+type RequestStat struct {
+	ID                  int64
+	EndpointName        string
+	RequestID           string
+	Timestamp           time.Time
+	Date                string
+	InputTokens         int
+	CacheCreationTokens int
+	CacheReadTokens     int
+	OutputTokens        int
+	Model               string
+	IsStreaming         bool
+	Success             bool
+	DeviceID            string
 }
 
 type Storage interface {
@@ -48,6 +69,12 @@ type Storage interface {
 	GetAllStats() (map[string][]DailyStat, error)
 	GetTotalStats() (int, map[string]*EndpointStats, error)
 	GetEndpointTotalStats(endpointName string) (*EndpointStats, error)
+
+	// Request Stats（新增）
+	RecordRequestStat(stat *RequestStat) error
+	GetRequestStats(endpointName string, startDate, endDate string, limit, offset int) ([]RequestStat, error)
+	GetRequestStatsCount(endpointName string, startDate, endDate string) (int, error)
+	CleanupOldRequestStats(daysToKeep int) error
 
 	// Config
 	GetConfig(key string) (string, error)

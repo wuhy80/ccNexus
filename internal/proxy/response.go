@@ -11,7 +11,7 @@ import (
 )
 
 // handleNonStreamingResponse processes non-streaming responses
-func (p *Proxy) handleNonStreamingResponse(w http.ResponseWriter, resp *http.Response, endpoint config.Endpoint, trans transformer.Transformer) (int, int, error) {
+func (p *Proxy) handleNonStreamingResponse(w http.ResponseWriter, resp *http.Response, endpoint config.Endpoint, trans transformer.Transformer) (transformer.TokenUsageDetail, error) {
 	var bodyBytes []byte
 	var err error
 
@@ -19,13 +19,13 @@ func (p *Proxy) handleNonStreamingResponse(w http.ResponseWriter, resp *http.Res
 		bodyBytes, err = decompressGzip(resp.Body)
 		if err != nil {
 			logger.Error("[%s] Failed to decompress gzip response: %v", endpoint.Name, err)
-			return 0, 0, err
+			return transformer.TokenUsageDetail{}, err
 		}
 	} else {
 		bodyBytes, err = io.ReadAll(resp.Body)
 		if err != nil {
 			logger.Error("[%s] Failed to read response body: %v", endpoint.Name, err)
-			return 0, 0, err
+			return transformer.TokenUsageDetail{}, err
 		}
 	}
 	resp.Body.Close()
@@ -36,13 +36,13 @@ func (p *Proxy) handleNonStreamingResponse(w http.ResponseWriter, resp *http.Res
 	transformedResp, err := trans.TransformResponse(bodyBytes, false)
 	if err != nil {
 		logger.Error("[%s] Failed to transform response: %v", endpoint.Name, err)
-		return 0, 0, err
+		return transformer.TokenUsageDetail{}, err
 	}
 
 	logger.DebugLog("[%s] Transformed Response: %s", endpoint.Name, string(transformedResp))
 
 	// Extract token usage
-	inputTokens, outputTokens := extractTokenUsage(transformedResp)
+	usage := extractTokenUsage(transformedResp)
 
 	// Copy response headers
 	for key, values := range resp.Header {
@@ -57,26 +57,19 @@ func (p *Proxy) handleNonStreamingResponse(w http.ResponseWriter, resp *http.Res
 	w.WriteHeader(resp.StatusCode)
 	w.Write(transformedResp)
 
-	return inputTokens, outputTokens, nil
+	return usage, nil
 }
 
-// extractTokenUsage extracts token counts from response
-func extractTokenUsage(responseBody []byte) (int, int) {
+// extractTokenUsage extracts detailed token usage from response
+func extractTokenUsage(responseBody []byte) transformer.TokenUsageDetail {
 	var resp map[string]interface{}
 	if err := json.Unmarshal(responseBody, &resp); err != nil {
-		return 0, 0
+		return transformer.TokenUsageDetail{}
 	}
 
-	var inputTokens, outputTokens int
-
-	if usage, ok := resp["usage"].(map[string]interface{}); ok {
-		if input, ok := usage["input_tokens"].(float64); ok {
-			inputTokens = int(input)
-		}
-		if output, ok := usage["output_tokens"].(float64); ok {
-			outputTokens = int(output)
-		}
+	if usageMap, ok := resp["usage"].(map[string]interface{}); ok {
+		return transformer.ExtractTokenUsageDetail(usageMap)
 	}
 
-	return inputTokens, outputTokens
+	return transformer.TokenUsageDetail{}
 }

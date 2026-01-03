@@ -415,14 +415,34 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		isStreaming := contentType == "text/event-stream" || (streamReq.Stream && strings.Contains(contentType, "text/event-stream"))
 
 		if resp.StatusCode == http.StatusOK && isStreaming {
-			inputTokens, outputTokens, outputText := p.handleStreamingResponse(w, resp, endpoint, trans, transformerName, thinkingEnabled, streamReq.Model, bodyBytes)
+			usage, outputText := p.handleStreamingResponse(w, resp, endpoint, trans, transformerName, thinkingEnabled, streamReq.Model, bodyBytes)
 
 			// Fallback: estimate tokens when usage is 0
-			if inputTokens == 0 || outputTokens == 0 {
-				inputTokens, outputTokens = p.estimateTokens(bodyBytes, outputText, inputTokens, outputTokens, endpoint.Name)
+			if usage.TotalInputTokens() == 0 || usage.OutputTokens == 0 {
+				if usage.TotalInputTokens() == 0 {
+					usage.InputTokens = p.estimateInputTokens(bodyBytes)
+				}
+				if usage.OutputTokens == 0 {
+					usage.OutputTokens = p.estimateOutputTokens(outputText)
+				}
 			}
 
-			p.stats.RecordTokens(endpoint.Name, inputTokens, outputTokens)
+			// Record daily aggregated stats
+			p.stats.RecordTokens(endpoint.Name, usage)
+
+			// Record request-level stats
+			p.stats.RecordRequestStat(&RequestStatRecord{
+				EndpointName:        endpoint.Name,
+				Timestamp:           time.Now(),
+				InputTokens:         usage.InputTokens,
+				CacheCreationTokens: usage.CacheCreationInputTokens,
+				CacheReadTokens:     usage.CacheReadInputTokens,
+				OutputTokens:        usage.OutputTokens,
+				Model:               streamReq.Model,
+				IsStreaming:         true,
+				Success:             true,
+			})
+
 			p.markRequestInactive(endpoint.Name)
 			if p.onEndpointSuccess != nil {
 				p.onEndpointSuccess(endpoint.Name)
@@ -432,9 +452,34 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if resp.StatusCode == http.StatusOK {
-			inputTokens, outputTokens, err := p.handleNonStreamingResponse(w, resp, endpoint, trans)
+			usage, err := p.handleNonStreamingResponse(w, resp, endpoint, trans)
 			if err == nil {
-				p.stats.RecordTokens(endpoint.Name, inputTokens, outputTokens)
+				// Fallback: estimate tokens when usage is 0
+				if usage.TotalInputTokens() == 0 {
+					usage.InputTokens = p.estimateInputTokens(bodyBytes)
+				}
+
+				// Record daily aggregated stats
+				p.stats.RecordTokens(endpoint.Name, usage)
+
+				// Record request-level stats
+				// Extract model name from request body
+				var reqBody map[string]interface{}
+				json.Unmarshal(bodyBytes, &reqBody)
+				modelName, _ := reqBody["model"].(string)
+
+				p.stats.RecordRequestStat(&RequestStatRecord{
+					EndpointName:        endpoint.Name,
+					Timestamp:           time.Now(),
+					InputTokens:         usage.InputTokens,
+					CacheCreationTokens: usage.CacheCreationInputTokens,
+					CacheReadTokens:     usage.CacheReadInputTokens,
+					OutputTokens:        usage.OutputTokens,
+					Model:               modelName,
+					IsStreaming:         false,
+					Success:             true,
+				})
+
 				p.markRequestInactive(endpoint.Name)
 				if p.onEndpointSuccess != nil {
 					p.onEndpointSuccess(endpoint.Name)

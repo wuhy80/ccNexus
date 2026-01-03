@@ -66,26 +66,31 @@ func (s *StatsService) getPeriodStats(period, startDate, endDate string) string 
 		stats = s.proxy.GetStats().GetPeriodStats(startDate, endDate)
 	}
 
-	var totalRequests, totalErrors, totalInputTokens, totalOutputTokens int
+	var totalRequests, totalErrors int
+	var totalInputTokens, totalCacheCreationTokens, totalCacheReadTokens, totalOutputTokens int
 	for _, st := range stats {
 		totalRequests += st.Requests
 		totalErrors += st.Errors
 		totalInputTokens += st.InputTokens
+		totalCacheCreationTokens += st.CacheCreationTokens
+		totalCacheReadTokens += st.CacheReadTokens
 		totalOutputTokens += st.OutputTokens
 	}
 
 	activeEndpoints, totalEndpoints := s.countEndpoints()
 
 	result := map[string]interface{}{
-		"period":            period,
-		"totalRequests":     totalRequests,
-		"totalErrors":       totalErrors,
-		"totalSuccess":      totalRequests - totalErrors,
-		"totalInputTokens":  totalInputTokens,
-		"totalOutputTokens": totalOutputTokens,
-		"activeEndpoints":   activeEndpoints,
-		"totalEndpoints":    totalEndpoints,
-		"endpoints":         stats,
+		"period":                   period,
+		"totalRequests":            totalRequests,
+		"totalErrors":              totalErrors,
+		"totalSuccess":             totalRequests - totalErrors,
+		"totalInputTokens":         totalInputTokens,
+		"totalCacheCreationTokens": totalCacheCreationTokens,
+		"totalCacheReadTokens":     totalCacheReadTokens,
+		"totalOutputTokens":        totalOutputTokens,
+		"activeEndpoints":          activeEndpoints,
+		"totalEndpoints":           totalEndpoints,
+		"endpoints":                stats,
 	}
 	if startDate == endDate {
 		result["date"] = startDate

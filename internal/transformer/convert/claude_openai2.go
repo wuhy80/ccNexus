@@ -174,15 +174,18 @@ func ClaudeRespToOpenAI2(claudeResp []byte) ([]byte, error) {
 	}
 	output = append(output, functionCalls...)
 
+	inputTokens := resp.Usage.TotalInputTokens()
+	outputTokens := resp.Usage.OutputTokens
+
 	openai2Resp := map[string]interface{}{
 		"id":     resp.ID,
 		"object": "response",
 		"status": "completed",
 		"output": output,
 		"usage": map[string]interface{}{
-			"input_tokens":  resp.Usage.InputTokens,
-			"output_tokens": resp.Usage.OutputTokens,
-			"total_tokens":  resp.Usage.InputTokens + resp.Usage.OutputTokens,
+			"input_tokens":  inputTokens,
+			"output_tokens": outputTokens,
+			"total_tokens":  inputTokens + outputTokens,
 		},
 	}
 
@@ -267,9 +270,7 @@ func ClaudeStreamToOpenAI2(event []byte, ctx *transformer.StreamContext) ([]byte
 		if msg, ok := data["message"].(map[string]interface{}); ok {
 			ctx.MessageID, _ = msg["id"].(string)
 			if usage, ok := msg["usage"].(map[string]interface{}); ok {
-				if in, ok := usage["input_tokens"].(float64); ok {
-					ctx.InputTokens = int(in)
-				}
+				ctx.InputTokens = transformer.ExtractInputTokens(usage)
 			}
 		}
 		writeEvent(map[string]interface{}{
@@ -335,7 +336,7 @@ func ClaudeStreamToOpenAI2(event []byte, ctx *transformer.StreamContext) ([]byte
 			partial := delta["partial_json"].(string)
 			ctx.ToolArguments += partial
 			writeEvent(map[string]interface{}{
-				"type": "response.function_call_arguments.delta",
+				"type":         "response.function_call_arguments.delta",
 				"output_index": ctx.ToolIndex, "delta": partial,
 			})
 		}
@@ -347,7 +348,7 @@ func ClaudeStreamToOpenAI2(event []byte, ctx *transformer.StreamContext) ([]byte
 		if ctx.ToolBlockStarted && blockIdx == ctx.ToolIndex {
 			// function_call_arguments.done
 			writeEvent(map[string]interface{}{
-				"type": "response.function_call_arguments.done",
+				"type":         "response.function_call_arguments.done",
 				"output_index": blockIdx, "arguments": ctx.ToolArguments,
 			})
 			// output_item.done for function_call

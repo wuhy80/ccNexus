@@ -101,8 +101,16 @@ func (s *SQLiteStorage) initSchema() error {
 		return err
 	}
 
-	// Migration: Add sort_order column if it doesn't exist
+	// Migrations
 	if err := s.migrateSortOrder(); err != nil {
+		return err
+	}
+
+	if err := s.migrateCacheTokens(); err != nil {
+		return err
+	}
+
+	if err := s.migrateRequestStats(); err != nil {
 		return err
 	}
 
@@ -129,6 +137,77 @@ func (s *SQLiteStorage) migrateSortOrder() error {
 		if _, err := s.db.Exec(`UPDATE endpoints SET sort_order = id WHERE sort_order = 0`); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// migrateCacheTokens adds cache token columns to daily_stats table
+func (s *SQLiteStorage) migrateCacheTokens() error {
+	// Check if cache_creation_tokens column exists
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('daily_stats') WHERE name='cache_creation_tokens'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		if _, err := s.db.Exec(`ALTER TABLE daily_stats ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+
+	// Check if cache_read_tokens column exists
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('daily_stats') WHERE name='cache_read_tokens'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		if _, err := s.db.Exec(`ALTER TABLE daily_stats ADD COLUMN cache_read_tokens INTEGER DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// migrateRequestStats creates the request_stats table
+func (s *SQLiteStorage) migrateRequestStats() error {
+	// Check if request_stats table exists
+	var tableName string
+	err := s.db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='request_stats'`).Scan(&tableName)
+
+	// Table doesn't exist, create it
+	if err == sql.ErrNoRows {
+		schema := `
+		CREATE TABLE IF NOT EXISTS request_stats (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			endpoint_name TEXT NOT NULL,
+			request_id TEXT,
+			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+			date TEXT NOT NULL,
+			input_tokens INTEGER DEFAULT 0,
+			cache_creation_tokens INTEGER DEFAULT 0,
+			cache_read_tokens INTEGER DEFAULT 0,
+			output_tokens INTEGER DEFAULT 0,
+			model TEXT,
+			is_streaming BOOLEAN DEFAULT 0,
+			success BOOLEAN DEFAULT 1,
+			device_id TEXT DEFAULT 'default'
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_request_stats_endpoint ON request_stats(endpoint_name);
+		CREATE INDEX IF NOT EXISTS idx_request_stats_date ON request_stats(date);
+		CREATE INDEX IF NOT EXISTS idx_request_stats_timestamp ON request_stats(timestamp DESC);
+		CREATE INDEX IF NOT EXISTS idx_request_stats_composite ON request_stats(endpoint_name, date, device_id);
+		`
+
+		if _, err := s.db.Exec(schema); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
 	}
 
 	return nil
@@ -196,14 +275,16 @@ func (s *SQLiteStorage) RecordDailyStat(stat *DailyStat) error {
 	defer s.mu.Unlock()
 
 	_, err := s.db.Exec(`
-		INSERT INTO daily_stats (endpoint_name, date, requests, errors, input_tokens, output_tokens, device_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO daily_stats (endpoint_name, date, requests, errors, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens, device_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(endpoint_name, date, device_id) DO UPDATE SET
 			requests = requests + excluded.requests,
 			errors = errors + excluded.errors,
 			input_tokens = input_tokens + excluded.input_tokens,
+			cache_creation_tokens = cache_creation_tokens + excluded.cache_creation_tokens,
+			cache_read_tokens = cache_read_tokens + excluded.cache_read_tokens,
 			output_tokens = output_tokens + excluded.output_tokens
-	`, stat.EndpointName, stat.Date, stat.Requests, stat.Errors, stat.InputTokens, stat.OutputTokens, stat.DeviceID)
+	`, stat.EndpointName, stat.Date, stat.Requests, stat.Errors, stat.InputTokens, stat.CacheCreationTokens, stat.CacheReadTokens, stat.OutputTokens, stat.DeviceID)
 
 	return err
 }
@@ -212,7 +293,9 @@ func (s *SQLiteStorage) GetDailyStats(endpointName, startDate, endDate string) (
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	query := `SELECT id, endpoint_name, date, SUM(requests), SUM(errors), SUM(input_tokens), SUM(output_tokens), device_id, created_at
+	query := `SELECT id, endpoint_name, date, SUM(requests), SUM(errors),
+		SUM(input_tokens), SUM(COALESCE(cache_creation_tokens, 0)), SUM(COALESCE(cache_read_tokens, 0)), SUM(output_tokens),
+		device_id, created_at
 		FROM daily_stats WHERE endpoint_name=? AND date>=? AND date<=? GROUP BY date ORDER BY date DESC`
 
 	rows, err := s.db.Query(query, endpointName, startDate, endDate)
@@ -224,7 +307,9 @@ func (s *SQLiteStorage) GetDailyStats(endpointName, startDate, endDate string) (
 	var stats []DailyStat
 	for rows.Next() {
 		var stat DailyStat
-		if err := rows.Scan(&stat.ID, &stat.EndpointName, &stat.Date, &stat.Requests, &stat.Errors, &stat.InputTokens, &stat.OutputTokens, &stat.DeviceID, &stat.CreatedAt); err != nil {
+		if err := rows.Scan(&stat.ID, &stat.EndpointName, &stat.Date, &stat.Requests, &stat.Errors,
+			&stat.InputTokens, &stat.CacheCreationTokens, &stat.CacheReadTokens, &stat.OutputTokens,
+			&stat.DeviceID, &stat.CreatedAt); err != nil {
 			return nil, err
 		}
 		stats = append(stats, stat)
@@ -237,7 +322,9 @@ func (s *SQLiteStorage) GetAllStats() (map[string][]DailyStat, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.Query(`SELECT id, endpoint_name, date, SUM(requests), SUM(errors), SUM(input_tokens), SUM(output_tokens), device_id, created_at
+	rows, err := s.db.Query(`SELECT id, endpoint_name, date, SUM(requests), SUM(errors),
+		SUM(input_tokens), SUM(COALESCE(cache_creation_tokens, 0)), SUM(COALESCE(cache_read_tokens, 0)), SUM(output_tokens),
+		device_id, created_at
 		FROM daily_stats GROUP BY endpoint_name, date ORDER BY date DESC`)
 	if err != nil {
 		return nil, err
@@ -247,7 +334,9 @@ func (s *SQLiteStorage) GetAllStats() (map[string][]DailyStat, error) {
 	result := make(map[string][]DailyStat)
 	for rows.Next() {
 		var stat DailyStat
-		if err := rows.Scan(&stat.ID, &stat.EndpointName, &stat.Date, &stat.Requests, &stat.Errors, &stat.InputTokens, &stat.OutputTokens, &stat.DeviceID, &stat.CreatedAt); err != nil {
+		if err := rows.Scan(&stat.ID, &stat.EndpointName, &stat.Date, &stat.Requests, &stat.Errors,
+			&stat.InputTokens, &stat.CacheCreationTokens, &stat.CacheReadTokens, &stat.OutputTokens,
+			&stat.DeviceID, &stat.CreatedAt); err != nil {
 			return nil, err
 		}
 		result[stat.EndpointName] = append(result[stat.EndpointName], stat)
@@ -284,7 +373,8 @@ func (s *SQLiteStorage) GetTotalStats() (int, map[string]*EndpointStats, error) 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	query := `SELECT endpoint_name, SUM(requests), SUM(errors), SUM(input_tokens), SUM(output_tokens)
+	query := `SELECT endpoint_name, SUM(requests), SUM(errors),
+		SUM(input_tokens), SUM(COALESCE(cache_creation_tokens, 0)), SUM(COALESCE(cache_read_tokens, 0)), SUM(output_tokens)
 		FROM daily_stats GROUP BY endpoint_name`
 
 	rows, err := s.db.Query(query)
@@ -299,17 +389,20 @@ func (s *SQLiteStorage) GetTotalStats() (int, map[string]*EndpointStats, error) 
 	for rows.Next() {
 		var endpointName string
 		var requests, errors int
-		var inputTokens, outputTokens int64
+		var inputTokens, cacheCreationTokens, cacheReadTokens, outputTokens int64
 
-		if err := rows.Scan(&endpointName, &requests, &errors, &inputTokens, &outputTokens); err != nil {
+		if err := rows.Scan(&endpointName, &requests, &errors,
+			&inputTokens, &cacheCreationTokens, &cacheReadTokens, &outputTokens); err != nil {
 			return 0, nil, err
 		}
 
 		result[endpointName] = &EndpointStats{
-			Requests:     requests,
-			Errors:       errors,
-			InputTokens:  inputTokens,
-			OutputTokens: outputTokens,
+			Requests:            requests,
+			Errors:              errors,
+			InputTokens:         inputTokens,
+			CacheCreationTokens: cacheCreationTokens,
+			CacheReadTokens:     cacheReadTokens,
+			OutputTokens:        outputTokens,
 		}
 		totalRequests += requests
 	}
@@ -321,13 +414,15 @@ func (s *SQLiteStorage) GetEndpointTotalStats(endpointName string) (*EndpointSta
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	query := `SELECT SUM(requests), SUM(errors), SUM(input_tokens), SUM(output_tokens)
+	query := `SELECT SUM(requests), SUM(errors),
+		SUM(input_tokens), SUM(COALESCE(cache_creation_tokens, 0)), SUM(COALESCE(cache_read_tokens, 0)), SUM(output_tokens)
 		FROM daily_stats WHERE endpoint_name=?`
 
 	var requests, errors int
-	var inputTokens, outputTokens int64
+	var inputTokens, cacheCreationTokens, cacheReadTokens, outputTokens int64
 
-	err := s.db.QueryRow(query, endpointName).Scan(&requests, &errors, &inputTokens, &outputTokens)
+	err := s.db.QueryRow(query, endpointName).Scan(&requests, &errors,
+		&inputTokens, &cacheCreationTokens, &cacheReadTokens, &outputTokens)
 	if err == sql.ErrNoRows {
 		return &EndpointStats{}, nil
 	}
@@ -336,10 +431,12 @@ func (s *SQLiteStorage) GetEndpointTotalStats(endpointName string) (*EndpointSta
 	}
 
 	return &EndpointStats{
-		Requests:     requests,
-		Errors:       errors,
-		InputTokens:  inputTokens,
-		OutputTokens: outputTokens,
+		Requests:            requests,
+		Errors:              errors,
+		InputTokens:         inputTokens,
+		CacheCreationTokens: cacheCreationTokens,
+		CacheReadTokens:     cacheReadTokens,
+		OutputTokens:        outputTokens,
 	}, nil
 }
 
@@ -694,8 +791,9 @@ func (s *SQLiteStorage) mergeDailyStats(tx *sql.Tx, strategy MergeStrategy) erro
 		// 使用本地 device_id 替代备份的 device_id 以避免重复
 		_, err := tx.Exec(`
 			INSERT OR IGNORE INTO daily_stats
-			(endpoint_name, date, requests, errors, input_tokens, output_tokens, device_id)
-			SELECT endpoint_name, date, requests, errors, input_tokens, output_tokens, ?
+			(endpoint_name, date, requests, errors, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens, device_id)
+			SELECT endpoint_name, date, requests, errors, input_tokens,
+				COALESCE(cache_creation_tokens, 0), COALESCE(cache_read_tokens, 0), output_tokens, ?
 			FROM backup.daily_stats
 		`, localDeviceID)
 		return err
@@ -717,8 +815,9 @@ func (s *SQLiteStorage) mergeDailyStats(tx *sql.Tx, strategy MergeStrategy) erro
 		// 步骤2：使用本地 device_id 插入备份数据
 		_, err = tx.Exec(`
 			INSERT INTO daily_stats
-			(endpoint_name, date, requests, errors, input_tokens, output_tokens, device_id)
-			SELECT endpoint_name, date, requests, errors, input_tokens, output_tokens, ?
+			(endpoint_name, date, requests, errors, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens, device_id)
+			SELECT endpoint_name, date, requests, errors, input_tokens,
+				COALESCE(cache_creation_tokens, 0), COALESCE(cache_read_tokens, 0), output_tokens, ?
 			FROM backup.daily_stats
 		`, localDeviceID)
 		return err
@@ -761,4 +860,100 @@ func (s *SQLiteStorage) mergeAppConfig(tx *sql.Tx, strategy MergeStrategy) error
 	default:
 		return fmt.Errorf("unknown merge strategy: %s", strategy)
 	}
+}
+
+// RecordRequestStat records a single request-level statistic
+func (s *SQLiteStorage) RecordRequestStat(stat *RequestStat) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.db.Exec(`
+		INSERT INTO request_stats (
+			endpoint_name, request_id, timestamp, date,
+			input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
+			model, is_streaming, success, device_id
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		stat.EndpointName, stat.RequestID, stat.Timestamp, stat.Date,
+		stat.InputTokens, stat.CacheCreationTokens, stat.CacheReadTokens, stat.OutputTokens,
+		stat.Model, stat.IsStreaming, stat.Success, stat.DeviceID,
+	)
+
+	return err
+}
+
+// GetRequestStats retrieves request-level statistics with pagination
+func (s *SQLiteStorage) GetRequestStats(endpointName string, startDate, endDate string, limit, offset int) ([]RequestStat, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	query := `
+		SELECT id, endpoint_name, request_id, timestamp, date,
+			input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
+			model, is_streaming, success, device_id
+		FROM request_stats
+		WHERE endpoint_name=? AND date>=? AND date<=?
+		ORDER BY timestamp DESC
+		LIMIT ? OFFSET ?
+	`
+
+	rows, err := s.db.Query(query, endpointName, startDate, endDate, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []RequestStat
+	for rows.Next() {
+		var stat RequestStat
+		if err := rows.Scan(
+			&stat.ID, &stat.EndpointName, &stat.RequestID, &stat.Timestamp, &stat.Date,
+			&stat.InputTokens, &stat.CacheCreationTokens, &stat.CacheReadTokens, &stat.OutputTokens,
+			&stat.Model, &stat.IsStreaming, &stat.Success, &stat.DeviceID,
+		); err != nil {
+			return nil, err
+		}
+		stats = append(stats, stat)
+	}
+
+	return stats, rows.Err()
+}
+
+// GetRequestStatsCount gets the total count of request stats for pagination
+func (s *SQLiteStorage) GetRequestStatsCount(endpointName string, startDate, endDate string) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var count int
+	err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM request_stats
+		WHERE endpoint_name=? AND date>=? AND date<=?
+	`, endpointName, startDate, endDate).Scan(&count)
+
+	return count, err
+}
+
+// CleanupOldRequestStats deletes request stats older than specified days
+func (s *SQLiteStorage) CleanupOldRequestStats(daysToKeep int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cutoffDate := time.Now().AddDate(0, 0, -daysToKeep).Format("2006-01-02")
+
+	result, err := s.db.Exec(`
+		DELETE FROM request_stats WHERE date < ?
+	`, cutoffDate)
+
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		// Note: logger is not available in this package, would need to be passed in or logged at a higher level
+		// For now, we'll just return success
+	}
+
+	return nil
 }

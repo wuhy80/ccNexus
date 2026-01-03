@@ -226,6 +226,9 @@ func ClaudeRespToGemini(claudeResp []byte) ([]byte, error) {
 		finishReason = "TOOL_CODE"
 	}
 
+	inputTokens := resp.Usage.TotalInputTokens()
+	outputTokens := resp.Usage.OutputTokens
+
 	geminiResp := map[string]interface{}{
 		"candidates": []map[string]interface{}{
 			{
@@ -234,9 +237,9 @@ func ClaudeRespToGemini(claudeResp []byte) ([]byte, error) {
 			},
 		},
 		"usageMetadata": map[string]interface{}{
-			"promptTokenCount":     resp.Usage.InputTokens,
-			"candidatesTokenCount": resp.Usage.OutputTokens,
-			"totalTokenCount":      resp.Usage.InputTokens + resp.Usage.OutputTokens,
+			"promptTokenCount":     inputTokens,
+			"candidatesTokenCount": outputTokens,
+			"totalTokenCount":      inputTokens + outputTokens,
 		},
 	}
 

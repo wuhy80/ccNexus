@@ -289,15 +289,18 @@ func ClaudeRespToOpenAI(claudeResp []byte, model string) ([]byte, error) {
 		finishReason = "tool_calls"
 	}
 
+	inputTokens := resp.Usage.TotalInputTokens()
+	outputTokens := resp.Usage.OutputTokens
+
 	openaiResp := map[string]interface{}{
 		"id":      resp.ID,
 		"object":  "chat.completion",
 		"model":   model,
 		"choices": []map[string]interface{}{{"index": 0, "message": message, "finish_reason": finishReason}},
 		"usage": map[string]interface{}{
-			"prompt_tokens":     resp.Usage.InputTokens,
-			"completion_tokens": resp.Usage.OutputTokens,
-			"total_tokens":      resp.Usage.InputTokens + resp.Usage.OutputTokens,
+			"prompt_tokens":     inputTokens,
+			"completion_tokens": outputTokens,
+			"total_tokens":      inputTokens + outputTokens,
 		},
 	}
 
@@ -629,4 +632,3 @@ func extractToolResultContent(content interface{}) string {
 	}
 	return ""
 }
-
