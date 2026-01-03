@@ -267,3 +267,200 @@ app_config (
 **WebDAV 冲突**: 从备份合并时，如果端点名称匹配但设置不同，则会发生冲突。始终使用两种策略测试冲突解决逻辑。
 
 **会话解析**: Claude Code 会话文件使用 base64 编码的路径。使用 `internal/session` 包方法而不是手动解析。
+
+## 发布新版本
+
+### 前置要求
+
+1. 安装 GitHub CLI (gh):
+```bash
+# Windows (使用 winget)
+winget install --id GitHub.cli
+
+# macOS
+brew install gh
+
+# Linux
+# 参考: https://github.com/cli/cli/blob/trunk/docs/install_linux.md
+```
+
+2. 认证 GitHub CLI:
+```bash
+gh auth login --git-protocol https --web
+```
+
+### 发布流程
+
+**1. 更新版本号**
+
+编辑 `cmd/desktop/wails.json`，更新 `info.productVersion` 字段：
+```json
+{
+  "info": {
+    "productVersion": "0.2.0"  // 更新为新版本号
+  }
+}
+```
+
+**2. 构建应用程序**
+
+```bash
+# Windows 桌面应用（在 Windows 上构建）
+cd cmd/desktop
+wails build -clean
+
+# 构建产物: cmd/desktop/build/bin/ccNexus.exe
+
+# Linux 服务器应用（交叉编译）
+cd cmd/server
+set GOOS=linux && set GOARCH=amd64 && set CGO_ENABLED=1
+go build -o ccnexus-server-linux-amd64 .
+
+# macOS 桌面应用（在 macOS 上构建）
+cd cmd/desktop
+wails build -platform darwin/universal
+
+# 构建产物: cmd/desktop/build/bin/ccNexus.app
+```
+
+**3. 准备 Release 文件**
+
+创建发布目录并重命名文件：
+```bash
+mkdir -p release_v0.x.x
+cp cmd/desktop/build/bin/ccNexus.exe release_v0.x.x/ccNexus-v0.x.x-windows-amd64.exe
+cp cmd/server/ccnexus-server-linux-amd64 release_v0.x.x/ccNexus-server-v0.x.x-linux-amd64
+# 如果有 macOS 版本
+cp -r cmd/desktop/build/bin/ccNexus.app release_v0.x.x/
+cd release_v0.x.x && zip -r ccNexus-v0.x.x-darwin-universal.zip ccNexus.app && cd ..
+```
+
+**4. 提交代码更改**
+
+```bash
+# 添加并提交版本号更新
+git add cmd/desktop/wails.json
+git commit -m "chore: bump version to v0.x.x
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
+
+# 推送到远程
+git push
+```
+
+**5. 创建 GitHub Release**
+
+```bash
+# 创建 release 并上传构建产物
+gh release create v0.x.x \
+  --title "v0.x.x - 版本标题" \
+  --notes "$(cat <<'EOF'
+## 🎉 新功能
+- ✨ 功能1描述
+- 📊 功能2描述
+
+## 🐛 Bug修复
+- 🔧 修复1描述
+
+## 📦 其他改进
+- 🎨 改进1描述
+
+---
+**完整变更日志**: https://github.com/wuhy80/ccNexus/compare/vX.Y.Z...v0.x.x
+EOF
+)" \
+  --latest \
+  release_v0.x.x/ccNexus-v0.x.x-windows-amd64.exe \
+  release_v0.x.x/ccNexus-server-v0.x.x-linux-amd64 \
+  release_v0.x.x/ccNexus-v0.x.x-darwin-universal.zip
+
+# 或者先创建 release，再上传文件
+gh release create v0.x.x --title "v0.x.x - 版本标题" --notes "..." --latest
+gh release upload v0.x.x release_v0.x.x/* --clobber
+```
+
+**6. 验证 Release**
+
+```bash
+# 查看 release 详情
+gh release view v0.x.x
+
+# 查看资产列表
+gh release view v0.x.x --json assets --jq '.assets[] | {name: .name, size: .size}'
+
+# 在浏览器中打开 release 页面
+gh release view v0.x.x --web
+```
+
+### Release 说明模板
+
+使用以下模板编写 release 说明：
+
+```markdown
+## 🎉 新功能
+
+### 分类标题
+- ✨ 新功能描述
+- 📊 数据/图表相关功能
+- 📈 统计/分析功能
+- 🔍 搜索/查询功能
+
+### 开发体验改进
+- 🔧 开发工具改进
+- 📝 文档更新
+- 🌐 配置/环境改进
+
+## 🐛 Bug修复
+- 🔧 Bug描述和修复说明
+
+## 📦 其他改进
+- 🎨 UI/UX改进
+- 🗑️ 清理/删除功能
+- ⚡ 性能优化
+
+## ⚠️ 破坏性变更（如果有）
+- 💥 描述不兼容的变更
+
+---
+**完整变更日志**: https://github.com/wuhy80/ccNexus/compare/vX.Y.Z...vA.B.C
+```
+
+### 版本号规范
+
+遵循语义化版本 (Semantic Versioning):
+
+- **主版本号 (Major)**: 不兼容的 API 变更
+- **次版本号 (Minor)**: 向后兼容的功能新增
+- **修订号 (Patch)**: 向后兼容的 Bug 修复
+
+示例:
+- `v1.0.0` → `v2.0.0`: 重大重构或 API 变更
+- `v1.0.0` → `v1.1.0`: 新增功能
+- `v1.0.0` → `v1.0.1`: Bug 修复
+
+### 常见问题
+
+**Q: 构建失败，提示 "Access is denied"**
+A: 关闭正在运行的应用程序实例，然后重新构建。
+
+**Q: Linux 交叉编译失败**
+A: 确保设置了 `CGO_ENABLED=1`，并安装了必要的交叉编译工具链。
+
+**Q: 如何删除错误的 release?**
+```bash
+gh release delete v0.x.x --yes
+git tag -d v0.x.x
+git push origin :refs/tags/v0.x.x
+```
+
+**Q: 如何更新已发布的 release 说明?**
+```bash
+gh release edit v0.x.x --notes "新的说明内容"
+```
+
+**Q: 如何添加更多文件到现有 release?**
+```bash
+gh release upload v0.x.x path/to/new-file.zip --clobber
+```
