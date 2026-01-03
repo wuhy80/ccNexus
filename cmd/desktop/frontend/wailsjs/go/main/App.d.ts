@@ -55,6 +55,8 @@ export function GetConfig():Promise<string>;
 
 export function GetCurrentEndpoint():Promise<string>;
 
+export function GetDailyRequestDetails(arg1:number,arg2:number):Promise<string>;
+
 export function GetDownloadProgress():Promise<string>;
 
 export function GetLanguage():Promise<string>;

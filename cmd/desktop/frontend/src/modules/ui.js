@@ -41,6 +41,9 @@ export function initUI() {
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <h2 style="margin: 0;">📊 ${t('statistics.title')}</h2>
                     <div class="stats-tabs">
+                        <button class="stats-detail-btn" onclick="window.showDailyDetailsModal()" title="${t('statistics.viewDetails')}">
+                            📋 ${t('statistics.details')}
+                        </button>
                         <button class="stats-tab-btn active" data-period="daily" onclick="window.switchStatsPeriod('daily')">
                             📅 ${t('statistics.daily')}
                         </button>
@@ -199,6 +202,62 @@ export function initUI() {
                         </div>
 
                         <div id="historyError" class="error-message" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Daily Details Modal (今日详情弹窗) -->
+            <div id="dailyDetailsModal" class="modal" style="display: none;">
+                <div class="modal-content" style="width: 70%; max-width: 1400px;">
+                    <div class="modal-header">
+                        <h2>📋 ${t('statistics.dailyDetails')}</h2>
+                        <button class="modal-close" onclick="window.closeDailyDetailsModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="details-controls">
+                            <div class="details-info">
+                                <span>${t('statistics.totalRecords')}: <strong id="detailsTotalCount">0</strong></span>
+                            </div>
+                            <div class="details-pagination">
+                                <label>${t('statistics.pageSize')}:</label>
+                                <select id="detailsPageSize" onchange="window.changeDetailsPageSize()">
+                                    <option value="20">20</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table id="dailyDetailsTable">
+                                <thead>
+                                    <tr>
+                                        <th>${t('statistics.time')}</th>
+                                        <th>${t('statistics.endpoint')}</th>
+                                        <th>${t('statistics.model')}</th>
+                                        <th>${t('statistics.inputTokens')}</th>
+                                        <th>${t('statistics.cacheCreationTokens')}</th>
+                                        <th>${t('statistics.cacheReadTokens')}</th>
+                                        <th>${t('statistics.outputTokens')}</th>
+                                        <th>${t('statistics.totalTokens')}</th>
+                                        <th>${t('statistics.status')}</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+
+                        <div class="details-pagination-controls">
+                            <button id="detailsPrevBtn" class="btn btn-secondary" onclick="window.loadPreviousDetailsPage()" disabled>
+                                ${t('statistics.previous')}
+                            </button>
+                            <span id="detailsPageInfo">1 / 1</span>
+                            <button id="detailsNextBtn" class="btn btn-secondary" onclick="window.loadNextDetailsPage()" disabled>
+                                ${t('statistics.next')}
+                            </button>
+                        </div>
+
+                        <div id="detailsError" class="error-message" style="display: none;"></div>
                     </div>
                 </div>
             </div>

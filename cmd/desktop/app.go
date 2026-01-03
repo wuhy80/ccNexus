@@ -138,6 +138,7 @@ func (a *App) startup(ctx context.Context) {
 	// Initialize services
 	version := a.GetVersion()
 	a.stats = service.NewStatsService(a.proxy, a.config)
+	a.stats.SetStorage(sqliteStorage)
 	a.endpoint = service.NewEndpointService(a.config, a.proxy, a.storage)
 	a.settings = service.NewSettingsService(a.config, a.storage)
 	a.webdav = service.NewWebDAVService(a.config, a.storage, version)
@@ -372,6 +373,10 @@ func (a *App) GetStatsMonthly() string   { return a.stats.GetStatsMonthly() }
 func (a *App) GetStatsTrend() string     { return a.stats.GetStatsTrend() }
 func (a *App) GetStatsTrendByPeriod(period string) string {
 	return a.stats.GetStatsTrendByPeriod(period)
+}
+
+func (a *App) GetDailyRequestDetails(limit, offset int) string {
+	return a.stats.GetDailyRequestDetails(limit, offset)
 }
 
 // ========== Endpoint Bindings ==========

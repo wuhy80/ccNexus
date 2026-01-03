@@ -110,6 +110,10 @@ export function GetCurrentEndpoint() {
   return window['go']['main']['App']['GetCurrentEndpoint']();
 }
 
+export function GetDailyRequestDetails(arg1, arg2) {
+  return window['go']['main']['App']['GetDailyRequestDetails'](arg1, arg2);
+}
+
 export function GetDownloadProgress() {
   return window['go']['main']['App']['GetDownloadProgress']();
 }

@@ -888,17 +888,36 @@ func (s *SQLiteStorage) GetRequestStats(endpointName string, startDate, endDate 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	query := `
-		SELECT id, endpoint_name, request_id, timestamp, date,
-			input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
-			model, is_streaming, success, device_id
-		FROM request_stats
-		WHERE endpoint_name=? AND date>=? AND date<=?
-		ORDER BY timestamp DESC
-		LIMIT ? OFFSET ?
-	`
+	var query string
+	var args []interface{}
 
-	rows, err := s.db.Query(query, endpointName, startDate, endDate, limit, offset)
+	if endpointName == "" {
+		// Query all endpoints
+		query = `
+			SELECT id, endpoint_name, request_id, timestamp, date,
+				input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
+				model, is_streaming, success, device_id
+			FROM request_stats
+			WHERE date>=? AND date<=?
+			ORDER BY timestamp DESC
+			LIMIT ? OFFSET ?
+		`
+		args = []interface{}{startDate, endDate, limit, offset}
+	} else {
+		// Query specific endpoint
+		query = `
+			SELECT id, endpoint_name, request_id, timestamp, date,
+				input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
+				model, is_streaming, success, device_id
+			FROM request_stats
+			WHERE endpoint_name=? AND date>=? AND date<=?
+			ORDER BY timestamp DESC
+			LIMIT ? OFFSET ?
+		`
+		args = []interface{}{endpointName, startDate, endDate, limit, offset}
+	}
+
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -926,10 +945,21 @@ func (s *SQLiteStorage) GetRequestStatsCount(endpointName string, startDate, end
 	defer s.mu.RUnlock()
 
 	var count int
-	err := s.db.QueryRow(`
-		SELECT COUNT(*) FROM request_stats
-		WHERE endpoint_name=? AND date>=? AND date<=?
-	`, endpointName, startDate, endDate).Scan(&count)
+	var err error
+
+	if endpointName == "" {
+		// Count all endpoints
+		err = s.db.QueryRow(`
+			SELECT COUNT(*) FROM request_stats
+			WHERE date>=? AND date<=?
+		`, startDate, endDate).Scan(&count)
+	} else {
+		// Count specific endpoint
+		err = s.db.QueryRow(`
+			SELECT COUNT(*) FROM request_stats
+			WHERE endpoint_name=? AND date>=? AND date<=?
+		`, endpointName, startDate, endDate).Scan(&count)
+	}
 
 	return count, err
 }

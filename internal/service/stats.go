@@ -6,17 +6,24 @@ import (
 
 	"github.com/lich0821/ccNexus/internal/config"
 	"github.com/lich0821/ccNexus/internal/proxy"
+	"github.com/lich0821/ccNexus/internal/storage"
 )
 
 // StatsService handles statistics operations
 type StatsService struct {
-	proxy  *proxy.Proxy
-	config *config.Config
+	proxy   *proxy.Proxy
+	config  *config.Config
+	storage storage.Storage
 }
 
 // NewStatsService creates a new stats service
 func NewStatsService(p *proxy.Proxy, cfg *config.Config) *StatsService {
 	return &StatsService{proxy: p, config: cfg}
+}
+
+// SetStorage sets the storage for accessing request details
+func (s *StatsService) SetStorage(st storage.Storage) {
+	s.storage = st
 }
 
 // GetStats returns current statistics
@@ -209,4 +216,61 @@ func calculateTrend(current, previous int) float64 {
 		return -100.0
 	}
 	return trend
+}
+
+// GetDailyRequestDetails returns detailed request-level statistics for today with pagination
+func (s *StatsService) GetDailyRequestDetails(limit, offset int) string {
+	today := time.Now().Format("2006-01-02")
+	return s.getRequestDetailsByDate(today, limit, offset)
+}
+
+// getRequestDetailsByDate returns detailed request-level statistics for a specific date
+func (s *StatsService) getRequestDetailsByDate(date string, limit, offset int) string {
+	if s.storage == nil {
+		result := map[string]interface{}{
+			"success":  false,
+			"date":     date,
+			"requests": []interface{}{},
+			"total":    0,
+			"message":  "Storage not initialized",
+		}
+		data, _ := json.Marshal(result)
+		return string(data)
+	}
+
+	// Get total count
+	total, err := s.storage.GetRequestStatsCount("", date, date)
+	if err != nil {
+		result := map[string]interface{}{
+			"success": false,
+			"date":    date,
+			"message": "Failed to get request count: " + err.Error(),
+		}
+		data, _ := json.Marshal(result)
+		return string(data)
+	}
+
+	// Get request stats with pagination
+	requests, err := s.storage.GetRequestStats("", date, date, limit, offset)
+	if err != nil {
+		result := map[string]interface{}{
+			"success": false,
+			"date":    date,
+			"message": "Failed to get request details: " + err.Error(),
+		}
+		data, _ := json.Marshal(result)
+		return string(data)
+	}
+
+	result := map[string]interface{}{
+		"success":  true,
+		"date":     date,
+		"requests": requests,
+		"total":    total,
+		"limit":    limit,
+		"offset":   offset,
+	}
+
+	data, _ := json.Marshal(result)
+	return string(data)
 }

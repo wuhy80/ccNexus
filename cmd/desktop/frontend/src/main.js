@@ -1,4 +1,5 @@
 import './style.css'
+import './styles/details.css'
 import './effects/festival-effects.css'
 import '../wailsjs/runtime/runtime.js'
 import { setLanguage } from './i18n/index.js'
@@ -11,6 +12,7 @@ import { showDataSyncDialog } from './modules/webdav.js'
 import { initTips } from './modules/tips.js'
 import { initTerminal } from './modules/terminal.js'
 import { initSession } from './modules/session.js'
+import { showDailyDetailsModal, closeDailyDetailsModal, changeDetailsPageSize, loadPreviousDetailsPage, loadNextDetailsPage } from './modules/details.js'
 import { showSettingsModal, closeSettingsModal, saveSettings, applyTheme, initTheme, showAutoThemeConfigModal, closeAutoThemeConfigModal, saveAutoThemeConfig } from './modules/settings.js'
 import { checkUpdatesOnStartup, checkForUpdates, initUpdateSettings } from './modules/updater.js'
 import { initBroadcast } from './modules/broadcast.js'
@@ -214,3 +216,10 @@ window.deleteHistoryArchive = async () => {
     const { deleteHistoryArchive } = await import('./modules/history.js');
     deleteHistoryArchive();
 };
+
+// Daily details modal functions
+window.showDailyDetailsModal = showDailyDetailsModal;
+window.closeDailyDetailsModal = closeDailyDetailsModal;
+window.changeDetailsPageSize = changeDetailsPageSize;
+window.loadPreviousDetailsPage = loadPreviousDetailsPage;
+window.loadNextDetailsPage = loadNextDetailsPage;
