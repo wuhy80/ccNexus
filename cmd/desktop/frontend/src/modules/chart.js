@@ -85,15 +85,25 @@ export async function initTokenChart(period = 'daily') {
                     mode: 'index',
                     intersect: false,
                 },
+                layout: {
+                    padding: {
+                        top: 5,
+                        bottom: 0,
+                        left: 5,
+                        right: 5
+                    }
+                },
                 plugins: {
                     legend: {
                         position: 'top',
                         labels: {
                             usePointStyle: true,
-                            padding: 15,
+                            padding: 10,
                             font: {
                                 size: 11
-                            }
+                            },
+                            boxWidth: 8,
+                            boxHeight: 8
                         },
                         onClick: function(e, legendItem, legend) {
                             // Default click handler - toggle dataset visibility
@@ -124,7 +134,11 @@ export async function initTokenChart(period = 'daily') {
                         ticks: {
                             callback: function(value) {
                                 return formatTokens(value);
-                            }
+                            },
+                            padding: 5
+                        },
+                        grid: {
+                            drawBorder: false
                         }
                     },
                     x: {
@@ -132,7 +146,11 @@ export async function initTokenChart(period = 'daily') {
                             maxRotation: 45,
                             minRotation: 0,
                             autoSkip: true,
-                            maxTicksLimit: 20
+                            maxTicksLimit: 20,
+                            padding: 5
+                        },
+                        grid: {
+                            drawBorder: false
                         }
                     }
                 }
@@ -181,30 +199,23 @@ function buildDatasets(data) {
 
     let colorIndex = 0;
 
-    // Create datasets for each endpoint
+    // Create datasets for each endpoint (merged input + output tokens)
     for (const [endpointName, endpointData] of Object.entries(data.endpoints || {})) {
         const color = colors[colorIndex % colors.length];
 
-        // Input tokens curve (solid line)
-        datasets.push({
-            label: `${endpointName} (${t('chart.inputTokens')})`,
-            data: endpointData.inputTokens,
-            borderColor: color.border,
-            backgroundColor: color.bg,
-            borderWidth: 1.5,
-            pointRadius: 0,
-            tension: 0.3,
-            fill: false
+        // Merge input and output tokens into total tokens
+        const totalTokens = endpointData.inputTokens.map((inputVal, index) => {
+            const outputVal = endpointData.outputTokens[index] || 0;
+            return inputVal + outputVal;
         });
 
-        // Output tokens curve (dashed line)
+        // Total tokens curve (solid line)
         datasets.push({
-            label: `${endpointName} (${t('chart.outputTokens')})`,
-            data: endpointData.outputTokens,
+            label: endpointName,
+            data: totalTokens,
             borderColor: color.border,
             backgroundColor: color.bg,
-            borderWidth: 1.5,
-            borderDash: [5, 5],
+            borderWidth: 2,
             pointRadius: 0,
             tension: 0.3,
             fill: false
@@ -213,26 +224,20 @@ function buildDatasets(data) {
         colorIndex++;
     }
 
-    // Add total summary curves (bold lines)
+    // Add total summary curve (bold line)
     if (data.total) {
-        datasets.push({
-            label: `${t('chart.total')} ${t('chart.inputTokens')}`,
-            data: data.total.inputTokens,
-            borderColor: '#764ba2',
-            backgroundColor: 'rgba(118, 75, 162, 0.15)',
-            borderWidth: 3,
-            pointRadius: 0,
-            tension: 0.3,
-            fill: false
+        // Merge total input and output tokens
+        const totalTokens = data.total.inputTokens.map((inputVal, index) => {
+            const outputVal = data.total.outputTokens[index] || 0;
+            return inputVal + outputVal;
         });
 
         datasets.push({
-            label: `${t('chart.total')} ${t('chart.outputTokens')}`,
-            data: data.total.outputTokens,
+            label: t('chart.total'),
+            data: totalTokens,
             borderColor: '#764ba2',
             backgroundColor: 'rgba(118, 75, 162, 0.15)',
             borderWidth: 3,
-            borderDash: [5, 5],
             pointRadius: 0,
             tension: 0.3,
             fill: false
