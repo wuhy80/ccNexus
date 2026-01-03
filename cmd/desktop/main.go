@@ -26,8 +26,19 @@ var trayIconWindows []byte
 var trayIconOther []byte
 
 func main() {
+	// Detect development mode by checking if CCNEXUS_DEV_MODE is set
+	// You can set this environment variable when running: CCNEXUS_DEV_MODE=1 wails dev
+	isDevMode := os.Getenv("CCNEXUS_DEV_MODE") != ""
+
+	// Use different mutex name for dev mode to allow running both dev and prod instances
+	mutexName := "Global\\ccNexus-SingleInstance-Mutex"
+	if isDevMode {
+		mutexName = "Global\\ccNexus-SingleInstance-Mutex-dev"
+		log.Printf("Running in development mode")
+	}
+
 	// Check for single instance
-	mutex, err := singleinstance.CreateMutex("Global\\ccNexus-SingleInstance-Mutex")
+	mutex, err := singleinstance.CreateMutex(mutexName)
 	if err != nil {
 		// Another instance is already running, try to show it
 		log.Printf("Another instance is already running, attempting to show existing window...")
@@ -56,7 +67,12 @@ func main() {
 	windowWidth, windowHeight := 1024, 768 // defaults
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
-		dbPath := filepath.Join(homeDir, ".ccNexus", "ccnexus.db")
+		// Use different config directory for dev mode
+		configDirName := ".ccNexus"
+		if isDevMode {
+			configDirName = ".ccNexus-dev"
+		}
+		dbPath := filepath.Join(homeDir, configDirName, "ccnexus.db")
 		if sqliteStorage, err := storage.NewSQLiteStorage(dbPath); err == nil {
 			if w, err := sqliteStorage.GetConfig("windowWidth"); err == nil && w != "" {
 				if width, err := strconv.Atoi(w); err == nil && width > 0 {

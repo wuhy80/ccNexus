@@ -81,7 +81,15 @@ func (a *App) startup(ctx context.Context) {
 		logger.Error("Failed to get home directory: %v", err)
 		homeDir = "."
 	}
-	configDir := filepath.Join(homeDir, ".ccNexus")
+
+	// Use separate database for development mode
+	configDirName := ".ccNexus"
+	if os.Getenv("CCNEXUS_DEV_MODE") != "" || os.Getenv("WAILS_ENVIRONMENT") == "development" {
+		configDirName = ".ccNexus-dev"
+		logger.Info("Running in development mode, using %s directory", configDirName)
+	}
+
+	configDir := filepath.Join(homeDir, configDirName)
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		logger.Error("Failed to create config directory: %v", err)
 	}

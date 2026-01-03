@@ -10,6 +10,11 @@ ccNexus 是一个为 Claude Code 和 Codex CLI 设计的智能 API 端点轮换�
 - **桌面应用** (`cmd/desktop/`): Wails v2 图形界面，带系统托盘、会话查看器和自动更新
 - **服务器应用** (`cmd/server/`): 无头 HTTP 服务，适用于 Docker/服务器部署
 
+**开发模式说明：**
+- 开发模式使用独立数据库目录 `~/.ccNexus-dev/`，不会影响正式安装版本的数据
+- 使用 `dev.bat`(Windows) 或 `dev.sh`(macOS/Linux) 启动开发模式
+- 或者手动设置环境变量 `CCNEXUS_DEV_MODE=1` 再运行 `wails dev`
+
 ## 开发命令
 
 ### 桌面应用开发
@@ -24,7 +29,15 @@ wails doctor
 # 安装前端依赖
 cd cmd/desktop/frontend && npm install && cd ../../..
 
-# 启动开发模式（热重载）
+# 启动开发模式（热重载）- 使用独立数据库
+# Windows:
+cd cmd/desktop && dev.bat
+# macOS/Linux:
+cd cmd/desktop && ./dev.sh
+
+# 或者手动设置环境变量
+set CCNEXUS_DEV_MODE=1  # Windows
+export CCNEXUS_DEV_MODE=1  # macOS/Linux
 cd cmd/desktop && wails dev
 
 # 为当前平台构建
