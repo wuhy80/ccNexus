@@ -4,7 +4,7 @@
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Proxy Port | Local proxy listening port | `3000` |
+| Proxy Port | Local proxy listening port | `3003` |
 | Log Level | 0=Debug, 1=Info, 2=Warn, 3=Error | `1` |
 | Language | Chinese / English | `zh-CN` |
 | Theme | 12 themes available | `light` |

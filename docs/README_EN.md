@@ -50,7 +50,7 @@ Click "Add Endpoint", fill in API URL, key, and select transformer (claude/opena
 {
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "anything, not important",
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3000",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3003",
     "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000", // Some models may not support 64k
   }
   // Other settings
@@ -67,7 +67,7 @@ preferred_auth_method = "apikey"
 
 [model_providers.ccNexus]
 name = "ccNexus"
-base_url = "http://localhost:3000/v1"
+base_url = "http://localhost:3003/v1"
 wire_api = "responses"  # or "chat"
 
 # Other settings

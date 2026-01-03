@@ -95,7 +95,7 @@ type Config struct {
 // DefaultConfig returns a default configuration
 func DefaultConfig() *Config {
 	return &Config{
-		Port:         3000,
+		Port:         3003,
 		LogLevel:     1,       // Default to INFO level
 		Language:     "zh-CN", // Default to Chinese
 		WindowWidth:  1024,    // Default window width
@@ -438,7 +438,7 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 		}
 	}
 	if config.Port == 0 {
-		config.Port = 3000
+		config.Port = 3003
 	}
 
 	if logLevelStr, err := storage.GetConfig("logLevel"); err == nil && logLevelStr != "" {

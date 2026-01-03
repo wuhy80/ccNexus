@@ -37,15 +37,15 @@ COPY --from=builder /app/ccnexus-server /app/ccnexus-server
 
 # Environment variables
 ENV CCNEXUS_DATA_DIR=/data
-ENV CCNEXUS_PORT=3000
+ENV CCNEXUS_PORT=3003
 ENV CCNEXUS_DB_PATH=/data/ccnexus.db
 
 # Expose HTTP API port
-EXPOSE 3000
+EXPOSE 3003
 
 # Health check targets the API health endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3003/health || exit 1
 
 # Volume for persistent data
 VOLUME ["/data"]

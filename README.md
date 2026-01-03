@@ -51,7 +51,7 @@
 {
   "env": {
     "ANTHROPIC_AUTH_TOKEN": "随便写，不重要",
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3000",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:3003",
     "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "64000", // 有些模型可能不支持 64k
   }
   // 其他配置
@@ -68,7 +68,7 @@ preferred_auth_method = "apikey"
 
 [model_providers.ccNexus]
 name = "ccNexus"
-base_url = "http://localhost:3000/v1"
+base_url = "http://localhost:3003/v1"
 wire_api = "responses"  # 或 "chat"
 
 # 其他配置

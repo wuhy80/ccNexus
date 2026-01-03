@@ -7,15 +7,15 @@
 	- 若存储中无任何 endpoint，会自动写入默认示例 endpoint，避免 “no endpoints configured” 直接退出。请尽快替换为真实 API 配置。
 
 2. 镜像与构建
-	- [Dockerfile](../app/Dockerfile) 仅构建后端二进制 `ccnexus-server`，移除前端构建。暴露端口仅 `3000`（HTTP API）。
+	- [Dockerfile](../app/Dockerfile) 仅构建后端二进制 `ccnexus-server`，移除前端构建。暴露端口仅 `3003`（HTTP API）。
 	- 构建阶段执行 `go mod tidy` 以生成 `go.sum`，并启用 CGO 支持 SQLite。
 
 3. 运行与编排
-	- [docker-compose.yml](../app/docker-compose.yml) 仅映射 API 端口（示例 `3021:3000`），挂载数据卷 `/data`，健康检查指向 `/health`。
-	- 默认环境：`CCNEXUS_DATA_DIR=/data`，`CCNEXUS_DB_PATH=/data/ccnexus.db`，`CCNEXUS_PORT=3000`。
+	- [docker-compose.yml](../app/docker-compose.yml) 仅映射 API 端口（示例 `3003:3003`），挂载数据卷 `/data`，健康检查指向 `/health`。
+	- 默认环境：`CCNEXUS_DATA_DIR=/data`，`CCNEXUS_DB_PATH=/data/ccnexus.db`，`CCNEXUS_PORT=3003`。
 
 4. 使用快速指引
-	- 端口占用时可改成 `HOST_PORT:3000`（例如 `3021:3000`）。
+	- 端口占用时可改成 `HOST_PORT:3003`（例如 `3003:3003`）。
 	- 构建运行：`docker compose up -d --build`。
 	- 启动后更新数据库中的 endpoint key/model 到真实值，或通过配置文件/环境变量完成覆盖。
 
@@ -46,10 +46,10 @@ ccNexus 现已内置 Web 管理界面，提供可视化的端点管理和监控�
 启动服务后，通过浏览器访问：
 
 ```
-http://localhost:3021/ui/
+http://localhost:3003/ui/
 ```
 
-> 注意：端口号根据您的 docker-compose.yml 配置而定（默认映射为 `3021:3000`）
+> 注意：端口号根据您的 docker-compose.yml 配置而定（默认映射为 `3003:3003`）
 
 ### 功能特性
 
@@ -98,7 +98,7 @@ http://localhost:3021/ui/
 
 #### 通过 Web 界面添加端点
 
-1. 访问 `http://localhost:3021/ui/`
+1. 访问 `http://localhost:3003/ui/`
 2. 点击左侧导航栏的"Endpoints"（端点）
 3. 点击右上角"Add Endpoint"（添加端点）按钮
 4. 填写表单：
@@ -114,7 +114,7 @@ http://localhost:3021/ui/
 #### 通过 API 添加端点
 
 ```bash
-curl -X POST http://localhost:3021/api/endpoints \
+curl -X POST http://localhost:3003/api/endpoints \
   -H "Content-Type: application/json" \
   -d '{
 	"name": "Claude Official",
@@ -193,16 +193,16 @@ Web UI 使用原生技术栈，修改非常简单：
 
 ## Web UI 快速开始速览
 
-- **访问入口**：生产 `http://localhost:3021/ui/`（或 `/admin` 重定向），测试 `http://localhost:3022/ui/`。
+- **访问入口**：生产 `http://localhost:3003/ui/`（或 `/admin` 重定向），测试 `http://localhost:3022/ui/`。
 - **常用操作**：
   - 添加端点：`/ui/#endpoints` → Add Endpoint → 填写名称/API URL/API Key/transformer/model。
   - 测试端点：在端点列表点 Test，或 `/ui/#testing` 选择端点后 Send Test Request。
   - 查看统计：`/ui/#stats` 选择 Daily/Weekly/Monthly 查看趋势。
   - 切换/启用/禁用：在端点列表使用 Switch 或开关；Delete 可移除端点。
 - **API 示例**：
-  - 列表端点：`curl http://localhost:3021/api/endpoints`
-  - 添加端点：`curl -X POST http://localhost:3021/api/endpoints -H "Content-Type: application/json" -d '{"name":"OpenAI","apiUrl":"api.openai.com","apiKey":"sk-...","transformer":"openai","model":"gpt-4"}'`
-  - 测试端点：`curl -X POST http://localhost:3021/api/endpoints/OpenAI/test`
+  - 列表端点：`curl http://localhost:3003/api/endpoints`
+  - 添加端点：`curl -X POST http://localhost:3003/api/endpoints -H "Content-Type: application/json" -d '{"name":"OpenAI","apiUrl":"api.openai.com","apiKey":"sk-...","transformer":"openai","model":"gpt-4"}'`
+  - 测试端点：`curl -X POST http://localhost:3003/api/endpoints/OpenAI/test`
 - **容器运维快捷命令**：
   - 查看日志：`docker logs -f ccnexus`（测试实例：`ccnexus2`）。
   - 重启：`docker compose restart`（测试用 `-f docker-compose.test.yml`）。

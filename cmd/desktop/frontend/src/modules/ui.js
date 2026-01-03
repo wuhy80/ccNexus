@@ -15,7 +15,7 @@ export function initUI() {
                 <div style="display: flex; gap: 15px; align-items: center;">
                     <div class="port-display" onclick="window.showEditPortModal()" title="${t('header.port')}">
                         <span style="color: #666; font-size: 14px;">${t('header.port')}: </span>
-                        <span class="port-number" id="proxyPort">3000</span>
+                        <span class="port-number" id="proxyPort">3003</span>
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <button class="header-link" onclick="window.openGitHub()" title="${t('header.githubRepo')}">
@@ -431,7 +431,7 @@ export function initUI() {
                 <div class="modal-body">
                     <div class="form-group">
                         <label><span class="required">*</span>${t('modal.portLabel')}</label>
-                        <input type="number" id="portInput" min="1" max="65535" placeholder="3000">
+                        <input type="number" id="portInput" min="1" max="65535" placeholder="3003">
                     </div>
                     <p style="color: #666; font-size: 14px; margin-top: 10px;">
                         ⚠️ ${t('modal.portNote')}
