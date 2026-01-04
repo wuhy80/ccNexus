@@ -492,10 +492,10 @@ function initTimeSelectors() {
 
     if (!startSelect || !endSelect) return;
 
-    // Generate time options (5-minute intervals)
+    // Generate time options (30-minute intervals)
     const options = [];
     for (let h = 0; h < 24; h++) {
-        for (let m = 0; m < 60; m += 5) {
+        for (let m = 0; m < 60; m += 30) {
             const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
             options.push(time);
         }
