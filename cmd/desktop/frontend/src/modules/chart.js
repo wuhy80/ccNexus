@@ -4,7 +4,12 @@ import { t } from '../i18n/index.js';
 let chartInstance = null;
 let currentGranularity = '5min';
 let currentPeriod = 'daily';
+let currentChartType = 'line';  // 'line' | 'bar'
+let customStartTime = null;     // null means auto, otherwise "HH:MM"
+let customEndTime = null;       // null means auto, otherwise "HH:MM"
+let dataRange = null;           // Store data range info from backend
 let refreshInterval = null;
+let timeSelectorInitialized = false;
 
 /**
  * Initialize token trend chart
@@ -18,6 +23,15 @@ export async function initTokenChart(period = 'daily') {
     }
 
     currentPeriod = period;
+
+    // Initialize time selectors if not done yet
+    if (!timeSelectorInitialized) {
+        initTimeSelectors();
+        timeSelectorInitialized = true;
+    }
+
+    // Update time selector visibility based on period and granularity
+    updateTimeSelectorVisibility();
 
     // Clear any existing error messages
     const existingError = document.getElementById('chartError');
@@ -71,9 +85,11 @@ export async function initTokenChart(period = 'daily') {
         // Build datasets
         const datasets = buildDatasets(data.data);
 
+        const isBarChart = currentChartType === 'bar';
+
         // Create chart instance
         chartInstance = new Chart(ctx, {
-            type: 'line',
+            type: currentChartType,
             data: {
                 labels: data.data.timestamps,
                 datasets: datasets
@@ -131,6 +147,7 @@ export async function initTokenChart(period = 'daily') {
                 scales: {
                     y: {
                         beginAtZero: true,
+                        stacked: isBarChart,
                         ticks: {
                             callback: function(value) {
                                 return formatTokens(value);
@@ -142,6 +159,7 @@ export async function initTokenChart(period = 'daily') {
                         }
                     },
                     x: {
+                        stacked: isBarChart,
                         ticks: {
                             maxRotation: 45,
                             minRotation: 0,
@@ -159,6 +177,7 @@ export async function initTokenChart(period = 'daily') {
 
         // Update button states based on current period
         updateGranularityButtons();
+        updateChartTypeButtons();
 
         // Start auto refresh
         startAutoRefresh();
@@ -190,14 +209,15 @@ function buildDatasets(data) {
 
     // Predefined colors for different endpoints
     const colors = [
-        { border: '#667eea', bg: 'rgba(102, 126, 234, 0.1)' },
-        { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
-        { border: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' },
-        { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' },
-        { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' }
+        { border: '#667eea', bg: 'rgba(102, 126, 234, 0.8)' },
+        { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.8)' },
+        { border: '#10b981', bg: 'rgba(16, 185, 129, 0.8)' },
+        { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.8)' },
+        { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.8)' }
     ];
 
     let colorIndex = 0;
+    const isBarChart = currentChartType === 'bar';
 
     // Create datasets for each endpoint (merged input + output tokens)
     for (const [endpointName, endpointData] of Object.entries(data.endpoints || {})) {
@@ -209,23 +229,32 @@ function buildDatasets(data) {
             return inputVal + outputVal;
         });
 
-        // Total tokens curve (solid line)
-        datasets.push({
+        const dataset = {
             label: endpointName,
             data: totalTokens,
             borderColor: color.border,
-            backgroundColor: color.bg,
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.3,
-            fill: false
-        });
+            backgroundColor: isBarChart ? color.border : `rgba(${hexToRgb(color.border)}, 0.1)`,
+        };
 
+        if (isBarChart) {
+            // Bar chart stacked config
+            dataset.stack = 'tokens';
+            dataset.borderWidth = 1;
+            dataset.borderRadius = 2;
+        } else {
+            // Line chart config
+            dataset.borderWidth = 2;
+            dataset.pointRadius = 0;
+            dataset.tension = 0.3;
+            dataset.fill = false;
+        }
+
+        datasets.push(dataset);
         colorIndex++;
     }
 
-    // Add total summary curve (bold line)
-    if (data.total) {
+    // Add total summary curve only for line chart (bar chart stacking shows total automatically)
+    if (!isBarChart && data.total) {
         // Merge total input and output tokens
         const totalTokens = data.total.inputTokens.map((inputVal, index) => {
             const outputVal = data.total.outputTokens[index] || 0;
@@ -248,6 +277,17 @@ function buildDatasets(data) {
 }
 
 /**
+ * Convert hex color to RGB values
+ */
+function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (result) {
+        return `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`;
+    }
+    return '102, 126, 234';
+}
+
+/**
  * Fetch chart data from backend API
  * @param {string} granularity - Time granularity ('5min', '30min', 'request')
  * @param {string} period - Time period ('daily', 'yesterday', 'weekly', 'monthly')
@@ -255,8 +295,21 @@ function buildDatasets(data) {
  */
 async function fetchChartData(granularity, period) {
     try {
-        const dataStr = await window.go.main.App.GetTokenTrendData(granularity, period);
-        return JSON.parse(dataStr);
+        const startTime = customStartTime || '';
+        const endTime = customEndTime || '';
+        const dataStr = await window.go.main.App.GetTokenTrendData(granularity, period, startTime, endTime);
+        const result = JSON.parse(dataStr);
+
+        // Store data range info and update time selectors
+        if (result.success && result.dataRange) {
+            dataRange = result.dataRange;
+            // Update time selector values if in auto mode
+            if (!customStartTime && !customEndTime) {
+                updateTimeSelectorValues(result.dataRange.effectiveStart, result.dataRange.effectiveEnd);
+            }
+        }
+
+        return result;
     } catch (error) {
         console.error('Failed to fetch chart data:', error);
         return { success: false, message: error.message };
@@ -409,3 +462,157 @@ function showChartError(message) {
 
 // Expose functions to window for onclick handlers
 window.switchGranularity = switchGranularity;
+
+/**
+ * Switch chart type
+ * @param {string} type - Chart type ('line' or 'bar')
+ */
+export async function switchChartType(type) {
+    if (type === currentChartType) return;
+
+    currentChartType = type;
+    updateChartTypeButtons();
+    await initTokenChart(currentPeriod);
+}
+
+/**
+ * Update chart type button states
+ */
+function updateChartTypeButtons() {
+    document.querySelectorAll('.chart-type-btn').forEach(btn => {
+        const type = btn.dataset.type;
+        btn.classList.toggle('active', type === currentChartType);
+    });
+}
+
+/**
+ * Initialize time selectors with 5-minute intervals
+ */
+function initTimeSelectors() {
+    const startSelect = document.getElementById('chartStartTime');
+    const endSelect = document.getElementById('chartEndTime');
+
+    if (!startSelect || !endSelect) return;
+
+    // Generate time options (5-minute intervals)
+    const options = [];
+    for (let h = 0; h < 24; h++) {
+        for (let m = 0; m < 60; m += 5) {
+            const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+            options.push(time);
+        }
+    }
+
+    // Populate start time selector
+    startSelect.innerHTML = options.map(time =>
+        `<option value="${time}">${time}</option>`
+    ).join('');
+
+    // Populate end time selector (add 24:00 option)
+    const endOptions = [...options, '24:00'];
+    endSelect.innerHTML = endOptions.map(time =>
+        `<option value="${time}">${time}</option>`
+    ).join('');
+
+    // Set default values
+    startSelect.value = '00:00';
+    endSelect.value = '24:00';
+}
+
+/**
+ * Update time selector values based on data range
+ */
+function updateTimeSelectorValues(effectiveStart, effectiveEnd) {
+    const startSelect = document.getElementById('chartStartTime');
+    const endSelect = document.getElementById('chartEndTime');
+
+    if (!startSelect || !endSelect) return;
+
+    if (effectiveStart) {
+        startSelect.value = effectiveStart;
+    }
+    if (effectiveEnd) {
+        endSelect.value = effectiveEnd;
+    }
+}
+
+/**
+ * Update time selector visibility based on period and granularity
+ */
+function updateTimeSelectorVisibility() {
+    const selector = document.getElementById('chartTimeSelector');
+    if (!selector) return;
+
+    // Hide time selector for multi-day periods or request granularity
+    const isMultiDay = (currentPeriod === 'weekly' || currentPeriod === 'monthly');
+    const isRequestGranularity = (currentGranularity === 'request');
+
+    if (isMultiDay || isRequestGranularity) {
+        selector.style.display = 'none';
+        // Reset custom time when hiding
+        customStartTime = null;
+        customEndTime = null;
+    } else {
+        selector.style.display = 'flex';
+    }
+}
+
+/**
+ * Handle time range change from selectors
+ */
+async function onChartTimeChange() {
+    const startSelect = document.getElementById('chartStartTime');
+    const endSelect = document.getElementById('chartEndTime');
+
+    if (!startSelect || !endSelect) return;
+
+    const newStart = startSelect.value;
+    const newEnd = endSelect.value;
+
+    // Validate: end must be after start
+    if (newEnd <= newStart) {
+        // Auto-correct: set end to start + 1 hour or 24:00
+        const startMinutes = parseTimeToMinutes(newStart);
+        const newEndMinutes = Math.min(startMinutes + 60, 24 * 60);
+        endSelect.value = minutesToTimeString(newEndMinutes);
+    }
+
+    customStartTime = startSelect.value;
+    customEndTime = endSelect.value;
+
+    await initTokenChart(currentPeriod);
+}
+
+/**
+ * Reset time range to auto mode
+ */
+async function resetChartTimeRange() {
+    customStartTime = null;
+    customEndTime = null;
+    await initTokenChart(currentPeriod);
+}
+
+/**
+ * Parse time string to minutes
+ */
+function parseTimeToMinutes(timeStr) {
+    if (!timeStr) return 0;
+    if (timeStr === '24:00') return 24 * 60;
+    const [h, m] = timeStr.split(':').map(Number);
+    return h * 60 + m;
+}
+
+/**
+ * Convert minutes to time string
+ */
+function minutesToTimeString(minutes) {
+    if (minutes >= 24 * 60) return '24:00';
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+}
+
+// Expose additional functions to window for onclick handlers
+window.switchChartType = switchChartType;
+window.onChartTimeChange = onChartTimeChange;
+window.resetChartTimeRange = resetChartTimeRange;

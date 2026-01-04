@@ -238,7 +238,12 @@ export default {
         noData: 'No data available for the selected period',
         noDataHint: 'Data will appear when requests are made',
         loadFailed: 'Failed to load chart data',
-        libraryFailed: 'Failed to load Chart.js library'
+        libraryFailed: 'Failed to load Chart.js library',
+        lineChart: 'Line Chart',
+        barChart: 'Bar Chart',
+        startTime: 'Start Time',
+        endTime: 'End Time',
+        resetTime: 'Reset to Auto'
     },
     history: {
         title: 'Historical Statistics',

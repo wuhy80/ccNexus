@@ -238,7 +238,12 @@ export default {
         noData: '所选周期暂无数据',
         noDataHint: '发起请求后将显示数据',
         loadFailed: '加载图表数据失败',
-        libraryFailed: '加载图表库失败'
+        libraryFailed: '加载图表库失败',
+        lineChart: '折线图',
+        barChart: '柱状图',
+        startTime: '开始时间',
+        endTime: '结束时间',
+        resetTime: '重置为自动'
     },
     history: {
         title: '历史统计',

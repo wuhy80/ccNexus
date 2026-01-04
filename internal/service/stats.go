@@ -277,7 +277,8 @@ func (s *StatsService) getRequestDetailsByDate(date string, limit, offset int) s
 }
 
 // GetTokenTrendData returns token usage trend data for charting
-func (s *StatsService) GetTokenTrendData(granularity string, period string) string {
+// startTime and endTime are optional time filters in "HH:MM" format (empty string means auto)
+func (s *StatsService) GetTokenTrendData(granularity, period, startTime, endTime string) string {
 	if s.storage == nil {
 		return jsonError("Storage not initialized")
 	}
@@ -321,9 +322,9 @@ func (s *StatsService) GetTokenTrendData(granularity string, period string) stri
 	var result map[string]interface{}
 	switch granularity {
 	case "5min":
-		result = s.aggregateBy5Minutes(requests, startDate, endDate, period)
+		result = s.aggregateByMinutes(requests, startDate, endDate, period, 5, startTime, endTime)
 	case "30min":
-		result = s.aggregateBy30Minutes(requests, startDate, endDate, period)
+		result = s.aggregateByMinutes(requests, startDate, endDate, period, 30, startTime, endTime)
 	case "request":
 		result = s.aggregateByRequest(requests, period)
 	default:
@@ -334,16 +335,38 @@ func (s *StatsService) GetTokenTrendData(granularity string, period string) stri
 	return string(data)
 }
 
-// aggregateBy5Minutes aggregates requests into 5-minute time slots (288 slots per day)
-func (s *StatsService) aggregateBy5Minutes(requests []storage.RequestStat, startDate, endDate, period string) map[string]interface{} {
-	timeSlots := generateTimeSlots(5)
+// aggregateByMinutes aggregates requests into time slots with smart time range compression
+// intervalMinutes: 5 or 30
+// startTime/endTime: optional "HH:MM" format, empty means auto-calculate
+func (s *StatsService) aggregateByMinutes(requests []storage.RequestStat, startDate, endDate, period string, intervalMinutes int, startTime, endTime string) map[string]interface{} {
+	// Find first and last request times for auto range calculation
+	var firstRequestTime, lastRequestTime string
+	if len(requests) > 0 {
+		// Requests are in DESC order, so last element is earliest
+		firstReq := requests[len(requests)-1]
+		lastReq := requests[0]
+		firstRequestTime = firstReq.Timestamp.Format("15:04")
+		lastRequestTime = lastReq.Timestamp.Format("15:04")
+	}
+
+	// Calculate effective time range
+	effectiveStart, effectiveEnd := calculateEffectiveTimeRange(
+		startTime, endTime, firstRequestTime, lastRequestTime, intervalMinutes,
+	)
+
+	// Generate time slots only for the effective range
+	timeSlots := generateTimeSlotsInRange(effectiveStart, effectiveEnd, intervalMinutes)
+	startSlotIndex := getTimeSlotIndexFromString(effectiveStart, intervalMinutes)
+
 	endpointData := make(map[string]map[string][]int)
 	totalInput := make([]int, len(timeSlots))
 	totalOutput := make([]int, len(timeSlots))
 
 	for _, req := range requests {
-		slotIndex := getTimeSlotIndex(req.Timestamp, 5)
-		if slotIndex < 0 || slotIndex >= len(timeSlots) {
+		absoluteSlotIndex := getTimeSlotIndex(req.Timestamp, intervalMinutes)
+		// Convert to relative index within our range
+		relativeSlotIndex := absoluteSlotIndex - startSlotIndex
+		if relativeSlotIndex < 0 || relativeSlotIndex >= len(timeSlots) {
 			continue
 		}
 
@@ -358,17 +381,28 @@ func (s *StatsService) aggregateBy5Minutes(requests []storage.RequestStat, start
 		// Merge cache tokens into input
 		inputTotal := req.InputTokens + req.CacheCreationTokens + req.CacheReadTokens
 
-		endpointData[req.EndpointName]["inputTokens"][slotIndex] += inputTotal
-		endpointData[req.EndpointName]["outputTokens"][slotIndex] += req.OutputTokens
-		totalInput[slotIndex] += inputTotal
-		totalOutput[slotIndex] += req.OutputTokens
+		endpointData[req.EndpointName]["inputTokens"][relativeSlotIndex] += inputTotal
+		endpointData[req.EndpointName]["outputTokens"][relativeSlotIndex] += req.OutputTokens
+		totalInput[relativeSlotIndex] += inputTotal
+		totalOutput[relativeSlotIndex] += req.OutputTokens
+	}
+
+	granularityStr := "5min"
+	if intervalMinutes == 30 {
+		granularityStr = "30min"
 	}
 
 	return map[string]interface{}{
 		"success":     true,
-		"granularity": "5min",
+		"granularity": granularityStr,
 		"period":      period,
 		"dateRange":   map[string]string{"start": startDate, "end": endDate},
+		"dataRange": map[string]string{
+			"firstRequest":   firstRequestTime,
+			"lastRequest":    lastRequestTime,
+			"effectiveStart": effectiveStart,
+			"effectiveEnd":   effectiveEnd,
+		},
 		"data": map[string]interface{}{
 			"timestamps": timeSlots,
 			"endpoints":  endpointData,
@@ -380,50 +414,99 @@ func (s *StatsService) aggregateBy5Minutes(requests []storage.RequestStat, start
 	}
 }
 
-// aggregateBy30Minutes aggregates requests into 30-minute time slots (48 slots per day)
-func (s *StatsService) aggregateBy30Minutes(requests []storage.RequestStat, startDate, endDate, period string) map[string]interface{} {
-	timeSlots := generateTimeSlots(30)
-	endpointData := make(map[string]map[string][]int)
-	totalInput := make([]int, len(timeSlots))
-	totalOutput := make([]int, len(timeSlots))
-
-	for _, req := range requests {
-		slotIndex := getTimeSlotIndex(req.Timestamp, 30)
-		if slotIndex < 0 || slotIndex >= len(timeSlots) {
-			continue
+// calculateEffectiveTimeRange calculates the effective time range for display
+// If startTime/endTime are provided, use them; otherwise auto-calculate based on data
+func calculateEffectiveTimeRange(startTime, endTime, firstRequest, lastRequest string, intervalMinutes int) (string, string) {
+	// Default to full day if no data
+	if firstRequest == "" || lastRequest == "" {
+		if startTime != "" && endTime != "" {
+			return startTime, endTime
 		}
-
-		// Initialize endpoint data if not exists
-		if _, exists := endpointData[req.EndpointName]; !exists {
-			endpointData[req.EndpointName] = map[string][]int{
-				"inputTokens":  make([]int, len(timeSlots)),
-				"outputTokens": make([]int, len(timeSlots)),
-			}
-		}
-
-		// Merge cache tokens into input
-		inputTotal := req.InputTokens + req.CacheCreationTokens + req.CacheReadTokens
-
-		endpointData[req.EndpointName]["inputTokens"][slotIndex] += inputTotal
-		endpointData[req.EndpointName]["outputTokens"][slotIndex] += req.OutputTokens
-		totalInput[slotIndex] += inputTotal
-		totalOutput[slotIndex] += req.OutputTokens
+		return "00:00", "24:00"
 	}
 
-	return map[string]interface{}{
-		"success":     true,
-		"granularity": "30min",
-		"period":      period,
-		"dateRange":   map[string]string{"start": startDate, "end": endDate},
-		"data": map[string]interface{}{
-			"timestamps": timeSlots,
-			"endpoints":  endpointData,
-			"total": map[string][]int{
-				"inputTokens":  totalInput,
-				"outputTokens": totalOutput,
-			},
-		},
+	var effectiveStart, effectiveEnd string
+
+	// Calculate auto start: max(00:00, firstRequest - 5min), rounded down to interval
+	if startTime == "" {
+		firstMinutes := parseTimeToMinutes(firstRequest)
+		autoStartMinutes := firstMinutes - 5
+		if autoStartMinutes < 0 {
+			autoStartMinutes = 0
+		}
+		// Round down to interval
+		autoStartMinutes = (autoStartMinutes / intervalMinutes) * intervalMinutes
+		effectiveStart = minutesToTimeString(autoStartMinutes)
+	} else {
+		effectiveStart = startTime
 	}
+
+	// Calculate auto end: lastRequest rounded up to next interval
+	if endTime == "" {
+		lastMinutes := parseTimeToMinutes(lastRequest)
+		// Round up to next interval
+		autoEndMinutes := ((lastMinutes / intervalMinutes) + 1) * intervalMinutes
+		if autoEndMinutes > 24*60 {
+			autoEndMinutes = 24 * 60
+		}
+		effectiveEnd = minutesToTimeString(autoEndMinutes)
+	} else {
+		effectiveEnd = endTime
+	}
+
+	return effectiveStart, effectiveEnd
+}
+
+// generateTimeSlotsInRange generates time slot labels for a given time range
+func generateTimeSlotsInRange(startTime, endTime string, intervalMinutes int) []string {
+	startMinutes := parseTimeToMinutes(startTime)
+	endMinutes := parseTimeToMinutes(endTime)
+
+	if endMinutes <= startMinutes {
+		endMinutes = startMinutes + intervalMinutes
+	}
+
+	numSlots := (endMinutes - startMinutes) / intervalMinutes
+	slots := make([]string, numSlots)
+	for i := 0; i < numSlots; i++ {
+		totalMinutes := startMinutes + i*intervalMinutes
+		hour := totalMinutes / 60
+		minute := totalMinutes % 60
+		slots[i] = time.Date(0, 1, 1, hour, minute, 0, 0, time.UTC).Format("15:04")
+	}
+
+	return slots
+}
+
+// parseTimeToMinutes converts "HH:MM" to total minutes
+func parseTimeToMinutes(timeStr string) int {
+	if timeStr == "" {
+		return 0
+	}
+	if timeStr == "24:00" {
+		return 24 * 60
+	}
+	t, err := time.Parse("15:04", timeStr)
+	if err != nil {
+		return 0
+	}
+	return t.Hour()*60 + t.Minute()
+}
+
+// minutesToTimeString converts total minutes to "HH:MM" format
+func minutesToTimeString(minutes int) string {
+	if minutes >= 24*60 {
+		return "24:00"
+	}
+	hour := minutes / 60
+	minute := minutes % 60
+	return time.Date(0, 1, 1, hour, minute, 0, 0, time.UTC).Format("15:04")
+}
+
+// getTimeSlotIndexFromString calculates slot index from "HH:MM" string
+func getTimeSlotIndexFromString(timeStr string, intervalMinutes int) int {
+	minutes := parseTimeToMinutes(timeStr)
+	return minutes / intervalMinutes
 }
 
 // aggregateByRequest aggregates by individual requests (max 200 points)

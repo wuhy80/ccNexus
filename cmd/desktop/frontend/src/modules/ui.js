@@ -159,16 +159,46 @@ export function initUI() {
 
                         <!-- Token Trend Chart -->
                         <div class="chart-container">
-                            <div class="chart-controls">
-                                <button class="granularity-btn active" data-granularity="5min" onclick="window.switchGranularity('5min')">
-                                    5${t('chart.minutes') || '分钟'}
-                                </button>
-                                <button class="granularity-btn" data-granularity="30min" onclick="window.switchGranularity('30min')">
-                                    30${t('chart.minutes') || '分钟'}
-                                </button>
-                                <button class="granularity-btn" data-granularity="request" onclick="window.switchGranularity('request')">
-                                    ${t('chart.perRequest') || '每次请求'}
-                                </button>
+                            <div class="chart-header">
+                                <!-- Left: Time Range Selector -->
+                                <div class="chart-time-selector" id="chartTimeSelector">
+                                    <select id="chartStartTime" class="time-select" onchange="window.onChartTimeChange()">
+                                    </select>
+                                    <span class="time-separator">—</span>
+                                    <select id="chartEndTime" class="time-select" onchange="window.onChartTimeChange()">
+                                    </select>
+                                    <button id="chartTimeReset" class="btn-icon" title="${t('chart.resetTime') || '重置为自动'}" onclick="window.resetChartTimeRange()">↺</button>
+                                </div>
+
+                                <!-- Right: Chart Type + Granularity -->
+                                <div class="chart-controls">
+                                    <!-- Chart Type Toggle -->
+                                    <div class="chart-type-btns">
+                                        <button class="chart-type-btn active" data-type="line" title="${t('chart.lineChart') || '折线图'}" onclick="window.switchChartType('line')">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                                            </svg>
+                                        </button>
+                                        <button class="chart-type-btn" data-type="bar" title="${t('chart.barChart') || '柱状图'}" onclick="window.switchChartType('bar')">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <rect x="3" y="12" width="4" height="9"></rect>
+                                                <rect x="10" y="6" width="4" height="15"></rect>
+                                                <rect x="17" y="3" width="4" height="18"></rect>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <div class="control-divider"></div>
+                                    <!-- Granularity Buttons -->
+                                    <button class="granularity-btn active" data-granularity="5min" onclick="window.switchGranularity('5min')">
+                                        5${t('chart.minutes') || '分钟'}
+                                    </button>
+                                    <button class="granularity-btn" data-granularity="30min" onclick="window.switchGranularity('30min')">
+                                        30${t('chart.minutes') || '分钟'}
+                                    </button>
+                                    <button class="granularity-btn" data-granularity="request" onclick="window.switchGranularity('request')">
+                                        ${t('chart.perRequest') || '每次请求'}
+                                    </button>
+                                </div>
                             </div>
                             <canvas id="tokenChartContainer"></canvas>
                         </div>
