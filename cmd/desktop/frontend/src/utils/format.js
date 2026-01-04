@@ -41,14 +41,11 @@ function formatTokensEn(value) {
 }
 
 function formatTokensZh(value) {
-    if (value >= 100000000) {
-        return `${trimDecimals(value / 100000000, 2)}亿`;
-    }
-    if (value >= 10000) {
-        return `${trimDecimals(value / 10000, 1)}万`;
+    if (value >= 1000000) {
+        return (value / 1000000).toFixed(1) + 'M';
     }
     if (value >= 1000) {
-        return `${trimDecimals(value / 1000, 1)}千`;
+        return (value / 1000).toFixed(1) + 'K';
     }
     return value.toString();
 }
