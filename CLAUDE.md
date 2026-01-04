@@ -11,9 +11,11 @@ ccNexus 是一个为 Claude Code 和 Codex CLI 设计的智能 API 端点轮换�
 - **服务器应用** (`cmd/server/`): 无头 HTTP 服务，适用于 Docker/服务器部署
 
 **开发模式说明：**
-- 开发模式使用独立数据库目录 `~/.ccNexus-dev/`，不会影响正式安装版本的数据
+- 开发模式使用正式版本的数据库 `~/.ccNexus/`，但禁用代理服务器
+- 这样可以在开发环境中测试新界面，同时使用正式版本的数据和功能
 - 使用 `dev.bat`(Windows) 或 `dev.sh`(macOS/Linux) 启动开发模式
-- 或者手动设置环境变量 `CCNEXUS_DEV_MODE=1` 再运行 `wails dev`
+- 或者手动设置环境变量 `CCNEXUS_NO_PROXY=1` 再运行 `wails dev`
+- 如果需要使用独立数据库进行测试，可以设置 `CCNEXUS_DEV_MODE=1`
 
 ## 开发命令
 
@@ -29,15 +31,20 @@ wails doctor
 # 安装前端依赖
 cd cmd/desktop/frontend && npm install && cd ../../..
 
-# 启动开发模式（热重载）- 使用独立数据库
+# 启动开发模式（热重载）- 使用正式数据库，禁用代理服务器
 # Windows:
 cd cmd/desktop && dev.bat
 # macOS/Linux:
 cd cmd/desktop && ./dev.sh
 
 # 或者手动设置环境变量
-set CCNEXUS_DEV_MODE=1  # Windows
-export CCNEXUS_DEV_MODE=1  # macOS/Linux
+set CCNEXUS_NO_PROXY=1  # Windows - 使用正式数据库，禁用代理
+export CCNEXUS_NO_PROXY=1  # macOS/Linux - 使用正式数据库，禁用代理
+cd cmd/desktop && wails dev
+
+# 如果需要使用独立数据库进行测试
+set CCNEXUS_DEV_MODE=1  # Windows - 使用独立数据库 ~/.ccNexus-dev/
+export CCNEXUS_DEV_MODE=1  # macOS/Linux - 使用独立数据库 ~/.ccNexus-dev/
 cd cmd/desktop && wails dev
 
 # 为当前平台构建

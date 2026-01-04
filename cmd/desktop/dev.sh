@@ -1,9 +1,10 @@
 #!/bin/bash
-# 设置开发模式环境变量
-export CCNEXUS_DEV_MODE=1
+# 设置开发模式环境变量 - 禁用代理服务器但使用正式数据库
+export CCNEXUS_NO_PROXY=1
 
 echo "Starting ccNexus in development mode..."
-echo "Using separate database: ~/.ccNexus-dev/"
+echo "Using production database: ~/.ccNexus/"
+echo "Proxy server disabled for UI testing"
 echo ""
 
 wails dev

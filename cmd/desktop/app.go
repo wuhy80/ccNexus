@@ -152,11 +152,16 @@ func (a *App) startup(ctx context.Context) {
 
 	a.initTray()
 
-	go func() {
-		if err := a.proxy.Start(); err != nil {
-			logger.Error("Proxy server error: %v", err)
-		}
-	}()
+	// Only start proxy if not disabled (useful for development UI testing)
+	if os.Getenv("CCNEXUS_NO_PROXY") == "" {
+		go func() {
+			if err := a.proxy.Start(); err != nil {
+				logger.Error("Proxy server error: %v", err)
+			}
+		}()
+	} else {
+		logger.Info("Proxy server disabled (CCNEXUS_NO_PROXY is set)")
+	}
 
 	time.Sleep(300 * time.Millisecond)
 	runtime.WindowShow(ctx)
