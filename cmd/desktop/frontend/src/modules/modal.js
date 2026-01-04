@@ -532,8 +532,8 @@ export async function testEndpointHandler(index, buttonElement) {
         buttonElement.disabled = true;
         buttonElement.innerHTML = '⏳';
 
-        // 使用轻量级测试（优先零消耗方法）
-        const result = await testEndpointLight(clientType, index);
+        // 使用真实API请求测试
+        const result = await testEndpoint(clientType, index);
 
         const resultContent = document.getElementById('testResultContent');
         const resultTitle = document.getElementById('testResultTitle');
