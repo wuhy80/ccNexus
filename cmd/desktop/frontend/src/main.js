@@ -91,7 +91,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Load initial data
     await loadConfigAndRender();
-    loadStatsByPeriod('daily'); // Load today's stats by default
+    await loadStatsByPeriod('daily'); // Load today's stats by default
 
     // Initialize token chart (delayed to allow data loading)
     setTimeout(() => {
