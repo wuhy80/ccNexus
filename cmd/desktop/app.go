@@ -82,11 +82,16 @@ func (a *App) startup(ctx context.Context) {
 		homeDir = "."
 	}
 
-	// Use separate database for development mode
+	// Use separate database ONLY when CCNEXUS_DEV_MODE is explicitly set
+	// CCNEXUS_NO_PROXY and wails dev will use production database
 	configDirName := ".ccNexus"
-	if os.Getenv("CCNEXUS_DEV_MODE") != "" || os.Getenv("WAILS_ENVIRONMENT") == "development" {
+	if os.Getenv("CCNEXUS_DEV_MODE") != "" {
 		configDirName = ".ccNexus-dev"
-		logger.Info("Running in development mode, using %s directory", configDirName)
+		logger.Info("Running in dev mode with separate database: %s", configDirName)
+	} else if os.Getenv("CCNEXUS_NO_PROXY") != "" {
+		logger.Info("Running in no-proxy mode with production database: %s", configDirName)
+	} else if os.Getenv("WAILS_ENVIRONMENT") == "development" {
+		logger.Info("Running in Wails dev mode with production database: %s", configDirName)
 	}
 
 	configDir := filepath.Join(homeDir, configDirName)

@@ -26,15 +26,24 @@ var trayIconWindows []byte
 var trayIconOther []byte
 
 func main() {
-	// Detect development mode by checking if CCNEXUS_DEV_MODE is set
-	// You can set this environment variable when running: CCNEXUS_DEV_MODE=1 wails dev
+	// Detect development mode by checking Wails environment or CCNEXUS_NO_PROXY
+	// CCNEXUS_NO_PROXY: Use production database but disable proxy (for UI testing)
+	// CCNEXUS_DEV_MODE: Use separate dev database (for isolated testing)
 	isDevMode := os.Getenv("CCNEXUS_DEV_MODE") != ""
+	isNoProxyMode := os.Getenv("CCNEXUS_NO_PROXY") != ""
+	isWailsDev := os.Getenv("WAILS_ENVIRONMENT") == "development"
 
 	// Use different mutex name for dev mode to allow running both dev and prod instances
 	mutexName := "Global\\ccNexus-SingleInstance-Mutex"
-	if isDevMode {
+	if isDevMode || isNoProxyMode || isWailsDev {
 		mutexName = "Global\\ccNexus-SingleInstance-Mutex-dev"
-		log.Printf("Running in development mode")
+		if isNoProxyMode {
+			log.Printf("Running in no-proxy mode (using production database)")
+		} else if isDevMode {
+			log.Printf("Running in development mode (using separate database)")
+		} else {
+			log.Printf("Running in Wails development mode")
+		}
 	}
 
 	// Check for single instance
@@ -67,7 +76,8 @@ func main() {
 	windowWidth, windowHeight := 1024, 768 // defaults
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
-		// Use different config directory for dev mode
+		// Use different config directory ONLY for CCNEXUS_DEV_MODE (separate database testing)
+		// CCNEXUS_NO_PROXY uses production database
 		configDirName := ".ccNexus"
 		if isDevMode {
 			configDirName = ".ccNexus-dev"
