@@ -478,11 +478,10 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
         return string(data)
     }
 
-    normalizedAPIUrl := normalizeAPIUrl(endpoint.APIUrl)
-    if !strings.HasPrefix(normalizedAPIUrl, "http://") && !strings.HasPrefix(normalizedAPIUrl, "https://") {
-        normalizedAPIUrl = "https://" + normalizedAPIUrl
-    }
-    url := fmt.Sprintf("%s%s", normalizedAPIUrl, apiPath)
+    // 通过ccNexus代理发送请求，而不是直接发送到目标API
+    // 这样请求会被识别为Claude Code客户端
+    port := e.config.GetPort()
+    url := fmt.Sprintf("http://localhost:%d%s", port, apiPath)
 
     req, err := http.NewRequest("POST", url, bytes.NewReader(requestBody))
     if err != nil {
