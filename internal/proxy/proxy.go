@@ -35,7 +35,8 @@ type APIResponse struct {
 type Proxy struct {
 	config           *config.Config
 	stats            *Stats
-	currentIndex     int
+	currentIndex     int                          // Legacy: for backward compatibility
+	currentIndexByClient map[ClientType]int       // Per-client endpoint index
 	mu               sync.RWMutex
 	server           *http.Server
 	activeRequests   map[string]bool              // tracks active requests by endpoint name
@@ -43,7 +44,7 @@ type Proxy struct {
 	endpointCtx      map[string]context.Context   // context per endpoint for cancellation
 	endpointCancel   map[string]context.CancelFunc // cancel functions per endpoint
 	ctxMu            sync.RWMutex                 // protects context maps
-	onEndpointSuccess func(endpointName string)   // callback when endpoint request succeeds
+	onEndpointSuccess func(endpointName string, clientType string)   // callback when endpoint request succeeds
 }
 
 // New creates a new Proxy instance
@@ -51,17 +52,18 @@ func New(cfg *config.Config, statsStorage StatsStorage, deviceID string) *Proxy 
 	stats := NewStats(statsStorage, deviceID)
 
 	return &Proxy{
-		config:         cfg,
-		stats:          stats,
-		currentIndex:   0,
-		activeRequests: make(map[string]bool),
-		endpointCtx:    make(map[string]context.Context),
-		endpointCancel: make(map[string]context.CancelFunc),
+		config:              cfg,
+		stats:               stats,
+		currentIndex:        0,
+		currentIndexByClient: make(map[ClientType]int),
+		activeRequests:      make(map[string]bool),
+		endpointCtx:         make(map[string]context.Context),
+		endpointCancel:      make(map[string]context.CancelFunc),
 	}
 }
 
 // SetOnEndpointSuccess sets the callback for successful endpoint requests
-func (p *Proxy) SetOnEndpointSuccess(callback func(endpointName string)) {
+func (p *Proxy) SetOnEndpointSuccess(callback func(endpointName string, clientType string)) {
 	p.onEndpointSuccess = callback
 }
 
@@ -118,7 +120,12 @@ func (p *Proxy) getEnabledEndpoints() []config.Endpoint {
 	return enabled
 }
 
-// getCurrentEndpoint returns the current endpoint (thread-safe)
+// getEnabledEndpointsForClient returns enabled endpoints for a specific client type
+func (p *Proxy) getEnabledEndpointsForClient(clientType ClientType) []config.Endpoint {
+	return p.config.GetEnabledEndpointsByClient(string(clientType))
+}
+
+// getCurrentEndpoint returns the current endpoint (thread-safe) - legacy for backward compatibility
 func (p *Proxy) getCurrentEndpoint() config.Endpoint {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -130,6 +137,20 @@ func (p *Proxy) getCurrentEndpoint() config.Endpoint {
 	}
 	// Make sure currentIndex is within bounds
 	index := p.currentIndex % len(endpoints)
+	return endpoints[index]
+}
+
+// getCurrentEndpointForClient returns the current endpoint for a specific client type (thread-safe)
+func (p *Proxy) getCurrentEndpointForClient(clientType ClientType) config.Endpoint {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	endpoints := p.getEnabledEndpointsForClient(clientType)
+	if len(endpoints) == 0 {
+		return config.Endpoint{}
+	}
+
+	index := p.currentIndexByClient[clientType] % len(endpoints)
 	return endpoints[index]
 }
 
@@ -154,9 +175,15 @@ func (p *Proxy) hasActiveRequests(endpointName string) bool {
 	return p.activeRequests[endpointName]
 }
 
-// isCurrentEndpoint checks if the given endpoint is still the current one
+// isCurrentEndpoint checks if the given endpoint is still the current one - legacy for backward compatibility
 func (p *Proxy) isCurrentEndpoint(endpointName string) bool {
 	current := p.getCurrentEndpoint()
+	return current.Name == endpointName
+}
+
+// isCurrentEndpointForClient checks if the given endpoint is still the current one for a client type
+func (p *Proxy) isCurrentEndpointForClient(endpointName string, clientType ClientType) bool {
+	current := p.getCurrentEndpointForClient(clientType)
 	return current.Name == endpointName
 }
 
@@ -232,9 +259,59 @@ func (p *Proxy) rotateEndpoint() config.Endpoint {
 	return newEndpoint
 }
 
+// rotateEndpointForClient switches to the next endpoint for a specific client type (thread-safe)
+func (p *Proxy) rotateEndpointForClient(clientType ClientType) config.Endpoint {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	endpoints := p.getEnabledEndpointsForClient(clientType)
+	if len(endpoints) == 0 {
+		return config.Endpoint{}
+	}
+
+	oldIndex := p.currentIndexByClient[clientType] % len(endpoints)
+	oldEndpoint := endpoints[oldIndex]
+
+	// Check if there are active requests on the current endpoint
+	// Wait a short time for them to complete (max 500ms)
+	if p.hasActiveRequests(oldEndpoint.Name) {
+		logger.Debug("[SWITCH:%s] Waiting for active requests on %s to complete...", clientType, oldEndpoint.Name)
+		p.mu.Unlock() // Release lock while waiting
+
+		for i := 0; i < 10; i++ { // Check 10 times, 50ms each = 500ms max
+			time.Sleep(50 * time.Millisecond)
+			if !p.hasActiveRequests(oldEndpoint.Name) {
+				break
+			}
+		}
+
+		p.mu.Lock() // Re-acquire lock
+
+		// Re-fetch endpoints after re-acquiring lock (may have changed)
+		endpoints = p.getEnabledEndpointsForClient(clientType)
+		if len(endpoints) == 0 {
+			return config.Endpoint{}
+		}
+	}
+
+	// Use oldIndex to calculate next, avoiding skip if currentIndex was modified during wait
+	p.currentIndexByClient[clientType] = (oldIndex + 1) % len(endpoints)
+
+	newEndpoint := endpoints[p.currentIndexByClient[clientType]]
+	logger.Debug("[SWITCH:%s] %s → %s (#%d)", clientType, oldEndpoint.Name, newEndpoint.Name, p.currentIndexByClient[clientType]+1)
+
+	return newEndpoint
+}
+
 // GetCurrentEndpointName returns the current endpoint name (thread-safe)
 func (p *Proxy) GetCurrentEndpointName() string {
 	endpoint := p.getCurrentEndpoint()
+	return endpoint.Name
+}
+
+// GetCurrentEndpointNameForClient returns the current endpoint name for a specific client type (thread-safe)
+func (p *Proxy) GetCurrentEndpointNameForClient(clientType string) string {
+	endpoint := p.getCurrentEndpointForClient(ClientType(clientType))
 	return endpoint.Name
 }
 
@@ -267,6 +344,37 @@ func (p *Proxy) SetCurrentEndpoint(targetName string) error {
 	return fmt.Errorf("endpoint '%s' not found or not enabled", targetName)
 }
 
+// SetCurrentEndpointForClient manually switches to a specific endpoint by name for a client type
+// Returns error if endpoint not found or not enabled
+// Thread-safe and cancels ongoing requests on the old endpoint
+func (p *Proxy) SetCurrentEndpointForClient(clientType string, targetName string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	ct := ClientType(clientType)
+	endpoints := p.getEnabledEndpointsForClient(ct)
+	if len(endpoints) == 0 {
+		return fmt.Errorf("no enabled endpoints for client type: %s", clientType)
+	}
+
+	// Find the endpoint by name
+	for i, ep := range endpoints {
+		if ep.Name == targetName {
+			oldIndex := p.currentIndexByClient[ct] % len(endpoints)
+			oldEndpoint := endpoints[oldIndex]
+			if oldEndpoint.Name != targetName {
+				// Cancel all requests on the old endpoint
+				p.cancelEndpointRequests(oldEndpoint.Name)
+			}
+			p.currentIndexByClient[ct] = i
+			logger.Info("[MANUAL SWITCH:%s] %s → %s", clientType, oldEndpoint.Name, ep.Name)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("endpoint '%s' not found or not enabled for client type: %s", targetName, clientType)
+}
+
 // ClientFormat represents the API format used by the client
 type ClientFormat string
 
@@ -276,7 +384,16 @@ const (
 	ClientFormatOpenAIResponses ClientFormat = "openai_responses" // Codex (responses): /v1/responses
 )
 
-// detectClientFormat identifies the client format based on request path
+// ClientType represents the client category for endpoint grouping
+type ClientType string
+
+const (
+	ClientTypeClaude ClientType = "claude" // Claude Code client
+	ClientTypeGemini ClientType = "gemini" // Gemini client
+	ClientTypeCodex  ClientType = "codex"  // Codex CLI client
+)
+
+// detectClientFormat identifies the client format based on request path (legacy support)
 func detectClientFormat(path string) ClientFormat {
 	switch {
 	case strings.HasPrefix(path, "/v1/chat/completions") || strings.HasPrefix(path, "/chat/completions"):
@@ -286,6 +403,36 @@ func detectClientFormat(path string) ClientFormat {
 	default:
 		return ClientFormatClaude
 	}
+}
+
+// extractClientAndFormat parses the request path to determine client type and format
+// New paths: /claude/..., /gemini/..., /codex/...
+// Legacy paths (backward compatible): /v1/messages, /v1/chat/completions, /v1/responses
+func extractClientAndFormat(path string) (ClientType, ClientFormat, string) {
+	// New routing: /{client}/...
+	if strings.HasPrefix(path, "/claude/") {
+		subPath := strings.TrimPrefix(path, "/claude")
+		return ClientTypeClaude, ClientFormatClaude, subPath
+	}
+	if strings.HasPrefix(path, "/gemini/") {
+		subPath := strings.TrimPrefix(path, "/gemini")
+		return ClientTypeGemini, ClientFormatClaude, subPath // Gemini uses Claude format from client
+	}
+	if strings.HasPrefix(path, "/codex/") {
+		subPath := strings.TrimPrefix(path, "/codex")
+		if strings.HasPrefix(subPath, "/v1/chat/completions") || strings.HasPrefix(subPath, "/chat/completions") {
+			return ClientTypeCodex, ClientFormatOpenAIChat, subPath
+		}
+		if strings.HasPrefix(subPath, "/v1/responses") || strings.HasPrefix(subPath, "/responses") {
+			return ClientTypeCodex, ClientFormatOpenAIResponses, subPath
+		}
+		// Default to chat format for codex
+		return ClientTypeCodex, ClientFormatOpenAIChat, subPath
+	}
+
+	// Legacy routing (backward compatible) - defaults to claude client type
+	format := detectClientFormat(path)
+	return ClientTypeClaude, format, path
 }
 
 // handleProxy handles the main proxy logic
@@ -298,11 +445,11 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	// Detect client format
-	clientFormat := detectClientFormat(r.URL.Path)
+	// Extract client type and format from path
+	clientType, clientFormat, _ := extractClientAndFormat(r.URL.Path)
 
 	logger.DebugLog("=== Proxy Request ===")
-	logger.DebugLog("Method: %s, Path: %s, ClientFormat: %s", r.Method, r.URL.Path, clientFormat)
+	logger.DebugLog("Method: %s, Path: %s, ClientType: %s, ClientFormat: %s", r.Method, r.URL.Path, clientType, clientFormat)
 	logger.DebugLog("Request Body: %s", string(bodyBytes))
 
 	var streamReq struct {
@@ -312,10 +459,10 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	json.Unmarshal(bodyBytes, &streamReq)
 
-	endpoints := p.getEnabledEndpoints()
+	endpoints := p.getEnabledEndpointsForClient(clientType)
 	if len(endpoints) == 0 {
-		logger.Error("No enabled endpoints available")
-		http.Error(w, "No enabled endpoints configured", http.StatusServiceUnavailable)
+		logger.Error("No enabled endpoints available for client type: %s", clientType)
+		http.Error(w, fmt.Sprintf("No enabled endpoints configured for client type: %s", clientType), http.StatusServiceUnavailable)
 		return
 	}
 
@@ -324,9 +471,9 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 	lastEndpointName := ""
 
 	for retry := 0; retry < maxRetries; retry++ {
-		endpoint := p.getCurrentEndpoint()
+		endpoint := p.getCurrentEndpointForClient(clientType)
 		if endpoint.Name == "" {
-			http.Error(w, "No enabled endpoints available", http.StatusServiceUnavailable)
+			http.Error(w, fmt.Sprintf("No enabled endpoints available for client type: %s", clientType), http.StatusServiceUnavailable)
 			return
 		}
 
@@ -338,15 +485,15 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 		endpointAttempts++
 		p.markRequestActive(endpoint.Name)
-		p.stats.RecordRequest(endpoint.Name)
+		p.stats.RecordRequest(endpoint.Name, string(clientType))
 
 		trans, err := prepareTransformerForClient(clientFormat, endpoint)
 		if err != nil {
 			logger.Error("[%s] %v", endpoint.Name, err)
-			p.stats.RecordError(endpoint.Name)
+			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.markRequestInactive(endpoint.Name)
 			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
+				p.rotateEndpointForClient(clientType)
 				endpointAttempts = 0
 			}
 			continue
@@ -357,10 +504,10 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		transformedBody, err := trans.TransformRequest(bodyBytes)
 		if err != nil {
 			logger.Error("[%s] Failed to transform request: %v", endpoint.Name, err)
-			p.stats.RecordError(endpoint.Name)
+			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.markRequestInactive(endpoint.Name)
 			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
+				p.rotateEndpointForClient(clientType)
 				endpointAttempts = 0
 			}
 			continue
@@ -389,10 +536,10 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		proxyReq, err := buildProxyRequest(r, endpoint, transformedBody, transformerName)
 		if err != nil {
 			logger.Error("[%s] Failed to create request: %v", endpoint.Name, err)
-			p.stats.RecordError(endpoint.Name)
+			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.markRequestInactive(endpoint.Name)
 			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
+				p.rotateEndpointForClient(clientType)
 				endpointAttempts = 0
 			}
 			continue
@@ -402,10 +549,10 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		resp, err := sendRequest(ctx, proxyReq, p.config)
 		if err != nil {
 			logger.Error("[%s] Request failed: %v", endpoint.Name, err)
-			p.stats.RecordError(endpoint.Name)
+			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.markRequestInactive(endpoint.Name)
 			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
+				p.rotateEndpointForClient(clientType)
 				endpointAttempts = 0
 			}
 			continue
@@ -415,7 +562,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		isStreaming := contentType == "text/event-stream" || (streamReq.Stream && strings.Contains(contentType, "text/event-stream"))
 
 		if resp.StatusCode == http.StatusOK && isStreaming {
-			usage, outputText := p.handleStreamingResponse(w, resp, endpoint, trans, transformerName, thinkingEnabled, streamReq.Model, bodyBytes)
+			usage, outputText := p.handleStreamingResponse(w, resp, endpoint, trans, transformerName, thinkingEnabled, streamReq.Model, bodyBytes, clientType)
 
 			// Fallback: estimate tokens when usage is 0
 			if usage.TotalInputTokens() == 0 || usage.OutputTokens == 0 {
@@ -428,11 +575,12 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Record daily aggregated stats
-			p.stats.RecordTokens(endpoint.Name, usage)
+			p.stats.RecordTokens(endpoint.Name, string(clientType), usage)
 
 			// Record request-level stats
 			p.stats.RecordRequestStat(&RequestStatRecord{
 				EndpointName:        endpoint.Name,
+				ClientType:          string(clientType),
 				Timestamp:           time.Now(),
 				InputTokens:         usage.InputTokens,
 				CacheCreationTokens: usage.CacheCreationInputTokens,
@@ -445,7 +593,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 			p.markRequestInactive(endpoint.Name)
 			if p.onEndpointSuccess != nil {
-				p.onEndpointSuccess(endpoint.Name)
+				p.onEndpointSuccess(endpoint.Name, string(clientType))
 			}
 			logger.Debug("[%s] Request completed successfully (streaming)", endpoint.Name)
 			return
@@ -460,7 +608,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 				}
 
 				// Record daily aggregated stats
-				p.stats.RecordTokens(endpoint.Name, usage)
+				p.stats.RecordTokens(endpoint.Name, string(clientType), usage)
 
 				// Record request-level stats
 				// Extract model name from request body
@@ -470,6 +618,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 				p.stats.RecordRequestStat(&RequestStatRecord{
 					EndpointName:        endpoint.Name,
+					ClientType:          string(clientType),
 					Timestamp:           time.Now(),
 					InputTokens:         usage.InputTokens,
 					CacheCreationTokens: usage.CacheCreationInputTokens,
@@ -482,7 +631,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 				p.markRequestInactive(endpoint.Name)
 				if p.onEndpointSuccess != nil {
-					p.onEndpointSuccess(endpoint.Name)
+					p.onEndpointSuccess(endpoint.Name, string(clientType))
 				}
 				logger.Debug("[%s] Request completed successfully", endpoint.Name)
 				return
@@ -503,10 +652,10 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			}
 			logger.Warn("[%s] Request failed %d: %s", endpoint.Name, resp.StatusCode, errMsg)
 			logger.DebugLog("[%s] Request failed %d: %s", endpoint.Name, resp.StatusCode, errMsg)
-			p.stats.RecordError(endpoint.Name)
+			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.markRequestInactive(endpoint.Name)
 			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
+				p.rotateEndpointForClient(clientType)
 				endpointAttempts = 0
 			}
 			continue

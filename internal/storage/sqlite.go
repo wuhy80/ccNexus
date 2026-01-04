@@ -114,6 +114,10 @@ func (s *SQLiteStorage) initSchema() error {
 		return err
 	}
 
+	if err := s.migrateClientType(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -213,11 +217,74 @@ func (s *SQLiteStorage) migrateRequestStats() error {
 	return nil
 }
 
+// migrateClientType adds client_type column to endpoints, daily_stats, and request_stats tables
+func (s *SQLiteStorage) migrateClientType() error {
+	// 1. Add client_type to endpoints table
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('endpoints') WHERE name='client_type'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		// Add the column with default 'claude' for existing endpoints
+		if _, err := s.db.Exec(`ALTER TABLE endpoints ADD COLUMN client_type TEXT DEFAULT 'claude'`); err != nil {
+			return err
+		}
+
+		// Drop the old unique constraint on name and create new one on (name, client_type)
+		// SQLite doesn't support DROP CONSTRAINT, so we use a unique index instead
+		// First, drop the old index if it exists (ignore error if not exists)
+		s.db.Exec(`DROP INDEX IF EXISTS idx_endpoints_name`)
+
+		// Create new unique index on (name, client_type)
+		if _, err := s.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_endpoints_name_client ON endpoints(name, client_type)`); err != nil {
+			return err
+		}
+	}
+
+	// 2. Add client_type to daily_stats table
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('daily_stats') WHERE name='client_type'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		if _, err := s.db.Exec(`ALTER TABLE daily_stats ADD COLUMN client_type TEXT DEFAULT 'claude'`); err != nil {
+			return err
+		}
+
+		// Create index for client_type queries
+		if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_daily_stats_client ON daily_stats(client_type)`); err != nil {
+			return err
+		}
+	}
+
+	// 3. Add client_type to request_stats table
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('request_stats') WHERE name='client_type'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		if _, err := s.db.Exec(`ALTER TABLE request_stats ADD COLUMN client_type TEXT DEFAULT 'claude'`); err != nil {
+			return err
+		}
+
+		// Create index for client_type queries
+		if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_request_stats_client ON request_stats(client_type)`); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (s *SQLiteStorage) GetEndpoints() ([]Endpoint, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.Query(`SELECT id, name, api_url, api_key, enabled, transformer, model, remark, sort_order, created_at, updated_at FROM endpoints ORDER BY sort_order ASC`)
+	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, sort_order, created_at, updated_at FROM endpoints ORDER BY client_type, sort_order ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +293,30 @@ func (s *SQLiteStorage) GetEndpoints() ([]Endpoint, error) {
 	var endpoints []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.Name, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
+			return nil, err
+		}
+		endpoints = append(endpoints, ep)
+	}
+
+	return endpoints, rows.Err()
+}
+
+// GetEndpointsByClient returns endpoints filtered by client type
+func (s *SQLiteStorage) GetEndpointsByClient(clientType string) ([]Endpoint, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, sort_order, created_at, updated_at FROM endpoints WHERE COALESCE(client_type, 'claude') = ? ORDER BY sort_order ASC`, clientType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var endpoints []Endpoint
+	for rows.Next() {
+		var ep Endpoint
+		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
 			return nil, err
 		}
 		endpoints = append(endpoints, ep)
@@ -239,8 +329,14 @@ func (s *SQLiteStorage) SaveEndpoint(ep *Endpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	result, err := s.db.Exec(`INSERT INTO endpoints (name, api_url, api_key, enabled, transformer, model, remark, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		ep.Name, ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder)
+	// Default client_type to 'claude' if not specified
+	clientType := ep.ClientType
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	result, err := s.db.Exec(`INSERT INTO endpoints (name, client_type, api_url, api_key, enabled, transformer, model, remark, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ep.Name, clientType, ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder)
 	if err != nil {
 		return err
 	}
@@ -250,6 +346,7 @@ func (s *SQLiteStorage) SaveEndpoint(ep *Endpoint) error {
 		return err
 	}
 	ep.ID = id
+	ep.ClientType = clientType
 	return nil
 }
 
@@ -257,16 +354,27 @@ func (s *SQLiteStorage) UpdateEndpoint(ep *Endpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, err := s.db.Exec(`UPDATE endpoints SET api_url=?, api_key=?, enabled=?, transformer=?, model=?, remark=?, sort_order=?, updated_at=CURRENT_TIMESTAMP WHERE name=?`,
-		ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder, ep.Name)
+	// Default client_type to 'claude' if not specified
+	clientType := ep.ClientType
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	_, err := s.db.Exec(`UPDATE endpoints SET api_url=?, api_key=?, enabled=?, transformer=?, model=?, remark=?, sort_order=?, updated_at=CURRENT_TIMESTAMP WHERE name=? AND COALESCE(client_type, 'claude')=?`,
+		ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder, ep.Name, clientType)
 	return err
 }
 
-func (s *SQLiteStorage) DeleteEndpoint(name string) error {
+func (s *SQLiteStorage) DeleteEndpoint(name string, clientType string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, err := s.db.Exec(`DELETE FROM endpoints WHERE name=?`, name)
+	// Default client_type to 'claude' if not specified
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	_, err := s.db.Exec(`DELETE FROM endpoints WHERE name=? AND COALESCE(client_type, 'claude')=?`, name, clientType)
 	return err
 }
 
@@ -274,9 +382,15 @@ func (s *SQLiteStorage) RecordDailyStat(stat *DailyStat) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Default client_type to 'claude' if not specified
+	clientType := stat.ClientType
+	if clientType == "" {
+		clientType = "claude"
+	}
+
 	_, err := s.db.Exec(`
-		INSERT INTO daily_stats (endpoint_name, date, requests, errors, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens, device_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO daily_stats (endpoint_name, client_type, date, requests, errors, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens, device_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(endpoint_name, date, device_id) DO UPDATE SET
 			requests = requests + excluded.requests,
 			errors = errors + excluded.errors,
@@ -284,21 +398,26 @@ func (s *SQLiteStorage) RecordDailyStat(stat *DailyStat) error {
 			cache_creation_tokens = cache_creation_tokens + excluded.cache_creation_tokens,
 			cache_read_tokens = cache_read_tokens + excluded.cache_read_tokens,
 			output_tokens = output_tokens + excluded.output_tokens
-	`, stat.EndpointName, stat.Date, stat.Requests, stat.Errors, stat.InputTokens, stat.CacheCreationTokens, stat.CacheReadTokens, stat.OutputTokens, stat.DeviceID)
+	`, stat.EndpointName, clientType, stat.Date, stat.Requests, stat.Errors, stat.InputTokens, stat.CacheCreationTokens, stat.CacheReadTokens, stat.OutputTokens, stat.DeviceID)
 
 	return err
 }
 
-func (s *SQLiteStorage) GetDailyStats(endpointName, startDate, endDate string) ([]DailyStat, error) {
+func (s *SQLiteStorage) GetDailyStats(endpointName, clientType, startDate, endDate string) ([]DailyStat, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	query := `SELECT id, endpoint_name, date, SUM(requests), SUM(errors),
+	// Default client_type to 'claude' if not specified
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	query := `SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type, date, SUM(requests), SUM(errors),
 		SUM(input_tokens), SUM(COALESCE(cache_creation_tokens, 0)), SUM(COALESCE(cache_read_tokens, 0)), SUM(output_tokens),
 		device_id, created_at
-		FROM daily_stats WHERE endpoint_name=? AND date>=? AND date<=? GROUP BY date ORDER BY date DESC`
+		FROM daily_stats WHERE endpoint_name=? AND COALESCE(client_type, 'claude')=? AND date>=? AND date<=? GROUP BY date ORDER BY date DESC`
 
-	rows, err := s.db.Query(query, endpointName, startDate, endDate)
+	rows, err := s.db.Query(query, endpointName, clientType, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +426,7 @@ func (s *SQLiteStorage) GetDailyStats(endpointName, startDate, endDate string) (
 	var stats []DailyStat
 	for rows.Next() {
 		var stat DailyStat
-		if err := rows.Scan(&stat.ID, &stat.EndpointName, &stat.Date, &stat.Requests, &stat.Errors,
+		if err := rows.Scan(&stat.ID, &stat.EndpointName, &stat.ClientType, &stat.Date, &stat.Requests, &stat.Errors,
 			&stat.InputTokens, &stat.CacheCreationTokens, &stat.CacheReadTokens, &stat.OutputTokens,
 			&stat.DeviceID, &stat.CreatedAt); err != nil {
 			return nil, err
@@ -322,10 +441,10 @@ func (s *SQLiteStorage) GetAllStats() (map[string][]DailyStat, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.Query(`SELECT id, endpoint_name, date, SUM(requests), SUM(errors),
+	rows, err := s.db.Query(`SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type, date, SUM(requests), SUM(errors),
 		SUM(input_tokens), SUM(COALESCE(cache_creation_tokens, 0)), SUM(COALESCE(cache_read_tokens, 0)), SUM(output_tokens),
 		device_id, created_at
-		FROM daily_stats GROUP BY endpoint_name, date ORDER BY date DESC`)
+		FROM daily_stats GROUP BY endpoint_name, client_type, date ORDER BY date DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -334,12 +453,14 @@ func (s *SQLiteStorage) GetAllStats() (map[string][]DailyStat, error) {
 	result := make(map[string][]DailyStat)
 	for rows.Next() {
 		var stat DailyStat
-		if err := rows.Scan(&stat.ID, &stat.EndpointName, &stat.Date, &stat.Requests, &stat.Errors,
+		if err := rows.Scan(&stat.ID, &stat.EndpointName, &stat.ClientType, &stat.Date, &stat.Requests, &stat.Errors,
 			&stat.InputTokens, &stat.CacheCreationTokens, &stat.CacheReadTokens, &stat.OutputTokens,
 			&stat.DeviceID, &stat.CreatedAt); err != nil {
 			return nil, err
 		}
-		result[stat.EndpointName] = append(result[stat.EndpointName], stat)
+		// Use clientType:endpointName as key to distinguish endpoints across client types
+		key := stat.ClientType + ":" + stat.EndpointName
+		result[key] = append(result[key], stat)
 	}
 
 	return result, rows.Err()
@@ -373,11 +494,60 @@ func (s *SQLiteStorage) GetTotalStats() (int, map[string]*EndpointStats, error) 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	query := `SELECT endpoint_name, SUM(requests), SUM(errors),
+	query := `SELECT COALESCE(client_type, 'claude') as client_type, endpoint_name, SUM(requests), SUM(errors),
 		SUM(input_tokens), SUM(COALESCE(cache_creation_tokens, 0)), SUM(COALESCE(cache_read_tokens, 0)), SUM(output_tokens)
-		FROM daily_stats GROUP BY endpoint_name`
+		FROM daily_stats GROUP BY client_type, endpoint_name`
 
 	rows, err := s.db.Query(query)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]*EndpointStats)
+	totalRequests := 0
+
+	for rows.Next() {
+		var clientType, endpointName string
+		var requests, errors int
+		var inputTokens, cacheCreationTokens, cacheReadTokens, outputTokens int64
+
+		if err := rows.Scan(&clientType, &endpointName, &requests, &errors,
+			&inputTokens, &cacheCreationTokens, &cacheReadTokens, &outputTokens); err != nil {
+			return 0, nil, err
+		}
+
+		// Use clientType:endpointName as key
+		key := clientType + ":" + endpointName
+		result[key] = &EndpointStats{
+			Requests:            requests,
+			Errors:              errors,
+			InputTokens:         inputTokens,
+			CacheCreationTokens: cacheCreationTokens,
+			CacheReadTokens:     cacheReadTokens,
+			OutputTokens:        outputTokens,
+		}
+		totalRequests += requests
+	}
+
+	return totalRequests, result, rows.Err()
+}
+
+// GetTotalStatsByClient returns total stats filtered by client type
+func (s *SQLiteStorage) GetTotalStatsByClient(clientType string) (int, map[string]*EndpointStats, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Default client_type to 'claude' if not specified
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	query := `SELECT endpoint_name, SUM(requests), SUM(errors),
+		SUM(input_tokens), SUM(COALESCE(cache_creation_tokens, 0)), SUM(COALESCE(cache_read_tokens, 0)), SUM(output_tokens)
+		FROM daily_stats WHERE COALESCE(client_type, 'claude') = ? GROUP BY endpoint_name`
+
+	rows, err := s.db.Query(query, clientType)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -410,18 +580,23 @@ func (s *SQLiteStorage) GetTotalStats() (int, map[string]*EndpointStats, error) 
 	return totalRequests, result, rows.Err()
 }
 
-func (s *SQLiteStorage) GetEndpointTotalStats(endpointName string) (*EndpointStats, error) {
+func (s *SQLiteStorage) GetEndpointTotalStats(endpointName string, clientType string) (*EndpointStats, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Default client_type to 'claude' if not specified
+	if clientType == "" {
+		clientType = "claude"
+	}
+
 	query := `SELECT SUM(requests), SUM(errors),
 		SUM(input_tokens), SUM(COALESCE(cache_creation_tokens, 0)), SUM(COALESCE(cache_read_tokens, 0)), SUM(output_tokens)
-		FROM daily_stats WHERE endpoint_name=?`
+		FROM daily_stats WHERE endpoint_name=? AND COALESCE(client_type, 'claude')=?`
 
 	var requests, errors int
 	var inputTokens, cacheCreationTokens, cacheReadTokens, outputTokens int64
 
-	err := s.db.QueryRow(query, endpointName).Scan(&requests, &errors,
+	err := s.db.QueryRow(query, endpointName, clientType).Scan(&requests, &errors,
 		&inputTokens, &cacheCreationTokens, &cacheReadTokens, &outputTokens)
 	if err == sql.ErrNoRows {
 		return &EndpointStats{}, nil
@@ -658,7 +833,7 @@ func (s *SQLiteStorage) DetectEndpointConflicts(remoteDBPath string) ([]MergeCon
 
 // getEndpointsFromDB gets endpoints from a specific database (main or attached)
 func (s *SQLiteStorage) getEndpointsFromDB(db *sql.DB, dbName string) ([]Endpoint, error) {
-	query := fmt.Sprintf(`SELECT id, name, api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0) as sort_order, created_at, updated_at FROM %s.endpoints`, dbName)
+	query := fmt.Sprintf(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0) as sort_order, created_at, updated_at FROM %s.endpoints`, dbName)
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
@@ -668,7 +843,7 @@ func (s *SQLiteStorage) getEndpointsFromDB(db *sql.DB, dbName string) ([]Endpoin
 	var endpoints []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.Name, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
 			return nil, err
 		}
 		endpoints = append(endpoints, ep)
@@ -760,8 +935,8 @@ func (s *SQLiteStorage) mergeEndpoints(tx *sql.Tx, strategy MergeStrategy) error
 		// 只插入新端点（忽略冲突）
 		_, err := tx.Exec(`
 			INSERT OR IGNORE INTO endpoints
-			(name, api_url, api_key, enabled, transformer, model, remark, sort_order)
-			SELECT name, api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0)
+			(name, client_type, api_url, api_key, enabled, transformer, model, remark, sort_order)
+			SELECT name, COALESCE(client_type, 'claude'), api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0)
 			FROM backup.endpoints
 		`)
 		return err
@@ -769,8 +944,8 @@ func (s *SQLiteStorage) mergeEndpoints(tx *sql.Tx, strategy MergeStrategy) error
 		// 替换已存在的端点
 		_, err := tx.Exec(`
 			INSERT OR REPLACE INTO endpoints
-			(name, api_url, api_key, enabled, transformer, model, remark, sort_order)
-			SELECT name, api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0)
+			(name, client_type, api_url, api_key, enabled, transformer, model, remark, sort_order)
+			SELECT name, COALESCE(client_type, 'claude'), api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0)
 			FROM backup.endpoints
 		`)
 		return err
@@ -871,15 +1046,21 @@ func (s *SQLiteStorage) RecordRequestStat(stat *RequestStat) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Default client_type to 'claude' if not specified
+	clientType := stat.ClientType
+	if clientType == "" {
+		clientType = "claude"
+	}
+
 	_, err := s.db.Exec(`
 		INSERT INTO request_stats (
-			endpoint_name, request_id, timestamp, date,
+			endpoint_name, client_type, request_id, timestamp, date,
 			input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
 			model, is_streaming, success, device_id
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
-		stat.EndpointName, stat.RequestID, stat.Timestamp, stat.Date,
+		stat.EndpointName, clientType, stat.RequestID, stat.Timestamp, stat.Date,
 		stat.InputTokens, stat.CacheCreationTokens, stat.CacheReadTokens, stat.OutputTokens,
 		stat.Model, stat.IsStreaming, stat.Success, stat.DeviceID,
 	)
@@ -888,37 +1069,42 @@ func (s *SQLiteStorage) RecordRequestStat(stat *RequestStat) error {
 }
 
 // GetRequestStats retrieves request-level statistics with pagination
-func (s *SQLiteStorage) GetRequestStats(endpointName string, startDate, endDate string, limit, offset int) ([]RequestStat, error) {
+func (s *SQLiteStorage) GetRequestStats(endpointName string, clientType string, startDate, endDate string, limit, offset int) ([]RequestStat, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
+	// Default client_type to 'claude' if not specified
+	if clientType == "" {
+		clientType = "claude"
+	}
 
 	var query string
 	var args []interface{}
 
 	if endpointName == "" {
-		// Query all endpoints
+		// Query all endpoints for this client type
 		query = `
-			SELECT id, endpoint_name, request_id, timestamp, date,
+			SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type, request_id, timestamp, date,
 				input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
 				model, is_streaming, success, device_id
 			FROM request_stats
-			WHERE date>=? AND date<=?
+			WHERE COALESCE(client_type, 'claude')=? AND date>=? AND date<=?
 			ORDER BY timestamp DESC
 			LIMIT ? OFFSET ?
 		`
-		args = []interface{}{startDate, endDate, limit, offset}
+		args = []interface{}{clientType, startDate, endDate, limit, offset}
 	} else {
 		// Query specific endpoint
 		query = `
-			SELECT id, endpoint_name, request_id, timestamp, date,
+			SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type, request_id, timestamp, date,
 				input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
 				model, is_streaming, success, device_id
 			FROM request_stats
-			WHERE endpoint_name=? AND date>=? AND date<=?
+			WHERE endpoint_name=? AND COALESCE(client_type, 'claude')=? AND date>=? AND date<=?
 			ORDER BY timestamp DESC
 			LIMIT ? OFFSET ?
 		`
-		args = []interface{}{endpointName, startDate, endDate, limit, offset}
+		args = []interface{}{endpointName, clientType, startDate, endDate, limit, offset}
 	}
 
 	rows, err := s.db.Query(query, args...)
@@ -931,7 +1117,7 @@ func (s *SQLiteStorage) GetRequestStats(endpointName string, startDate, endDate 
 	for rows.Next() {
 		var stat RequestStat
 		if err := rows.Scan(
-			&stat.ID, &stat.EndpointName, &stat.RequestID, &stat.Timestamp, &stat.Date,
+			&stat.ID, &stat.EndpointName, &stat.ClientType, &stat.RequestID, &stat.Timestamp, &stat.Date,
 			&stat.InputTokens, &stat.CacheCreationTokens, &stat.CacheReadTokens, &stat.OutputTokens,
 			&stat.Model, &stat.IsStreaming, &stat.Success, &stat.DeviceID,
 		); err != nil {
@@ -944,25 +1130,30 @@ func (s *SQLiteStorage) GetRequestStats(endpointName string, startDate, endDate 
 }
 
 // GetRequestStatsCount gets the total count of request stats for pagination
-func (s *SQLiteStorage) GetRequestStatsCount(endpointName string, startDate, endDate string) (int, error) {
+func (s *SQLiteStorage) GetRequestStatsCount(endpointName string, clientType string, startDate, endDate string) (int, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
+	// Default client_type to 'claude' if not specified
+	if clientType == "" {
+		clientType = "claude"
+	}
 
 	var count int
 	var err error
 
 	if endpointName == "" {
-		// Count all endpoints
+		// Count all endpoints for this client type
 		err = s.db.QueryRow(`
 			SELECT COUNT(*) FROM request_stats
-			WHERE date>=? AND date<=?
-		`, startDate, endDate).Scan(&count)
+			WHERE COALESCE(client_type, 'claude')=? AND date>=? AND date<=?
+		`, clientType, startDate, endDate).Scan(&count)
 	} else {
 		// Count specific endpoint
 		err = s.db.QueryRow(`
 			SELECT COUNT(*) FROM request_stats
-			WHERE endpoint_name=? AND date>=? AND date<=?
-		`, endpointName, startDate, endDate).Scan(&count)
+			WHERE endpoint_name=? AND COALESCE(client_type, 'claude')=? AND date>=? AND date<=?
+		`, endpointName, clientType, startDate, endDate).Scan(&count)
 	}
 
 	return count, err

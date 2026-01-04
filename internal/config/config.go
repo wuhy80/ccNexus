@@ -10,6 +10,7 @@ import (
 // Endpoint represents a single API endpoint configuration
 type Endpoint struct {
 	Name        string `json:"name"`
+	ClientType  string `json:"clientType,omitempty"`  // Client type: claude, gemini, codex (default: claude)
 	APIUrl      string `json:"apiUrl"`
 	APIKey      string `json:"apiKey"`
 	Enabled     bool   `json:"enabled"`
@@ -103,6 +104,7 @@ func DefaultConfig() *Config {
 		Endpoints: []Endpoint{
 			{
 				Name:        "Claude Official",
+				ClientType:  "claude",
 				APIUrl:      "api.anthropic.com",
 				APIKey:      "your-api-key-here",
 				Enabled:     true,
@@ -159,6 +161,52 @@ func (c *Config) GetEndpoints() []Endpoint {
 	endpoints := make([]Endpoint, len(c.Endpoints))
 	copy(endpoints, c.Endpoints)
 	return endpoints
+}
+
+// GetEndpointsByClient returns endpoints filtered by client type (thread-safe)
+func (c *Config) GetEndpointsByClient(clientType string) []Endpoint {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// Default to 'claude' if not specified
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	var filtered []Endpoint
+	for _, ep := range c.Endpoints {
+		epClientType := ep.ClientType
+		if epClientType == "" {
+			epClientType = "claude"
+		}
+		if epClientType == clientType {
+			filtered = append(filtered, ep)
+		}
+	}
+	return filtered
+}
+
+// GetEnabledEndpointsByClient returns enabled endpoints filtered by client type (thread-safe)
+func (c *Config) GetEnabledEndpointsByClient(clientType string) []Endpoint {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// Default to 'claude' if not specified
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	var filtered []Endpoint
+	for _, ep := range c.Endpoints {
+		epClientType := ep.ClientType
+		if epClientType == "" {
+			epClientType = "claude"
+		}
+		if epClientType == clientType && ep.Enabled {
+			filtered = append(filtered, ep)
+		}
+	}
+	return filtered
 }
 
 // GetPort returns the configured port (thread-safe)
@@ -384,9 +432,10 @@ func (c *Config) UpdateProxy(proxy *ProxyConfig) {
 // StorageAdapter defines the interface needed for loading/saving config
 type StorageAdapter interface {
 	GetEndpoints() ([]StorageEndpoint, error)
+	GetEndpointsByClient(clientType string) ([]StorageEndpoint, error)
 	SaveEndpoint(ep *StorageEndpoint) error
 	UpdateEndpoint(ep *StorageEndpoint) error
-	DeleteEndpoint(name string) error
+	DeleteEndpoint(name string, clientType string) error
 	GetConfig(key string) (string, error)
 	SetConfig(key, value string) error
 }
@@ -394,6 +443,7 @@ type StorageAdapter interface {
 // StorageEndpoint represents an endpoint in storage
 type StorageEndpoint struct {
 	Name        string
+	ClientType  string
 	APIUrl      string
 	APIKey      string
 	Enabled     bool
@@ -416,8 +466,13 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 	}
 
 	for _, ep := range endpoints {
+		clientType := ep.ClientType
+		if clientType == "" {
+			clientType = "claude"
+		}
 		endpoint := Endpoint{
 			Name:        ep.Name,
+			ClientType:  clientType,
 			APIUrl:      ep.APIUrl,
 			APIKey:      ep.APIKey,
 			Enabled:     ep.Enabled,
@@ -613,15 +668,26 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 		return fmt.Errorf("failed to get existing endpoints: %w", err)
 	}
 
-	existingNames := make(map[string]bool)
+	// Use clientType:name as key to track existing endpoints
+	existingKeys := make(map[string]string) // key -> clientType
 	for _, ep := range existingEndpoints {
-		existingNames[ep.Name] = true
+		clientType := ep.ClientType
+		if clientType == "" {
+			clientType = "claude"
+		}
+		key := clientType + ":" + ep.Name
+		existingKeys[key] = clientType
 	}
 
 	// Save/update endpoints
 	for i, ep := range c.Endpoints {
+		clientType := ep.ClientType
+		if clientType == "" {
+			clientType = "claude"
+		}
 		endpoint := &StorageEndpoint{
 			Name:        ep.Name,
+			ClientType:  clientType,
 			APIUrl:      ep.APIUrl,
 			APIKey:      ep.APIKey,
 			Enabled:     ep.Enabled,
@@ -631,7 +697,8 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 			SortOrder:   i, // Use array index as sort order
 		}
 
-		if existingNames[ep.Name] {
+		key := clientType + ":" + ep.Name
+		if _, exists := existingKeys[key]; exists {
 			if err := storage.UpdateEndpoint(endpoint); err != nil {
 				return fmt.Errorf("failed to update endpoint %s: %w", ep.Name, err)
 			}
@@ -640,12 +707,14 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 				return fmt.Errorf("failed to save endpoint %s: %w", ep.Name, err)
 			}
 		}
-		delete(existingNames, ep.Name)
+		delete(existingKeys, key)
 	}
 
 	// Delete endpoints that no longer exist
-	for name := range existingNames {
-		if err := storage.DeleteEndpoint(name); err != nil {
+	for key, clientType := range existingKeys {
+		// Extract name from key (clientType:name)
+		name := key[len(clientType)+1:]
+		if err := storage.DeleteEndpoint(name, clientType); err != nil {
 			return fmt.Errorf("failed to delete endpoint %s: %w", name, err)
 		}
 	}

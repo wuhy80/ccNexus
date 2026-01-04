@@ -18,7 +18,7 @@ import (
 )
 
 // handleStreamingResponse processes streaming SSE responses
-func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Response, endpoint config.Endpoint, trans transformer.Transformer, transformerName string, thinkingEnabled bool, modelName string, bodyBytes []byte) (transformer.TokenUsageDetail, string) {
+func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Response, endpoint config.Endpoint, trans transformer.Transformer, transformerName string, thinkingEnabled bool, modelName string, bodyBytes []byte, clientType ClientType) (transformer.TokenUsageDetail, string) {
 	// Copy response headers except Content-Length and Content-Encoding
 	for key, values := range resp.Header {
 		if key == "Content-Length" || key == "Content-Encoding" {
@@ -78,7 +78,7 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 	for scanner.Scan() && !streamDone {
 		line := scanner.Text()
 
-		if !p.isCurrentEndpoint(endpoint.Name) {
+		if !p.isCurrentEndpointForClient(endpoint.Name, clientType) {
 			logger.Warn("[%s] Endpoint switched during streaming, terminating stream gracefully", endpoint.Name)
 			streamDone = true
 			break

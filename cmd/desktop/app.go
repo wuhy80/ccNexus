@@ -131,8 +131,11 @@ func (a *App) startup(ctx context.Context) {
 	statsAdapter := storage.NewStatsStorageAdapter(sqliteStorage)
 	a.proxy = proxy.New(cfg, statsAdapter, deviceID)
 
-	a.proxy.SetOnEndpointSuccess(func(endpointName string) {
-		runtime.EventsEmit(ctx, "endpoint:success", endpointName)
+	a.proxy.SetOnEndpointSuccess(func(endpointName string, clientType string) {
+		runtime.EventsEmit(ctx, "endpoint:success", map[string]string{
+			"endpointName": endpointName,
+			"clientType":   clientType,
+		})
 	})
 
 	// Initialize services
@@ -385,24 +388,36 @@ func (a *App) GetTokenTrendData(granularity, period, startTime, endTime string) 
 
 // ========== Endpoint Bindings ==========
 
-func (a *App) AddEndpoint(name, apiUrl, apiKey, transformer, model, remark string) error {
-	return a.endpoint.AddEndpoint(name, apiUrl, apiKey, transformer, model, remark)
+func (a *App) AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark string) error {
+	return a.endpoint.AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark)
 }
-func (a *App) RemoveEndpoint(index int) error { return a.endpoint.RemoveEndpoint(index) }
-func (a *App) UpdateEndpoint(index int, name, apiUrl, apiKey, transformer, model, remark string) error {
-	return a.endpoint.UpdateEndpoint(index, name, apiUrl, apiKey, transformer, model, remark)
+func (a *App) RemoveEndpoint(clientType string, index int) error {
+	return a.endpoint.RemoveEndpoint(clientType, index)
 }
-func (a *App) ToggleEndpoint(index int, enabled bool) error {
-	return a.endpoint.ToggleEndpoint(index, enabled)
+func (a *App) UpdateEndpoint(clientType string, index int, name, apiUrl, apiKey, transformer, model, remark string) error {
+	return a.endpoint.UpdateEndpoint(clientType, index, name, apiUrl, apiKey, transformer, model, remark)
 }
-func (a *App) ReorderEndpoints(names []string) error { return a.endpoint.ReorderEndpoints(names) }
-func (a *App) GetCurrentEndpoint() string            { return a.endpoint.GetCurrentEndpoint() }
-func (a *App) SwitchToEndpoint(endpointName string) error {
-	return a.endpoint.SwitchToEndpoint(endpointName)
+func (a *App) ToggleEndpoint(clientType string, index int, enabled bool) error {
+	return a.endpoint.ToggleEndpoint(clientType, index, enabled)
 }
-func (a *App) TestEndpoint(index int) string      { return a.endpoint.TestEndpoint(index) }
-func (a *App) TestEndpointLight(index int) string { return a.endpoint.TestEndpointLight(index) }
-func (a *App) TestAllEndpointsZeroCost() string   { return a.endpoint.TestAllEndpointsZeroCost() }
+func (a *App) ReorderEndpoints(clientType string, names []string) error {
+	return a.endpoint.ReorderEndpoints(clientType, names)
+}
+func (a *App) GetCurrentEndpoint(clientType string) string {
+	return a.endpoint.GetCurrentEndpoint(clientType)
+}
+func (a *App) SwitchToEndpoint(clientType, endpointName string) error {
+	return a.endpoint.SwitchToEndpoint(clientType, endpointName)
+}
+func (a *App) TestEndpoint(clientType string, index int) string {
+	return a.endpoint.TestEndpoint(clientType, index)
+}
+func (a *App) TestEndpointLight(clientType string, index int) string {
+	return a.endpoint.TestEndpointLight(clientType, index)
+}
+func (a *App) TestAllEndpointsZeroCost(clientType string) string {
+	return a.endpoint.TestAllEndpointsZeroCost(clientType)
+}
 func (a *App) FetchModels(apiUrl, apiKey, transformer string) string {
 	return a.endpoint.FetchModels(apiUrl, apiKey, transformer)
 }

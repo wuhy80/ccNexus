@@ -109,35 +109,43 @@ func (p *Proxy) UpdateConfig(cfg *config.Config) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Save current endpoint name
-	var currentEndpointName string
+	// Save current endpoint names for each client type
+	currentEndpointNames := make(map[ClientType]string)
 	if p.config != nil {
-		endpoints := p.getEnabledEndpoints()
-		if len(endpoints) > 0 && p.currentIndex < len(endpoints) {
-			currentEndpointName = endpoints[p.currentIndex].Name
+		for _, clientType := range []ClientType{ClientTypeClaude, ClientTypeGemini, ClientTypeCodex} {
+			endpoints := p.config.GetEnabledEndpointsByClient(string(clientType))
+			if len(endpoints) > 0 {
+				idx := p.currentIndexByClient[clientType]
+				if idx < len(endpoints) {
+					currentEndpointNames[clientType] = endpoints[idx].Name
+				}
+			}
 		}
 	}
 
 	p.config = cfg
 
-	// Try to find the previous current endpoint in new config
-	newEndpoints := p.getEnabledEndpoints()
-	if currentEndpointName != "" && len(newEndpoints) > 0 {
-		found := false
-		for i, ep := range newEndpoints {
-			if ep.Name == currentEndpointName {
-				p.currentIndex = i
-				found = true
-				logger.Debug("[CONFIG UPDATE] Preserved current endpoint: %s at index %d", currentEndpointName, i)
-				break
+	// Try to find the previous current endpoints in new config for each client type
+	for _, clientType := range []ClientType{ClientTypeClaude, ClientTypeGemini, ClientTypeCodex} {
+		newEndpoints := cfg.GetEnabledEndpointsByClient(string(clientType))
+		currentName := currentEndpointNames[clientType]
+		if currentName != "" && len(newEndpoints) > 0 {
+			found := false
+			for i, ep := range newEndpoints {
+				if ep.Name == currentName {
+					p.currentIndexByClient[clientType] = i
+					found = true
+					logger.Debug("[CONFIG UPDATE] Preserved current endpoint for %s: %s at index %d", clientType, currentName, i)
+					break
+				}
 			}
+			if !found {
+				p.currentIndexByClient[clientType] = 0
+				logger.Debug("[CONFIG UPDATE] Current endpoint '%s' for %s not found, reset to index 0", currentName, clientType)
+			}
+		} else {
+			p.currentIndexByClient[clientType] = 0
 		}
-		if !found {
-			p.currentIndex = 0
-			logger.Debug("[CONFIG UPDATE] Current endpoint '%s' not found, reset to index 0", currentEndpointName)
-		}
-	} else {
-		p.currentIndex = 0
 	}
 
 	logger.Info("Configuration updated: %d endpoints configured", len(cfg.GetEndpoints()))

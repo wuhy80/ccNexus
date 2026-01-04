@@ -26,6 +26,7 @@ func (a *StatsStorageAdapter) RecordDailyStat(stat interface{}) error {
 
 	dailyStat := &DailyStat{
 		EndpointName:        v.FieldByName("EndpointName").String(),
+		ClientType:          v.FieldByName("ClientType").String(),
 		Date:                v.FieldByName("Date").String(),
 		Requests:            int(v.FieldByName("Requests").Int()),
 		Errors:              int(v.FieldByName("Errors").Int()),
@@ -47,6 +48,7 @@ func (a *StatsStorageAdapter) RecordRequestStat(stat interface{}) error {
 
 	requestStat := &RequestStat{
 		EndpointName:        v.FieldByName("EndpointName").String(),
+		ClientType:          v.FieldByName("ClientType").String(),
 		RequestID:           v.FieldByName("RequestID").String(),
 		Timestamp:           v.FieldByName("Timestamp").Interface().(time.Time),
 		Date:                v.FieldByName("Date").String(),
@@ -95,8 +97,8 @@ type StatsDataCompat struct {
 }
 
 // GetDailyStats gets daily stats for an endpoint
-func (a *StatsStorageAdapter) GetDailyStats(endpointName, startDate, endDate string) ([]interface{}, error) {
-	dailyStats, err := a.storage.GetDailyStats(endpointName, startDate, endDate)
+func (a *StatsStorageAdapter) GetDailyStats(endpointName, clientType, startDate, endDate string) ([]interface{}, error) {
+	dailyStats, err := a.storage.GetDailyStats(endpointName, clientType, startDate, endDate)
 	if err != nil {
 		return nil, err
 	}

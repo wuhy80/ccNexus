@@ -7,7 +7,7 @@ import { initUI, changeLanguage } from './modules/ui.js'
 import { loadConfig } from './modules/config.js'
 import { loadStats, switchStatsPeriod, loadStatsByPeriod, getCurrentPeriod } from './modules/stats.js'
 import { initTokenChart } from './modules/chart.js'
-import { renderEndpoints, toggleEndpointPanel, initEndpointSuccessListener, checkAllEndpointsOnStartup, switchEndpointViewMode, initEndpointViewMode, isDropdownOpen } from './modules/endpoints.js'
+import { renderEndpoints, toggleEndpointPanel, initEndpointSuccessListener, checkAllEndpointsOnStartup, switchEndpointViewMode, initEndpointViewMode, isDropdownOpen, initCurrentClientType, renderClientTypeSelector } from './modules/endpoints.js'
 import { loadLogs, toggleLogPanel, changeLogLevel, copyLogs, clearLogs } from './modules/logs.js'
 import { showDataSyncDialog } from './modules/webdav.js'
 import { initTips } from './modules/tips.js'
@@ -67,6 +67,10 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize endpoint view mode
     initEndpointViewMode();
+
+    // Initialize client type
+    initCurrentClientType();
+    renderClientTypeSelector();
 
     // Initialize terminal module
     initTerminal();

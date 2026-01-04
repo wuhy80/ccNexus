@@ -37,12 +37,13 @@ type StatsStorage interface {
 	RecordDailyStat(stat interface{}) error
 	RecordRequestStat(stat interface{}) error // 新增
 	GetTotalStats() (int, map[string]interface{}, error)
-	GetDailyStats(endpointName, startDate, endDate string) ([]interface{}, error)
+	GetDailyStats(endpointName, clientType, startDate, endDate string) ([]interface{}, error)
 }
 
 // StatRecord represents a stat record for storage
 type StatRecord struct {
 	EndpointName        string
+	ClientType          string // 客户端类型: claude, gemini, codex
 	Date                string
 	Requests            int
 	Errors              int
@@ -56,6 +57,7 @@ type StatRecord struct {
 // RequestStatRecord represents a request-level stat record (新增)
 type RequestStatRecord struct {
 	EndpointName        string
+	ClientType          string // 客户端类型: claude, gemini, codex
 	RequestID           string
 	Timestamp           time.Time
 	Date                string
@@ -114,11 +116,12 @@ func NewStats(storage StatsStorage, deviceID string) *Stats {
 }
 
 // RecordRequest records a request for an endpoint
-func (s *Stats) RecordRequest(endpointName string) {
+func (s *Stats) RecordRequest(endpointName string, clientType string) {
 	date := time.Now().Format("2006-01-02")
 
 	stat := &StatRecord{
 		EndpointName: endpointName,
+		ClientType:   clientType,
 		Date:         date,
 		Requests:     1,
 		Errors:       0,
@@ -133,11 +136,12 @@ func (s *Stats) RecordRequest(endpointName string) {
 }
 
 // RecordError records an error for an endpoint
-func (s *Stats) RecordError(endpointName string) {
+func (s *Stats) RecordError(endpointName string, clientType string) {
 	date := time.Now().Format("2006-01-02")
 
 	stat := &StatRecord{
 		EndpointName: endpointName,
+		ClientType:   clientType,
 		Date:         date,
 		Requests:     0,
 		Errors:       1,
@@ -152,11 +156,12 @@ func (s *Stats) RecordError(endpointName string) {
 }
 
 // RecordTokens records token usage for an endpoint
-func (s *Stats) RecordTokens(endpointName string, usage transformer.TokenUsageDetail) {
+func (s *Stats) RecordTokens(endpointName string, clientType string, usage transformer.TokenUsageDetail) {
 	date := time.Now().Format("2006-01-02")
 
 	stat := &StatRecord{
 		EndpointName:        endpointName,
+		ClientType:          clientType,
 		Date:                date,
 		Requests:            0,
 		Errors:              0,
@@ -280,7 +285,7 @@ func (s *Stats) GetPeriodStats(startDate, endDate string) map[string]*DailyStats
 
 	// For each endpoint, get daily stats in the period
 	for endpointName := range statsData {
-		dailyRecords, err := s.storage.GetDailyStats(endpointName, startDate, endDate)
+		dailyRecords, err := s.storage.GetDailyStats(endpointName, "", startDate, endDate)
 		if err != nil {
 			logger.Error("Failed to get daily stats for %s: %v", endpointName, err)
 			continue
@@ -330,7 +335,7 @@ func (s *Stats) GetDailyStats(date string) map[string]*DailyStats {
 
 	// For each endpoint, get stats for the specific date
 	for endpointName := range statsData {
-		dailyRecords, err := s.storage.GetDailyStats(endpointName, date, date)
+		dailyRecords, err := s.storage.GetDailyStats(endpointName, "", date, date)
 		if err != nil {
 			logger.Error("Failed to get daily stats for %s: %v", endpointName, err)
 			continue

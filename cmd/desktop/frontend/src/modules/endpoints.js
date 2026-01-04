@@ -5,6 +5,74 @@ import { toggleEndpoint, testAllEndpointsZeroCost } from './config.js';
 
 const ENDPOINT_TEST_STATUS_KEY = 'ccNexus_endpointTestStatus';
 const ENDPOINT_VIEW_MODE_KEY = 'ccNexus_endpointViewMode';
+const CURRENT_CLIENT_TYPE_KEY = 'ccNexus_currentClientType';
+
+// 客户端类型选项
+export const CLIENT_TYPES = [
+    { value: 'claude', label: 'Claude Code' },
+    { value: 'gemini', label: 'Gemini' },
+    { value: 'codex', label: 'Codex CLI' }
+];
+
+// 当前选中的客户端类型
+let currentClientType = 'claude';
+
+// 获取当前客户端类型
+export function getCurrentClientType() {
+    return currentClientType;
+}
+
+// 设置当前客户端类型
+export function setCurrentClientType(clientType) {
+    currentClientType = clientType;
+    try {
+        localStorage.setItem(CURRENT_CLIENT_TYPE_KEY, clientType);
+    } catch (error) {
+        console.error('Failed to save current client type:', error);
+    }
+}
+
+// 初始化客户端类型
+export function initCurrentClientType() {
+    try {
+        const saved = localStorage.getItem(CURRENT_CLIENT_TYPE_KEY);
+        if (saved && CLIENT_TYPES.some(ct => ct.value === saved)) {
+            currentClientType = saved;
+        }
+    } catch {
+        currentClientType = 'claude';
+    }
+}
+
+// 渲染客户端类型选择器
+export function renderClientTypeSelector(containerId = 'clientTypeSelector') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="client-type-selector">
+            <label>${t('endpoints.clientType')}:</label>
+            <select id="clientTypeSelect">
+                ${CLIENT_TYPES.map(ct => `
+                    <option value="${ct.value}" ${ct.value === currentClientType ? 'selected' : ''}>
+                        ${ct.label}
+                    </option>
+                `).join('')}
+            </select>
+        </div>
+    `;
+
+    const select = document.getElementById('clientTypeSelect');
+    if (select) {
+        select.addEventListener('change', async (e) => {
+            setCurrentClientType(e.target.value);
+            // 刷新端点列表
+            if (window.loadConfig) {
+                window.loadConfig();
+            }
+        });
+    }
+}
 
 // 获取端点测试状态
 export function getEndpointTestStatus(endpointName) {
@@ -123,15 +191,20 @@ export function setTestState(button, index) {
 export async function renderEndpoints(endpoints) {
     const container = document.getElementById('endpointList');
 
-    // Get current endpoint from backend
+    // Filter endpoints by current client type
+    const filteredEndpoints = endpoints.filter(ep =>
+        (ep.clientType || 'claude') === currentClientType
+    );
+
+    // Get current endpoint from backend for this client type
     let currentEndpointName = '';
     try {
-        currentEndpointName = await window.go.main.App.GetCurrentEndpoint();
+        currentEndpointName = await window.go.main.App.GetCurrentEndpoint(currentClientType);
     } catch (error) {
         console.error('Failed to get current endpoint:', error);
     }
 
-    if (endpoints.length === 0) {
+    if (filteredEndpoints.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
                 <p>${t('endpoints.noEndpoints')}</p>
@@ -144,7 +217,7 @@ export async function renderEndpoints(endpoints) {
 
     const endpointStats = getEndpointStats();
     // Display endpoints in config file order (no sorting by enabled status)
-    const sortedEndpoints = endpoints.map((ep, index) => {
+    const sortedEndpoints = filteredEndpoints.map((ep, index) => {
         const stats = endpointStats[ep.name] || { requests: 0, errors: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
         const enabled = ep.enabled !== undefined ? ep.enabled : true;
         return { endpoint: ep, originalIndex: index, stats, enabled };
@@ -241,7 +314,7 @@ export async function renderEndpoints(endpoints) {
             const idx = parseInt(e.target.getAttribute('data-index'));
             const newEnabled = e.target.checked;
             try {
-                await toggleEndpoint(idx, newEnabled);
+                await toggleEndpoint(currentClientType, idx, newEnabled);
                 window.loadConfig();
             } catch (error) {
                 console.error('Failed to toggle endpoint:', error);
@@ -263,7 +336,7 @@ export async function renderEndpoints(endpoints) {
                 try {
                     switchBtn.disabled = true;
                     switchBtn.innerHTML = '⏳';
-                    await window.go.main.App.SwitchToEndpoint(name);
+                    await window.go.main.App.SwitchToEndpoint(currentClientType, name);
                     window.loadConfig(); // Refresh display
                 } catch (error) {
                     console.error('Failed to switch endpoint:', error);
@@ -414,7 +487,7 @@ function setupDragAndDrop(item, container) {
 
             // Save to backend
             try {
-                await window.go.main.App.ReorderEndpoints(newOrder);
+                await window.go.main.App.ReorderEndpoints(currentClientType, newOrder);
                 window.loadConfig();
             } catch (error) {
                 console.error('Failed to reorder endpoints:', error);
@@ -430,7 +503,9 @@ function setupDragAndDrop(item, container) {
 // 初始化端点成功事件监听
 export function initEndpointSuccessListener() {
     if (window.runtime && window.runtime.EventsOn) {
-        window.runtime.EventsOn('endpoint:success', (endpointName) => {
+        window.runtime.EventsOn('endpoint:success', (data) => {
+            // data 现在是 { endpointName, clientType }
+            const endpointName = typeof data === 'string' ? data : data.endpointName;
             // 更新测试状态为成功
             saveEndpointTestStatus(endpointName, true);
             // 刷新端点列表显示
@@ -456,7 +531,7 @@ export async function checkAllEndpointsOnStartup() {
         // 先清除所有状态
         clearAllEndpointTestStatus();
 
-        const results = await testAllEndpointsZeroCost();
+        const results = await testAllEndpointsZeroCost(currentClientType);
         for (const [name, status] of Object.entries(results)) {
             if (status === 'ok') {
                 saveEndpointTestStatus(name, true);
@@ -578,7 +653,7 @@ function bindCompactItemEvents(item, index, enabled) {
         const idx = parseInt(e.target.getAttribute('data-index'));
         const newEnabled = e.target.checked;
         try {
-            await toggleEndpoint(idx, newEnabled);
+            await toggleEndpoint(currentClientType, idx, newEnabled);
             window.loadConfig();
         } catch (error) {
             console.error('Failed to toggle endpoint:', error);
@@ -594,7 +669,7 @@ function bindCompactItemEvents(item, index, enabled) {
             try {
                 switchBtn.disabled = true;
                 switchBtn.innerHTML = '⏳';
-                await window.go.main.App.SwitchToEndpoint(name);
+                await window.go.main.App.SwitchToEndpoint(currentClientType, name);
                 window.loadConfig(); // Refresh display
             } catch (error) {
                 console.error('Failed to switch endpoint:', error);
@@ -867,7 +942,7 @@ async function handleContainerDrop(e) {
         if (!orderChanged) return;
 
         try {
-            await window.go.main.App.ReorderEndpoints(newOrder);
+            await window.go.main.App.ReorderEndpoints(currentClientType, newOrder);
             window.loadConfig();
         } catch (error) {
             console.error('Failed to reorder endpoints:', error);

@@ -53,12 +53,16 @@ func normalizeAPIUrl(apiUrl string) string {
     return strings.TrimSuffix(apiUrl, "/")
 }
 
-// AddEndpoint adds a new endpoint
-func (e *EndpointService) AddEndpoint(name, apiUrl, apiKey, transformer, model, remark string) error {
-    endpoints := e.config.GetEndpoints()
+// AddEndpoint adds a new endpoint for a specific client type
+func (e *EndpointService) AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark string) error {
+    if clientType == "" {
+        clientType = "claude"
+    }
+
+    endpoints := e.config.GetEndpointsByClient(clientType)
     for _, ep := range endpoints {
         if ep.Name == name {
-            return fmt.Errorf("endpoint name '%s' already exists", name)
+            return fmt.Errorf("endpoint name '%s' already exists for client type '%s'", name, clientType)
         }
     }
 
@@ -68,17 +72,21 @@ func (e *EndpointService) AddEndpoint(name, apiUrl, apiKey, transformer, model, 
 
     apiUrl = normalizeAPIUrl(apiUrl)
 
-    endpoints = append(endpoints, config.Endpoint{
+    newEndpoint := config.Endpoint{
         Name:        name,
+        ClientType:  clientType,
         APIUrl:      apiUrl,
         APIKey:      apiKey,
         Enabled:     true,
         Transformer: transformer,
         Model:       model,
         Remark:      remark,
-    })
+    }
 
-    e.config.UpdateEndpoints(endpoints)
+    // Get all endpoints and add the new one
+    allEndpoints := e.config.GetEndpoints()
+    allEndpoints = append(allEndpoints, newEndpoint)
+    e.config.UpdateEndpoints(allEndpoints)
 
     if err := e.config.Validate(); err != nil {
         return err
@@ -96,27 +104,39 @@ func (e *EndpointService) AddEndpoint(name, apiUrl, apiKey, transformer, model, 
     }
 
     if model != "" {
-        logger.Info("Endpoint added: %s (%s) [%s/%s]", name, apiUrl, transformer, model)
+        logger.Info("Endpoint added: %s (%s) [%s/%s] for client %s", name, apiUrl, transformer, model, clientType)
     } else {
-        logger.Info("Endpoint added: %s (%s) [%s]", name, apiUrl, transformer)
+        logger.Info("Endpoint added: %s (%s) [%s] for client %s", name, apiUrl, transformer, clientType)
     }
 
     return nil
 }
 
-// RemoveEndpoint removes an endpoint by index
-func (e *EndpointService) RemoveEndpoint(index int) error {
-    endpoints := e.config.GetEndpoints()
+// RemoveEndpoint removes an endpoint by index for a specific client type
+func (e *EndpointService) RemoveEndpoint(clientType string, index int) error {
+    if clientType == "" {
+        clientType = "claude"
+    }
+
+    endpoints := e.config.GetEndpointsByClient(clientType)
 
     if index < 0 || index >= len(endpoints) {
         return fmt.Errorf("invalid endpoint index: %d", index)
     }
 
     removedName := endpoints[index].Name
-    endpoints = append(endpoints[:index], endpoints[index+1:]...)
-    e.config.UpdateEndpoints(endpoints)
 
-    if len(endpoints) > 0 {
+    // Remove from all endpoints
+    allEndpoints := e.config.GetEndpoints()
+    newEndpoints := make([]config.Endpoint, 0, len(allEndpoints)-1)
+    for _, ep := range allEndpoints {
+        if !(ep.Name == removedName && ep.ClientType == clientType) {
+            newEndpoints = append(newEndpoints, ep)
+        }
+    }
+    e.config.UpdateEndpoints(newEndpoints)
+
+    if len(e.config.GetEndpointsByClient(clientType)) > 0 {
         if err := e.config.Validate(); err != nil {
             return err
         }
@@ -133,13 +153,17 @@ func (e *EndpointService) RemoveEndpoint(index int) error {
         }
     }
 
-    logger.Info("Endpoint removed: %s", removedName)
+    logger.Info("Endpoint removed: %s (client: %s)", removedName, clientType)
     return nil
 }
 
-// UpdateEndpoint updates an endpoint by index
-func (e *EndpointService) UpdateEndpoint(index int, name, apiUrl, apiKey, transformer, model, remark string) error {
-    endpoints := e.config.GetEndpoints()
+// UpdateEndpoint updates an endpoint by index for a specific client type
+func (e *EndpointService) UpdateEndpoint(clientType string, index int, name, apiUrl, apiKey, transformer, model, remark string) error {
+    if clientType == "" {
+        clientType = "claude"
+    }
+
+    endpoints := e.config.GetEndpointsByClient(clientType)
 
     if index < 0 || index >= len(endpoints) {
         return fmt.Errorf("invalid endpoint index: %d", index)
@@ -150,7 +174,7 @@ func (e *EndpointService) UpdateEndpoint(index int, name, apiUrl, apiKey, transf
     if oldName != name {
         for i, ep := range endpoints {
             if i != index && ep.Name == name {
-                return fmt.Errorf("endpoint name '%s' already exists", name)
+                return fmt.Errorf("endpoint name '%s' already exists for client type '%s'", name, clientType)
             }
         }
     }
@@ -163,8 +187,9 @@ func (e *EndpointService) UpdateEndpoint(index int, name, apiUrl, apiKey, transf
 
     apiUrl = normalizeAPIUrl(apiUrl)
 
-    endpoints[index] = config.Endpoint{
+    updatedEndpoint := config.Endpoint{
         Name:        name,
+        ClientType:  clientType,
         APIUrl:      apiUrl,
         APIKey:      apiKey,
         Enabled:     enabled,
@@ -173,7 +198,15 @@ func (e *EndpointService) UpdateEndpoint(index int, name, apiUrl, apiKey, transf
         Remark:      remark,
     }
 
-    e.config.UpdateEndpoints(endpoints)
+    // Update in all endpoints
+    allEndpoints := e.config.GetEndpoints()
+    for i, ep := range allEndpoints {
+        if ep.Name == oldName && ep.ClientType == clientType {
+            allEndpoints[i] = updatedEndpoint
+            break
+        }
+    }
+    e.config.UpdateEndpoints(allEndpoints)
 
     if err := e.config.Validate(); err != nil {
         return err
@@ -192,32 +225,44 @@ func (e *EndpointService) UpdateEndpoint(index int, name, apiUrl, apiKey, transf
 
     if oldName != name {
         if model != "" {
-            logger.Info("Endpoint updated: %s → %s (%s) [%s/%s]", oldName, name, apiUrl, transformer, model)
+            logger.Info("Endpoint updated: %s → %s (%s) [%s/%s] for client %s", oldName, name, apiUrl, transformer, model, clientType)
         } else {
-            logger.Info("Endpoint updated: %s → %s (%s) [%s]", oldName, name, apiUrl, transformer)
+            logger.Info("Endpoint updated: %s → %s (%s) [%s] for client %s", oldName, name, apiUrl, transformer, clientType)
         }
     } else {
         if model != "" {
-            logger.Info("Endpoint updated: %s (%s) [%s/%s]", name, apiUrl, transformer, model)
+            logger.Info("Endpoint updated: %s (%s) [%s/%s] for client %s", name, apiUrl, transformer, model, clientType)
         } else {
-            logger.Info("Endpoint updated: %s (%s) [%s]", name, apiUrl, transformer)
+            logger.Info("Endpoint updated: %s (%s) [%s] for client %s", name, apiUrl, transformer, clientType)
         }
     }
 
     return nil
 }
 
-// ToggleEndpoint toggles the enabled state of an endpoint
-func (e *EndpointService) ToggleEndpoint(index int, enabled bool) error {
-    endpoints := e.config.GetEndpoints()
+// ToggleEndpoint toggles the enabled state of an endpoint for a specific client type
+func (e *EndpointService) ToggleEndpoint(clientType string, index int, enabled bool) error {
+    if clientType == "" {
+        clientType = "claude"
+    }
+
+    endpoints := e.config.GetEndpointsByClient(clientType)
 
     if index < 0 || index >= len(endpoints) {
         return fmt.Errorf("invalid endpoint index: %d", index)
     }
 
     endpointName := endpoints[index].Name
-    endpoints[index].Enabled = enabled
-    e.config.UpdateEndpoints(endpoints)
+
+    // Update in all endpoints
+    allEndpoints := e.config.GetEndpoints()
+    for i, ep := range allEndpoints {
+        if ep.Name == endpointName && ep.ClientType == clientType {
+            allEndpoints[i].Enabled = enabled
+            break
+        }
+    }
+    e.config.UpdateEndpoints(allEndpoints)
 
     if err := e.proxy.UpdateConfig(e.config); err != nil {
         return err
@@ -231,20 +276,24 @@ func (e *EndpointService) ToggleEndpoint(index int, enabled bool) error {
     }
 
     if enabled {
-        logger.Info("Endpoint enabled: %s", endpointName)
+        logger.Info("Endpoint enabled: %s (client: %s)", endpointName, clientType)
     } else {
-        logger.Info("Endpoint disabled: %s", endpointName)
+        logger.Info("Endpoint disabled: %s (client: %s)", endpointName, clientType)
     }
 
     return nil
 }
 
-// ReorderEndpoints reorders endpoints based on the provided name array
-func (e *EndpointService) ReorderEndpoints(names []string) error {
-    endpoints := e.config.GetEndpoints()
+// ReorderEndpoints reorders endpoints based on the provided name array for a specific client type
+func (e *EndpointService) ReorderEndpoints(clientType string, names []string) error {
+    if clientType == "" {
+        clientType = "claude"
+    }
+
+    endpoints := e.config.GetEndpointsByClient(clientType)
 
     if len(names) != len(endpoints) {
-        return fmt.Errorf("names array length (%d) doesn't match endpoints count (%d)", len(names), len(endpoints))
+        return fmt.Errorf("names array length (%d) doesn't match endpoints count (%d) for client type '%s'", len(names), len(endpoints), clientType)
     }
 
     seen := make(map[string]bool)
@@ -260,15 +309,24 @@ func (e *EndpointService) ReorderEndpoints(names []string) error {
         endpointMap[ep.Name] = ep
     }
 
-    newEndpoints := make([]config.Endpoint, 0, len(names))
+    reorderedEndpoints := make([]config.Endpoint, 0, len(names))
     for _, name := range names {
         ep, exists := endpointMap[name]
         if !exists {
             return fmt.Errorf("endpoint not found: %s", name)
         }
-        newEndpoints = append(newEndpoints, ep)
+        reorderedEndpoints = append(reorderedEndpoints, ep)
     }
 
+    // Rebuild all endpoints: other client types + reordered ones
+    allEndpoints := e.config.GetEndpoints()
+    newEndpoints := make([]config.Endpoint, 0, len(allEndpoints))
+    for _, ep := range allEndpoints {
+        if ep.ClientType != clientType {
+            newEndpoints = append(newEndpoints, ep)
+        }
+    }
+    newEndpoints = append(newEndpoints, reorderedEndpoints...)
     e.config.UpdateEndpoints(newEndpoints)
 
     if err := e.config.Validate(); err != nil {
@@ -286,29 +344,39 @@ func (e *EndpointService) ReorderEndpoints(names []string) error {
         }
     }
 
-    logger.Info("Endpoints reordered: %v", names)
+    logger.Info("Endpoints reordered for client %s: %v", clientType, names)
     return nil
 }
 
-// GetCurrentEndpoint returns the current active endpoint name
-func (e *EndpointService) GetCurrentEndpoint() string {
+// GetCurrentEndpoint returns the current active endpoint name for a specific client type
+func (e *EndpointService) GetCurrentEndpoint(clientType string) string {
     if e.proxy == nil {
         return ""
     }
-    return e.proxy.GetCurrentEndpointName()
+    if clientType == "" {
+        clientType = "claude"
+    }
+    return e.proxy.GetCurrentEndpointNameForClient(clientType)
 }
 
-// SwitchToEndpoint manually switches to a specific endpoint by name
-func (e *EndpointService) SwitchToEndpoint(endpointName string) error {
+// SwitchToEndpoint manually switches to a specific endpoint by name for a specific client type
+func (e *EndpointService) SwitchToEndpoint(clientType, endpointName string) error {
     if e.proxy == nil {
         return fmt.Errorf("proxy not initialized")
     }
-    return e.proxy.SetCurrentEndpoint(endpointName)
+    if clientType == "" {
+        clientType = "claude"
+    }
+    return e.proxy.SetCurrentEndpointForClient(clientType, endpointName)
 }
 
-// TestEndpoint tests an endpoint by sending a simple request
-func (e *EndpointService) TestEndpoint(index int) string {
-    endpoints := e.config.GetEndpoints()
+// TestEndpoint tests an endpoint by sending a simple request for a specific client type
+func (e *EndpointService) TestEndpoint(clientType string, index int) string {
+    if clientType == "" {
+        clientType = "claude"
+    }
+
+    endpoints := e.config.GetEndpointsByClient(clientType)
 
     if index < 0 || index >= len(endpoints) {
         result := map[string]interface{}{
@@ -536,9 +604,13 @@ func (e *EndpointService) TestEndpoint(index int) string {
 // Remaining methods (TestEndpointLight, TestAllEndpointsZeroCost, FetchModels, etc.) 
 // will be added in the next part due to size constraints
 
-// TestEndpointLight tests endpoint availability with minimal token consumption
-func (e *EndpointService) TestEndpointLight(index int) string {
-    endpoints := e.config.GetEndpoints()
+// TestEndpointLight tests endpoint availability with minimal token consumption for a specific client type
+func (e *EndpointService) TestEndpointLight(clientType string, index int) string {
+    if clientType == "" {
+        clientType = "claude"
+    }
+
+    endpoints := e.config.GetEndpointsByClient(clientType)
 
     if index < 0 || index >= len(endpoints) {
         return e.testResult(false, "invalid_index", "models", fmt.Sprintf("Invalid endpoint index: %d", index))
@@ -611,9 +683,13 @@ func (e *EndpointService) testResult(success bool, status, method, message strin
     return string(data)
 }
 
-// TestAllEndpointsZeroCost tests all endpoints using zero-cost methods only
-func (e *EndpointService) TestAllEndpointsZeroCost() string {
-    endpoints := e.config.GetEndpoints()
+// TestAllEndpointsZeroCost tests all endpoints using zero-cost methods only for a specific client type
+func (e *EndpointService) TestAllEndpointsZeroCost(clientType string) string {
+    if clientType == "" {
+        clientType = "claude"
+    }
+
+    endpoints := e.config.GetEndpointsByClient(clientType)
     results := make(map[string]string)
 
     for _, endpoint := range endpoints {

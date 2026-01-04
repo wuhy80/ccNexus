@@ -364,6 +364,7 @@ export function initUI() {
                         <button class="endpoint-toggle-btn" onclick="window.toggleEndpointPanel()">
                             <span id="endpointToggleIcon">🔼</span> <span id="endpointToggleText">${t('endpoints.collapse')}</span>
                         </button>
+                        <div id="clientTypeSelector"></div>
                         <div class="view-mode-tabs">
                             <button class="view-mode-btn active" data-view="detail" onclick="window.switchEndpointViewMode('detail')" title="${t('endpoints.viewDetail')}">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">

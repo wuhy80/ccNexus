@@ -37,12 +37,12 @@ export default {
         testTipSuccess: 'Connection test passed',
         testTipFailed: 'Connection test failed or endpoint does not support API testing',
         testTipUnknown: 'Not tested or test result unknown',
-        expand: 'Expand',
         viewDetail: 'Default Mode',
         viewCompact: 'List Mode',
         dragToReorder: 'Drag to Reorder',
         moreActions: 'More Actions',
-        disabled: 'Off'
+        disabled: 'Off',
+        clientType: 'Client'
     },
     modal: {
         addEndpoint: 'Add Endpoint',

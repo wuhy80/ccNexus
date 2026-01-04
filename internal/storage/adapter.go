@@ -23,6 +23,31 @@ func (a *ConfigStorageAdapter) GetEndpoints() ([]config.StorageEndpoint, error) 
 	for i, ep := range endpoints {
 		result[i] = config.StorageEndpoint{
 			Name:        ep.Name,
+			ClientType:  ep.ClientType,
+			APIUrl:      ep.APIUrl,
+			APIKey:      ep.APIKey,
+			Enabled:     ep.Enabled,
+			Transformer: ep.Transformer,
+			Model:       ep.Model,
+			Remark:      ep.Remark,
+			SortOrder:   ep.SortOrder,
+		}
+	}
+	return result, nil
+}
+
+// GetEndpointsByClient returns endpoints for a specific client type
+func (a *ConfigStorageAdapter) GetEndpointsByClient(clientType string) ([]config.StorageEndpoint, error) {
+	endpoints, err := a.storage.GetEndpointsByClient(clientType)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]config.StorageEndpoint, len(endpoints))
+	for i, ep := range endpoints {
+		result[i] = config.StorageEndpoint{
+			Name:        ep.Name,
+			ClientType:  ep.ClientType,
 			APIUrl:      ep.APIUrl,
 			APIKey:      ep.APIKey,
 			Enabled:     ep.Enabled,
@@ -39,6 +64,7 @@ func (a *ConfigStorageAdapter) GetEndpoints() ([]config.StorageEndpoint, error) 
 func (a *ConfigStorageAdapter) SaveEndpoint(ep *config.StorageEndpoint) error {
 	endpoint := &Endpoint{
 		Name:        ep.Name,
+		ClientType:  ep.ClientType,
 		APIUrl:      ep.APIUrl,
 		APIKey:      ep.APIKey,
 		Enabled:     ep.Enabled,
@@ -54,6 +80,7 @@ func (a *ConfigStorageAdapter) SaveEndpoint(ep *config.StorageEndpoint) error {
 func (a *ConfigStorageAdapter) UpdateEndpoint(ep *config.StorageEndpoint) error {
 	endpoint := &Endpoint{
 		Name:        ep.Name,
+		ClientType:  ep.ClientType,
 		APIUrl:      ep.APIUrl,
 		APIKey:      ep.APIKey,
 		Enabled:     ep.Enabled,
@@ -66,8 +93,8 @@ func (a *ConfigStorageAdapter) UpdateEndpoint(ep *config.StorageEndpoint) error 
 }
 
 // DeleteEndpoint deletes an endpoint
-func (a *ConfigStorageAdapter) DeleteEndpoint(name string) error {
-	return a.storage.DeleteEndpoint(name)
+func (a *ConfigStorageAdapter) DeleteEndpoint(name string, clientType string) error {
+	return a.storage.DeleteEndpoint(name, clientType)
 }
 
 // GetConfig gets a config value

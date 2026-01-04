@@ -59,9 +59,20 @@ func (h *Handler) handleEndpointByName(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// listEndpoints returns all endpoints
+// listEndpoints returns all endpoints, optionally filtered by client type
 func (h *Handler) listEndpoints(w http.ResponseWriter, r *http.Request) {
-	endpoints, err := h.storage.GetEndpoints()
+	// Get clientType from query parameter
+	clientType := r.URL.Query().Get("clientType")
+
+	var endpoints []storage.Endpoint
+	var err error
+
+	if clientType != "" {
+		endpoints, err = h.storage.GetEndpointsByClient(clientType)
+	} else {
+		endpoints, err = h.storage.GetEndpoints()
+	}
+
 	if err != nil {
 		logger.Error("Failed to get endpoints: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to get endpoints")
@@ -102,6 +113,7 @@ func (h *Handler) getEndpoint(w http.ResponseWriter, r *http.Request, name strin
 func (h *Handler) createEndpoint(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name        string `json:"name"`
+		ClientType  string `json:"clientType"`
 		APIUrl      string `json:"apiUrl"`
 		APIKey      string `json:"apiKey"`
 		Enabled     bool   `json:"enabled"`
@@ -121,18 +133,23 @@ func (h *Handler) createEndpoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get current endpoints to determine sort order
-	endpoints, err := h.storage.GetEndpoints()
+	// Default clientType to "claude"
+	if req.ClientType == "" {
+		req.ClientType = "claude"
+	}
+
+	// Get current endpoints for this client type to determine sort order and check duplicates
+	endpoints, err := h.storage.GetEndpointsByClient(req.ClientType)
 	if err != nil {
 		logger.Error("Failed to get endpoints: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to get endpoints")
 		return
 	}
 
-	// Check if endpoint with same name exists
+	// Check if endpoint with same name exists for this client type
 	for _, ep := range endpoints {
 		if ep.Name == req.Name {
-			WriteError(w, http.StatusConflict, "Endpoint with this name already exists")
+			WriteError(w, http.StatusConflict, "Endpoint with this name already exists for this client type")
 			return
 		}
 	}
@@ -140,6 +157,7 @@ func (h *Handler) createEndpoint(w http.ResponseWriter, r *http.Request) {
 	// Create new endpoint
 	endpoint := &storage.Endpoint{
 		Name:        req.Name,
+		ClientType:  req.ClientType,
 		APIUrl:      normalizeAPIUrl(req.APIUrl),
 		APIKey:      req.APIKey,
 		Enabled:     req.Enabled,
@@ -241,7 +259,13 @@ func (h *Handler) updateEndpoint(w http.ResponseWriter, r *http.Request, name st
 
 // deleteEndpoint deletes an endpoint
 func (h *Handler) deleteEndpoint(w http.ResponseWriter, r *http.Request, name string) {
-	if err := h.storage.DeleteEndpoint(name); err != nil {
+	// Get clientType from query parameter, default to "claude"
+	clientType := r.URL.Query().Get("clientType")
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	if err := h.storage.DeleteEndpoint(name, clientType); err != nil {
 		logger.Error("Failed to delete endpoint: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to delete endpoint")
 		return
@@ -313,16 +337,22 @@ func (h *Handler) toggleEndpoint(w http.ResponseWriter, r *http.Request, name st
 	})
 }
 
-// handleCurrentEndpoint returns the current active endpoint
+// handleCurrentEndpoint returns the current active endpoint for a client type
 func (h *Handler) handleCurrentEndpoint(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
-	endpoints := h.config.GetEndpoints()
+	// Get clientType from query parameter, default to "claude"
+	clientType := r.URL.Query().Get("clientType")
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	endpoints := h.config.GetEndpointsByClient(clientType)
 	if len(endpoints) == 0 {
-		WriteError(w, http.StatusNotFound, "No endpoints configured")
+		WriteError(w, http.StatusNotFound, "No endpoints configured for this client type")
 		return
 	}
 
@@ -335,17 +365,18 @@ func (h *Handler) handleCurrentEndpoint(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if len(enabledEndpoints) == 0 {
-		WriteError(w, http.StatusNotFound, "No enabled endpoints")
+		WriteError(w, http.StatusNotFound, "No enabled endpoints for this client type")
 		return
 	}
 
 	// Return first enabled endpoint as current
 	WriteSuccess(w, map[string]interface{}{
-		"name": enabledEndpoints[0].Name,
+		"name":       enabledEndpoints[0].Name,
+		"clientType": clientType,
 	})
 }
 
-// handleSwitchEndpoint switches to a specific endpoint
+// handleSwitchEndpoint switches to a specific endpoint for a client type
 func (h *Handler) handleSwitchEndpoint(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
@@ -353,7 +384,8 @@ func (h *Handler) handleSwitchEndpoint(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name string `json:"name"`
+		Name       string `json:"name"`
+		ClientType string `json:"clientType"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -361,8 +393,13 @@ func (h *Handler) handleSwitchEndpoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify endpoint exists
-	endpoints := h.config.GetEndpoints()
+	// Default clientType to "claude"
+	if req.ClientType == "" {
+		req.ClientType = "claude"
+	}
+
+	// Verify endpoint exists for this client type
+	endpoints := h.config.GetEndpointsByClient(req.ClientType)
 	found := false
 	for _, ep := range endpoints {
 		if ep.Name == req.Name && ep.Enabled {
@@ -372,17 +409,18 @@ func (h *Handler) handleSwitchEndpoint(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !found {
-		WriteError(w, http.StatusNotFound, "Endpoint not found or not enabled")
+		WriteError(w, http.StatusNotFound, "Endpoint not found or not enabled for this client type")
 		return
 	}
 
 	WriteSuccess(w, map[string]interface{}{
-		"message": "Endpoint switched successfully",
-		"name":    req.Name,
+		"message":    "Endpoint switched successfully",
+		"name":       req.Name,
+		"clientType": req.ClientType,
 	})
 }
 
-// handleReorderEndpoints reorders endpoints
+// handleReorderEndpoints reorders endpoints for a client type
 func (h *Handler) handleReorderEndpoints(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
@@ -390,7 +428,8 @@ func (h *Handler) handleReorderEndpoints(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req struct {
-		Names []string `json:"names"`
+		Names      []string `json:"names"`
+		ClientType string   `json:"clientType"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -398,8 +437,13 @@ func (h *Handler) handleReorderEndpoints(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Get all endpoints
-	endpoints, err := h.storage.GetEndpoints()
+	// Default clientType to "claude"
+	if req.ClientType == "" {
+		req.ClientType = "claude"
+	}
+
+	// Get endpoints for this client type
+	endpoints, err := h.storage.GetEndpointsByClient(req.ClientType)
 	if err != nil {
 		logger.Error("Failed to get endpoints: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to get endpoints")
@@ -429,7 +473,8 @@ func (h *Handler) handleReorderEndpoints(w http.ResponseWriter, r *http.Request)
 	}
 
 	WriteSuccess(w, map[string]interface{}{
-		"message": "Endpoints reordered successfully",
+		"message":    "Endpoints reordered successfully",
+		"clientType": req.ClientType,
 	})
 }
 

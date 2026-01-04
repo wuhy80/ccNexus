@@ -4472,3 +4472,37 @@ body {
         opacity: 0.8;
     }
 }
+
+/* Client Type Selector */
+.client-type-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.client-type-selector label {
+    font-size: 14px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.client-type-selector select {
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-size: 14px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.client-type-selector select:hover {
+    border-color: var(--primary-color);
+}
+
+.client-type-selector select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}

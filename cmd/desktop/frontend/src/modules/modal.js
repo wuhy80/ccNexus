@@ -1,7 +1,7 @@
 import { t } from '../i18n/index.js';
 import { escapeHtml } from '../utils/format.js';
 import { addEndpoint, updateEndpoint, removeEndpoint, testEndpoint, testEndpointLight, updatePort } from './config.js';
-import { setTestState, clearTestState, saveEndpointTestStatus } from './endpoints.js';
+import { setTestState, clearTestState, saveEndpointTestStatus, getCurrentClientType } from './endpoints.js';
 
 let currentEditIndex = -1;
 
@@ -112,9 +112,13 @@ export function showAddEndpointModal() {
 
 export async function editEndpoint(index) {
     currentEditIndex = index;
+    const clientType = getCurrentClientType();
     const configStr = await window.go.main.App.GetConfig();
     const config = JSON.parse(configStr);
-    const ep = config.endpoints[index];
+    const endpoints = config.endpoints.filter(ep =>
+        (ep.clientType || 'claude') === clientType
+    );
+    const ep = endpoints[index];
 
     document.getElementById('modalTitle').textContent = '✏️ ' + t('modal.editEndpoint');
     document.getElementById('endpointName').value = ep.name;
@@ -148,10 +152,14 @@ export async function saveEndpoint() {
         return;
     }
 
-    // Check for duplicate endpoint name
+    // Check for duplicate endpoint name within the same client type
+    const clientType = getCurrentClientType();
     const configStr = await window.go.main.App.GetConfig();
     const config = JSON.parse(configStr);
-    const existingEndpoint = config.endpoints.find((ep, idx) =>
+    const filteredEndpoints = config.endpoints.filter(ep =>
+        (ep.clientType || 'claude') === clientType
+    );
+    const existingEndpoint = filteredEndpoints.find((ep, idx) =>
         ep.name === name && idx !== currentEditIndex
     );
 
@@ -162,9 +170,9 @@ export async function saveEndpoint() {
 
     try {
         if (currentEditIndex === -1) {
-            await addEndpoint(name, url, key, transformer, model, remark);
+            await addEndpoint(clientType, name, url, key, transformer, model, remark);
         } else {
-            await updateEndpoint(currentEditIndex, name, url, key, transformer, model, remark);
+            await updateEndpoint(clientType, currentEditIndex, name, url, key, transformer, model, remark);
         }
 
         closeModal();
@@ -175,9 +183,13 @@ export async function saveEndpoint() {
 }
 
 export async function deleteEndpoint(index) {
+    const clientType = getCurrentClientType();
+
     try {
         const config = await window.go.main.App.GetConfig();
-        const endpoints = JSON.parse(config).endpoints;
+        const endpoints = JSON.parse(config).endpoints.filter(ep =>
+            (ep.clientType || 'claude') === clientType
+        );
         const endpointName = endpoints[index].name;
 
         const confirmed = await showConfirm(t('modal.confirmDelete').replace('{name}', endpointName));
@@ -185,7 +197,7 @@ export async function deleteEndpoint(index) {
             return;
         }
 
-        await removeEndpoint(index);
+        await removeEndpoint(clientType, index);
         window.loadConfig();
     } catch (error) {
         console.error('Delete failed:', error);
@@ -503,6 +515,8 @@ function isTestNotSupported(statusCode, message) {
 export async function testEndpointHandler(index, buttonElement) {
     setTestState(buttonElement, index);
 
+    const clientType = getCurrentClientType();
+
     // 获取端点名称用于保存测试状态（兼容详情视图和简洁视图）
     const endpointItem = buttonElement.closest('.endpoint-item') || buttonElement.closest('.endpoint-item-compact');
     const endpointName = endpointItem ? endpointItem.dataset.name : null;
@@ -519,7 +533,7 @@ export async function testEndpointHandler(index, buttonElement) {
         buttonElement.innerHTML = '⏳';
 
         // 使用轻量级测试（优先零消耗方法）
-        const result = await testEndpointLight(index);
+        const result = await testEndpointLight(clientType, index);
 
         const resultContent = document.getElementById('testResultContent');
         const resultTitle = document.getElementById('testResultTitle');

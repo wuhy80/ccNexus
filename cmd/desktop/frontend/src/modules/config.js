@@ -1,4 +1,6 @@
 // Configuration management
+import { getCurrentClientType } from './endpoints.js';
+
 export async function loadConfig() {
     try {
         if (!window.go?.main?.App) {
@@ -32,33 +34,33 @@ export async function updatePort(port) {
     await window.go.main.App.UpdatePort(port);
 }
 
-export async function addEndpoint(name, url, key, transformer, model, remark) {
-    await window.go.main.App.AddEndpoint(name, url, key, transformer, model, remark || '');
+export async function addEndpoint(clientType, name, url, key, transformer, model, remark) {
+    await window.go.main.App.AddEndpoint(clientType, name, url, key, transformer, model, remark || '');
 }
 
-export async function updateEndpoint(index, name, url, key, transformer, model, remark) {
-    await window.go.main.App.UpdateEndpoint(index, name, url, key, transformer, model, remark || '');
+export async function updateEndpoint(clientType, index, name, url, key, transformer, model, remark) {
+    await window.go.main.App.UpdateEndpoint(clientType, index, name, url, key, transformer, model, remark || '');
 }
 
-export async function removeEndpoint(index) {
-    await window.go.main.App.RemoveEndpoint(index);
+export async function removeEndpoint(clientType, index) {
+    await window.go.main.App.RemoveEndpoint(clientType, index);
 }
 
-export async function toggleEndpoint(index, enabled) {
-    await window.go.main.App.ToggleEndpoint(index, enabled);
+export async function toggleEndpoint(clientType, index, enabled) {
+    await window.go.main.App.ToggleEndpoint(clientType, index, enabled);
 }
 
-export async function testEndpoint(index) {
-    const resultStr = await window.go.main.App.TestEndpoint(index);
+export async function testEndpoint(clientType, index) {
+    const resultStr = await window.go.main.App.TestEndpoint(clientType, index);
     return JSON.parse(resultStr);
 }
 
-export async function testEndpointLight(index) {
-    const resultStr = await window.go.main.App.TestEndpointLight(index);
+export async function testEndpointLight(clientType, index) {
+    const resultStr = await window.go.main.App.TestEndpointLight(clientType, index);
     return JSON.parse(resultStr);
 }
 
-export async function testAllEndpointsZeroCost() {
-    const resultStr = await window.go.main.App.TestAllEndpointsZeroCost();
+export async function testAllEndpointsZeroCost(clientType) {
+    const resultStr = await window.go.main.App.TestAllEndpointsZeroCost(clientType);
     return JSON.parse(resultStr);
 }

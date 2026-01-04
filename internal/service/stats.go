@@ -240,7 +240,7 @@ func (s *StatsService) getRequestDetailsByDate(date string, limit, offset int) s
 	}
 
 	// Get total count
-	total, err := s.storage.GetRequestStatsCount("", date, date)
+	total, err := s.storage.GetRequestStatsCount("", "", date, date)
 	if err != nil {
 		result := map[string]interface{}{
 			"success": false,
@@ -252,7 +252,7 @@ func (s *StatsService) getRequestDetailsByDate(date string, limit, offset int) s
 	}
 
 	// Get request stats with pagination
-	requests, err := s.storage.GetRequestStats("", date, date, limit, offset)
+	requests, err := s.storage.GetRequestStats("", "", date, date, limit, offset)
 	if err != nil {
 		result := map[string]interface{}{
 			"success": false,
@@ -307,7 +307,7 @@ func (s *StatsService) GetTokenTrendData(granularity, period, startTime, endTime
 	}
 
 	// Fetch request stats from storage
-	requests, err := s.storage.GetRequestStats("", startDate, endDate, 10000, 0)
+	requests, err := s.storage.GetRequestStats("", "", startDate, endDate, 10000, 0)
 	if err != nil {
 		return jsonError("Failed to get request stats: " + err.Error())
 	}
