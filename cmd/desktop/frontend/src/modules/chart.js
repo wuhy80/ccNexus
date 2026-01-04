@@ -43,9 +43,8 @@ export async function initTokenChart(period = 'daily') {
     const parent = container.parentElement;
     const loadingDiv = document.createElement('div');
     loadingDiv.id = 'chartLoading';
-    loadingDiv.style.cssText = 'text-align: center; padding: 40px; color: #999; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);';
+    loadingDiv.style.cssText = 'text-align: center; padding: 40px; color: #999; flex: 1; display: flex; align-items: center; justify-content: center;';
     loadingDiv.innerHTML = `<p style="font-size: 14px;">${t('chart.loading')}</p>`;
-    parent.style.position = 'relative';
     parent.appendChild(loadingDiv);
 
     container.style.display = 'block';
@@ -449,14 +448,13 @@ function showChartError(message) {
     const parent = container.parentElement;
     const errorDiv = document.createElement('div');
     errorDiv.id = 'chartError';
-    errorDiv.style.cssText = 'text-align: center; padding: 80px 20px; color: #999; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%;';
+    errorDiv.style.cssText = 'text-align: center; padding: 80px 20px; color: #999; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;';
     errorDiv.innerHTML = `
         <p style="font-size: 14px; margin-bottom: 8px;">📊 ${message}</p>
         <p style="font-size: 12px; opacity: 0.7;">${t('chart.noDataHint')}</p>
     `;
 
     container.style.display = 'none';
-    parent.style.position = 'relative';
     parent.appendChild(errorDiv);
 }
 
