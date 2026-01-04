@@ -196,7 +196,8 @@ func (s *StatsService) sumStats(startDate, endDate string) statsSummary {
 	for _, st := range stats {
 		sum.requests += st.Requests
 		sum.errors += st.Errors
-		sum.tokens += st.InputTokens + st.OutputTokens
+		// Include cache tokens in total (cache_creation + cache_read are part of input)
+		sum.tokens += st.InputTokens + st.CacheCreationTokens + st.CacheReadTokens + st.OutputTokens
 	}
 	return sum
 }

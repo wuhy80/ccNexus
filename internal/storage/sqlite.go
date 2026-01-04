@@ -510,13 +510,15 @@ func (s *SQLiteStorage) GetArchiveMonths() ([]string, error) {
 
 // MonthlyArchiveData represents archive data for a specific month
 type MonthlyArchiveData struct {
-	Month        string
-	EndpointName string
-	Date         string
-	Requests     int
-	Errors       int
-	InputTokens  int
-	OutputTokens int
+	Month               string
+	EndpointName        string
+	Date                string
+	Requests            int
+	Errors              int
+	InputTokens         int
+	CacheCreationTokens int
+	CacheReadTokens     int
+	OutputTokens        int
 }
 
 // GetMonthlyArchiveData returns all daily stats for a specific month
@@ -524,7 +526,8 @@ func (s *SQLiteStorage) GetMonthlyArchiveData(month string) ([]MonthlyArchiveDat
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	query := `SELECT endpoint_name, date, SUM(requests), SUM(errors), SUM(input_tokens), SUM(output_tokens)
+	query := `SELECT endpoint_name, date, SUM(requests), SUM(errors),
+		SUM(input_tokens), SUM(COALESCE(cache_creation_tokens, 0)), SUM(COALESCE(cache_read_tokens, 0)), SUM(output_tokens)
 		FROM daily_stats
 		WHERE strftime('%Y-%m', date) = ?
 		GROUP BY endpoint_name, date
@@ -540,7 +543,8 @@ func (s *SQLiteStorage) GetMonthlyArchiveData(month string) ([]MonthlyArchiveDat
 	for rows.Next() {
 		var data MonthlyArchiveData
 		data.Month = month
-		if err := rows.Scan(&data.EndpointName, &data.Date, &data.Requests, &data.Errors, &data.InputTokens, &data.OutputTokens); err != nil {
+		if err := rows.Scan(&data.EndpointName, &data.Date, &data.Requests, &data.Errors,
+			&data.InputTokens, &data.CacheCreationTokens, &data.CacheReadTokens, &data.OutputTokens); err != nil {
 			return nil, err
 		}
 		results = append(results, data)

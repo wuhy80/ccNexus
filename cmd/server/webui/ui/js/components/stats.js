@@ -78,7 +78,7 @@ class Stats {
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">Total Tokens</div>
-                    <div class="stat-value">${formatTokens((stats.totalInputTokens || 0) + (stats.totalOutputTokens || 0))}</div>
+                    <div class="stat-value">${formatTokens((stats.totalInputTokens || 0) + (stats.totalCacheCreationTokens || 0) + (stats.totalCacheReadTokens || 0) + (stats.totalOutputTokens || 0))}</div>
                 </div>
             </div>
 
@@ -115,12 +115,13 @@ class Stats {
                     <tbody>
                         ${endpointNames.map(name => {
                             const ep = endpoints[name];
+                            const inputWithCache = (ep.inputTokens || 0) + (ep.cacheCreationTokens || 0) + (ep.cacheReadTokens || 0);
                             return `
                                 <tr>
                                     <td><strong>${this.escapeHtml(name)}</strong></td>
                                     <td>${formatNumber(ep.requests || 0)}</td>
                                     <td>${formatNumber(ep.errors || 0)}</td>
-                                    <td>${formatTokens(ep.inputTokens || 0)}</td>
+                                    <td>${formatTokens(inputWithCache)}</td>
                                     <td>${formatTokens(ep.outputTokens || 0)}</td>
                                 </tr>
                             `;

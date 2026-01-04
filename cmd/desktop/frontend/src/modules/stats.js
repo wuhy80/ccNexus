@@ -22,21 +22,27 @@ export async function loadStats() {
         let totalSuccess = 0;
         let totalFailed = 0;
         let totalInputTokens = 0;
+        let totalCacheCreationTokens = 0;
+        let totalCacheReadTokens = 0;
         let totalOutputTokens = 0;
 
         for (const epStats of Object.values(stats.endpoints || {})) {
             totalSuccess += (epStats.requests - epStats.errors);
             totalFailed += epStats.errors;
             totalInputTokens += epStats.inputTokens || 0;
+            totalCacheCreationTokens += epStats.cacheCreationTokens || 0;
+            totalCacheReadTokens += epStats.cacheReadTokens || 0;
             totalOutputTokens += epStats.outputTokens || 0;
         }
 
         document.getElementById('successRequests').textContent = totalSuccess;
         document.getElementById('failedRequests').textContent = totalFailed;
 
-        const totalTokens = totalInputTokens + totalOutputTokens;
+        // Include cache tokens in the total (cache_creation + cache_read are part of input)
+        const totalInputWithCache = totalInputTokens + totalCacheCreationTokens + totalCacheReadTokens;
+        const totalTokens = totalInputWithCache + totalOutputTokens;
         document.getElementById('totalTokens').textContent = formatTokens(totalTokens);
-        document.getElementById('totalInputTokens').textContent = formatTokens(totalInputTokens);
+        document.getElementById('totalInputTokens').textContent = formatTokens(totalInputWithCache);
         document.getElementById('totalOutputTokens').textContent = formatTokens(totalOutputTokens);
 
         endpointStats = stats.endpoints || {};
@@ -78,9 +84,13 @@ export async function loadStatsByPeriod(period = 'daily') {
         document.getElementById('periodSuccess').textContent = stats.totalSuccess || 0;
         document.getElementById('periodFailed').textContent = stats.totalErrors || 0;
 
-        const totalTokens = (stats.totalInputTokens || 0) + (stats.totalOutputTokens || 0);
+        // Include cache tokens in the total (cache_creation + cache_read are part of input)
+        const totalInputWithCache = (stats.totalInputTokens || 0) +
+            (stats.totalCacheCreationTokens || 0) +
+            (stats.totalCacheReadTokens || 0);
+        const totalTokens = totalInputWithCache + (stats.totalOutputTokens || 0);
         document.getElementById('periodTotalTokens').textContent = formatTokens(totalTokens);
-        document.getElementById('periodInputTokens').textContent = formatTokens(stats.totalInputTokens || 0);
+        document.getElementById('periodInputTokens').textContent = formatTokens(totalInputWithCache);
         document.getElementById('periodOutputTokens').textContent = formatTokens(stats.totalOutputTokens || 0);
 
         // Update endpoint stats (active / total)

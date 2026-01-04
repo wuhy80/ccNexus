@@ -74,7 +74,7 @@ func (a *ArchiveService) GetArchiveData(month string) string {
     }
 
     endpoints := make(map[string]map[string]interface{})
-    var totalRequests, totalErrors, totalInputTokens, totalOutputTokens int
+    var totalRequests, totalErrors, totalInputTokens, totalCacheCreationTokens, totalCacheReadTokens, totalOutputTokens int
 
     for _, record := range archiveData {
         if endpoints[record.EndpointName] == nil {
@@ -85,24 +85,30 @@ func (a *ArchiveService) GetArchiveData(month string) string {
 
         dailyHistory := endpoints[record.EndpointName]["dailyHistory"].(map[string]interface{})
         dailyHistory[record.Date] = map[string]interface{}{
-            "date":         record.Date,
-            "requests":     record.Requests,
-            "errors":       record.Errors,
-            "inputTokens":  record.InputTokens,
-            "outputTokens": record.OutputTokens,
+            "date":                record.Date,
+            "requests":            record.Requests,
+            "errors":              record.Errors,
+            "inputTokens":         record.InputTokens,
+            "cacheCreationTokens": record.CacheCreationTokens,
+            "cacheReadTokens":     record.CacheReadTokens,
+            "outputTokens":        record.OutputTokens,
         }
 
         totalRequests += record.Requests
         totalErrors += record.Errors
         totalInputTokens += record.InputTokens
+        totalCacheCreationTokens += record.CacheCreationTokens
+        totalCacheReadTokens += record.CacheReadTokens
         totalOutputTokens += record.OutputTokens
     }
 
     summary := map[string]interface{}{
-        "totalRequests":     totalRequests,
-        "totalErrors":       totalErrors,
-        "totalInputTokens":  totalInputTokens,
-        "totalOutputTokens": totalOutputTokens,
+        "totalRequests":            totalRequests,
+        "totalErrors":              totalErrors,
+        "totalInputTokens":         totalInputTokens,
+        "totalCacheCreationTokens": totalCacheCreationTokens,
+        "totalCacheReadTokens":     totalCacheReadTokens,
+        "totalOutputTokens":        totalOutputTokens,
     }
 
     archive := map[string]interface{}{
@@ -170,14 +176,16 @@ func (a *ArchiveService) GetArchiveTrend(month string) string {
     for _, record := range currentData {
         currentRequests += record.Requests
         currentErrors += record.Errors
-        currentTokens += record.InputTokens + record.OutputTokens
+        // Include cache tokens in total
+        currentTokens += record.InputTokens + record.CacheCreationTokens + record.CacheReadTokens + record.OutputTokens
     }
 
     var previousRequests, previousErrors, previousTokens int
     for _, record := range previousData {
         previousRequests += record.Requests
         previousErrors += record.Errors
-        previousTokens += record.InputTokens + record.OutputTokens
+        // Include cache tokens in total
+        previousTokens += record.InputTokens + record.CacheCreationTokens + record.CacheReadTokens + record.OutputTokens
     }
 
     requestsTrend := calculateTrend(currentRequests, previousRequests)

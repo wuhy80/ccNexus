@@ -236,8 +236,11 @@ function updateSummaryCards(summary) {
         failedEl.textContent = summary.totalErrors || 0;
     }
 
-    // Tokens
-    const totalTokens = (summary.totalInputTokens || 0) + (summary.totalOutputTokens || 0);
+    // Tokens - include cache tokens in total (cache_creation + cache_read are part of input)
+    const totalInputWithCache = (summary.totalInputTokens || 0) +
+        (summary.totalCacheCreationTokens || 0) +
+        (summary.totalCacheReadTokens || 0);
+    const totalTokens = totalInputWithCache + (summary.totalOutputTokens || 0);
     const totalTokensEl = document.getElementById('historyTotalTokens');
     const inputTokensEl = document.getElementById('historyInputTokens');
     const outputTokensEl = document.getElementById('historyOutputTokens');
@@ -246,7 +249,7 @@ function updateSummaryCards(summary) {
         totalTokensEl.textContent = formatTokens(totalTokens);
     }
     if (inputTokensEl) {
-        inputTokensEl.textContent = formatTokens(summary.totalInputTokens || 0);
+        inputTokensEl.textContent = formatTokens(totalInputWithCache);
     }
     if (outputTokensEl) {
         outputTokensEl.textContent = formatTokens(summary.totalOutputTokens || 0);
@@ -272,6 +275,8 @@ function renderDailyTable(endpoints) {
                     requests: 0,
                     errors: 0,
                     inputTokens: 0,
+                    cacheCreationTokens: 0,
+                    cacheReadTokens: 0,
                     outputTokens: 0
                 });
             }
@@ -280,6 +285,8 @@ function renderDailyTable(endpoints) {
             dayData.requests += daily.requests || 0;
             dayData.errors += daily.errors || 0;
             dayData.inputTokens += daily.inputTokens || 0;
+            dayData.cacheCreationTokens += daily.cacheCreationTokens || 0;
+            dayData.cacheReadTokens += daily.cacheReadTokens || 0;
             dayData.outputTokens += daily.outputTokens || 0;
         }
     }
@@ -290,14 +297,16 @@ function renderDailyTable(endpoints) {
     // Create table rows
     sortedDates.forEach(date => {
         const data = dailyDataMap.get(date);
-        const totalTokens = data.inputTokens + data.outputTokens;
+        // Include cache tokens in input total
+        const totalInputWithCache = data.inputTokens + data.cacheCreationTokens + data.cacheReadTokens;
+        const totalTokens = totalInputWithCache + data.outputTokens;
         const row = document.createElement('tr');
 
         row.innerHTML = `
             <td>${date}</td>
             <td>${data.requests}</td>
             <td>${data.errors}</td>
-            <td>${formatTokens(data.inputTokens)}</td>
+            <td>${formatTokens(totalInputWithCache)}</td>
             <td>${formatTokens(data.outputTokens)}</td>
             <td>${formatTokens(totalTokens)}</td>
         `;
@@ -338,6 +347,8 @@ function showNoDataMessage() {
         totalRequests: 0,
         totalErrors: 0,
         totalInputTokens: 0,
+        totalCacheCreationTokens: 0,
+        totalCacheReadTokens: 0,
         totalOutputTokens: 0
     });
 }

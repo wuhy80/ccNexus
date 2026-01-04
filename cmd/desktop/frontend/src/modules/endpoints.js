@@ -145,7 +145,7 @@ export async function renderEndpoints(endpoints) {
     const endpointStats = getEndpointStats();
     // Display endpoints in config file order (no sorting by enabled status)
     const sortedEndpoints = endpoints.map((ep, index) => {
-        const stats = endpointStats[ep.name] || { requests: 0, errors: 0, inputTokens: 0, outputTokens: 0 };
+        const stats = endpointStats[ep.name] || { requests: 0, errors: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
         const enabled = ep.enabled !== undefined ? ep.enabled : true;
         return { endpoint: ep, originalIndex: index, stats, enabled };
     });
@@ -161,7 +161,9 @@ export async function renderEndpoints(endpoints) {
     }
 
     sortedEndpoints.forEach(({ endpoint: ep, originalIndex: index, stats }) => {
-        const totalTokens = stats.inputTokens + stats.outputTokens;
+        // Include cache tokens in total (cache_creation + cache_read are part of input)
+        const totalInputWithCache = (stats.inputTokens || 0) + (stats.cacheCreationTokens || 0) + (stats.cacheReadTokens || 0);
+        const totalTokens = totalInputWithCache + (stats.outputTokens || 0);
         const enabled = ep.enabled !== undefined ? ep.enabled : true;
         const transformer = ep.transformer || 'claude';
         const model = ep.model || '';
@@ -197,7 +199,7 @@ export async function renderEndpoints(endpoints) {
                 <p style="display: flex; align-items: center; gap: 8px; min-width: 0;"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🔑 ${maskApiKey(ep.apiKey)}</span> <button class="copy-btn" data-copy="${ep.apiKey}" aria-label="${t('endpoints.copy')}" title="${t('endpoints.copy')}"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em"><path d="M7 4c0-1.1.9-2 2-2h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-1V8c0-2-1-3-3-3H7V4Z" fill="currentColor"></path><path d="M5 7a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h10a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5Z" fill="currentColor"></path></svg></button></p>
                 <p style="color: #666; font-size: 14px; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🔄 ${t('endpoints.transformer')}: ${transformer}${model ? ` (${model})` : ''}</p>
                 <p style="color: #666; font-size: 14px; margin-top: 3px;">📊 ${t('endpoints.requests')}: ${stats.requests} | ${t('endpoints.errors')}: ${stats.errors}</p>
-                <p style="color: #666; font-size: 14px; margin-top: 3px;">🎯 ${t('endpoints.tokens')}: ${formatTokens(totalTokens)} (${t('statistics.in')}: ${formatTokens(stats.inputTokens)}, ${t('statistics.out')}: ${formatTokens(stats.outputTokens)})</p>
+                <p style="color: #666; font-size: 14px; margin-top: 3px;">🎯 ${t('endpoints.tokens')}: ${formatTokens(totalTokens)} (${t('statistics.in')}: ${formatTokens(totalInputWithCache)}, ${t('statistics.out')}: ${formatTokens(stats.outputTokens)})</p>
                 ${ep.remark ? `<p style="color: #888; font-size: 13px; margin-top: 5px; font-style: italic;" title="${ep.remark}">💬 ${ep.remark.length > 20 ? ep.remark.substring(0, 20) + '...' : ep.remark}</p>` : ''}
             </div>
             <div class="endpoint-actions">
@@ -501,9 +503,10 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
         // 截断 URL 显示
         const displayUrl = ep.apiUrl.length > 40 ? ep.apiUrl.substring(0, 40) + '...' : ep.apiUrl;
 
-        // 构建统计详情提示
-        const totalTokens = stats.inputTokens + stats.outputTokens;
-        let statsTooltip = `${t('endpoints.requests')}: ${stats.requests} | ${t('endpoints.errors')}: ${stats.errors}\n${t('statistics.in')}: ${formatTokens(stats.inputTokens)} | ${t('statistics.out')}: ${formatTokens(stats.outputTokens)}`;
+        // Include cache tokens in total (cache_creation + cache_read are part of input)
+        const totalInputWithCache = (stats.inputTokens || 0) + (stats.cacheCreationTokens || 0) + (stats.cacheReadTokens || 0);
+        const totalTokens = totalInputWithCache + (stats.outputTokens || 0);
+        let statsTooltip = `${t('endpoints.requests')}: ${stats.requests} | ${t('endpoints.errors')}: ${stats.errors}\n${t('statistics.in')}: ${formatTokens(totalInputWithCache)} | ${t('statistics.out')}: ${formatTokens(stats.outputTokens)}`;
         if (model) {
             statsTooltip += `\n${t('modal.model')}: ${model}`;
         }
@@ -522,7 +525,7 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
             ${isCurrentEndpoint ? '<span class="btn btn-primary compact-badge-btn">' + t('endpoints.current') + '</span>' : (enabled ? '<button class="btn btn-primary compact-badge-btn" data-action="switch" data-name="' + ep.name + '">' + t('endpoints.switchTo') + '</button>' : '<span class="btn btn-primary compact-badge-btn compact-badge-disabled">' + t('endpoints.disabled') + '</span>')}
             <span class="compact-url" title="${ep.apiUrl}"><span class="compact-url-icon">🌐</span>${displayUrl}</span>
             <span class="compact-transformer">🔄 ${transformer}</span>
-            <span class="compact-stats" title="${statsTooltip}">📊 ${stats.requests} | 🎯 ${formatTokens(stats.inputTokens + stats.outputTokens)}</span>
+            <span class="compact-stats" title="${statsTooltip}">📊 ${stats.requests} | 🎯 ${formatTokens(totalTokens)}</span>
             <div class="compact-actions">
                 <label class="toggle-switch">
                     <input type="checkbox" data-index="${index}" ${enabled ? 'checked' : ''}>
