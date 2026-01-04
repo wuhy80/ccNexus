@@ -2,7 +2,7 @@
 
 /* Stats Detail Button */
 .stats-detail-btn {
-    background: #4caf50;
+    background: var(--primary-color);
     border: 2px solid transparent;
     border-radius: 8px;
     padding: 8px 16px;
@@ -15,9 +15,9 @@
 }
 
 .stats-detail-btn:hover {
-    background: #45a049;
+    background: var(--primary-hover);
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+    box-shadow: 0 2px 8px var(--shadow-color);
 }
 
 /* Modal Header - 确保标题和关闭按钮在同一行 */
@@ -26,20 +26,20 @@
     justify-content: space-between;
     align-items: center;
     padding: 20px 30px;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--border-color);
 }
 
 #dailyDetailsModal .modal-header h2 {
     margin: 0;
     font-size: 20px;
-    color: #333;
+    color: var(--text-primary);
 }
 
 #dailyDetailsModal .modal-close {
     background: none;
     border: none;
     font-size: 28px;
-    color: #999;
+    color: var(--text-secondary);
     cursor: pointer;
     padding: 0;
     width: 32px;
@@ -51,7 +51,7 @@
 }
 
 #dailyDetailsModal .modal-close:hover {
-    color: #333;
+    color: var(--text-primary);
     transform: scale(1.1);
 }
 
@@ -62,17 +62,17 @@
     align-items: center;
     margin-bottom: 20px;
     padding: 15px;
-    background: #f8f9fa;
+    background: var(--bg-secondary);
     border-radius: 8px;
 }
 
 .details-info {
     font-size: 14px;
-    color: #333;
+    color: var(--text-primary);
 }
 
 .details-info strong {
-    color: #667eea;
+    color: var(--primary-color);
     font-weight: 600;
 }
 
@@ -84,27 +84,28 @@
 
 .details-pagination label {
     font-weight: 500;
-    color: #333;
+    color: var(--text-primary);
     font-size: 14px;
 }
 
 .details-pagination select {
     padding: 6px 12px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-color);
     border-radius: 6px;
-    background: white;
+    background: var(--bg-primary);
+    color: var(--text-primary);
     font-size: 14px;
     cursor: pointer;
     transition: border-color 0.2s;
 }
 
 .details-pagination select:hover {
-    border-color: #667eea;
+    border-color: var(--primary-color);
 }
 
 .details-pagination select:focus {
     outline: none;
-    border-color: #667eea;
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
@@ -112,13 +113,13 @@
 #dailyDetailsTable {
     width: 100%;
     border-collapse: collapse;
-    background: white;
+    background: var(--bg-primary);
     border-radius: 8px;
     overflow: hidden;
 }
 
 #dailyDetailsTable thead {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
 }
 
 #dailyDetailsTable thead th {
@@ -133,13 +134,13 @@
 
 #dailyDetailsTable tbody td {
     padding: 12px 15px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--border-light);
     font-size: 14px;
-    color: #333;
+    color: var(--text-primary);
 }
 
 #dailyDetailsTable tbody tr:hover {
-    background: #f8f9fa;
+    background: var(--bg-secondary);
 }
 
 #dailyDetailsTable tbody tr:last-child td {
@@ -162,7 +163,7 @@
 
 .details-pagination-controls span {
     font-weight: 500;
-    color: #333;
+    color: var(--text-primary);
     min-width: 60px;
     text-align: center;
     font-size: 14px;

@@ -43,7 +43,8 @@ export async function initTokenChart(period = 'daily') {
     const parent = container.parentElement;
     const loadingDiv = document.createElement('div');
     loadingDiv.id = 'chartLoading';
-    loadingDiv.style.cssText = 'text-align: center; padding: 40px; color: #999; flex: 1; display: flex; align-items: center; justify-content: center;';
+    const textSecondary = getCSSVariable('--text-secondary') || '#999';
+    loadingDiv.style.cssText = `text-align: center; padding: 40px; color: ${textSecondary}; flex: 1; display: flex; align-items: center; justify-content: center;`;
     loadingDiv.innerHTML = `<p style="font-size: 14px;">${t('chart.loading')}</p>`;
     parent.appendChild(loadingDiv);
 
@@ -86,6 +87,10 @@ export async function initTokenChart(period = 'daily') {
 
         const isBarChart = currentChartType === 'bar';
 
+        // Get theme colors for chart elements
+        const textPrimary = getCSSVariable('--text-primary') || '#333';
+        const borderLight = getCSSVariable('--border-light') || '#e0e0e0';
+
         // Create chart instance
         chartInstance = new Chart(ctx, {
             type: currentChartType,
@@ -118,7 +123,8 @@ export async function initTokenChart(period = 'daily') {
                                 size: 11
                             },
                             boxWidth: 8,
-                            boxHeight: 8
+                            boxHeight: 8,
+                            color: textPrimary
                         },
                         onClick: function(e, legendItem, legend) {
                             // Default click handler - toggle dataset visibility
@@ -151,10 +157,12 @@ export async function initTokenChart(period = 'daily') {
                             callback: function(value) {
                                 return formatTokens(value);
                             },
-                            padding: 5
+                            padding: 5,
+                            color: textPrimary
                         },
                         grid: {
-                            drawBorder: false
+                            drawBorder: false,
+                            color: borderLight
                         }
                     },
                     x: {
@@ -164,10 +172,12 @@ export async function initTokenChart(period = 'daily') {
                             minRotation: 0,
                             autoSkip: true,
                             maxTicksLimit: 20,
-                            padding: 5
+                            padding: 5,
+                            color: textPrimary
                         },
                         grid: {
-                            drawBorder: false
+                            drawBorder: false,
+                            color: borderLight
                         }
                     }
                 }
@@ -194,6 +204,34 @@ export async function initTokenChart(period = 'daily') {
 }
 
 /**
+ * Get CSS variable value from root
+ * @param {string} varName - CSS variable name (e.g., '--primary-color')
+ * @returns {string} The CSS variable value
+ */
+function getCSSVariable(varName) {
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+}
+
+/**
+ * Get chart colors from CSS variables
+ * @returns {array} Array of color objects with border and background colors
+ */
+function getChartColors() {
+    const primaryColor = getCSSVariable('--primary-color') || '#667eea';
+
+    // Generate a palette based on primary color and complementary colors
+    const colors = [
+        { border: primaryColor, bg: `${primaryColor}cc` }, // Primary color with 80% opacity
+        { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.8)' }, // Orange
+        { border: '#10b981', bg: 'rgba(16, 185, 129, 0.8)' }, // Green
+        { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.8)' },  // Red
+        { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.8)' }  // Purple
+    ];
+
+    return colors;
+}
+
+/**
  * Build datasets from API response data
  * @param {object} data - The data object containing endpoints and total
  * @returns {array} Array of Chart.js dataset objects
@@ -206,14 +244,8 @@ function buildDatasets(data) {
         return datasets;
     }
 
-    // Predefined colors for different endpoints
-    const colors = [
-        { border: '#667eea', bg: 'rgba(102, 126, 234, 0.8)' },
-        { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.8)' },
-        { border: '#10b981', bg: 'rgba(16, 185, 129, 0.8)' },
-        { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.8)' },
-        { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.8)' }
-    ];
+    // Get colors from theme
+    const colors = getChartColors();
 
     let colorIndex = 0;
     const isBarChart = currentChartType === 'bar';
@@ -260,11 +292,13 @@ function buildDatasets(data) {
             return inputVal + outputVal;
         });
 
+        const primaryHover = getCSSVariable('--primary-hover') || '#764ba2';
+
         datasets.push({
             label: t('chart.total'),
             data: totalTokens,
-            borderColor: '#764ba2',
-            backgroundColor: 'rgba(118, 75, 162, 0.15)',
+            borderColor: primaryHover,
+            backgroundColor: `${primaryHover}26`, // 15% opacity
             borderWidth: 3,
             pointRadius: 0,
             tension: 0.3,
@@ -448,7 +482,8 @@ function showChartError(message) {
     const parent = container.parentElement;
     const errorDiv = document.createElement('div');
     errorDiv.id = 'chartError';
-    errorDiv.style.cssText = 'text-align: center; padding: 80px 20px; color: #999; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;';
+    const textSecondary = getCSSVariable('--text-secondary') || '#999';
+    errorDiv.style.cssText = `text-align: center; padding: 80px 20px; color: ${textSecondary}; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;`;
     errorDiv.innerHTML = `
         <p style="font-size: 14px; margin-bottom: 8px;">📊 ${message}</p>
         <p style="font-size: 12px; opacity: 0.7;">${t('chart.noDataHint')}</p>
