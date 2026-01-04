@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -284,8 +285,9 @@ func (s *Stats) GetPeriodStats(startDate, endDate string) map[string]*DailyStats
 	result := make(map[string]*DailyStats)
 
 	// For each endpoint, get daily stats in the period
-	for endpointName := range statsData {
-		dailyRecords, err := s.storage.GetDailyStats(endpointName, "", startDate, endDate)
+	for key := range statsData {
+		clientType, endpointName := splitClientEndpointKey(key)
+		dailyRecords, err := s.storage.GetDailyStats(endpointName, clientType, startDate, endDate)
 		if err != nil {
 			logger.Error("Failed to get daily stats for %s: %v", endpointName, err)
 			continue
@@ -315,7 +317,7 @@ func (s *Stats) GetPeriodStats(startDate, endDate string) map[string]*DailyStats
 			aggregated.OutputTokens += int(v.FieldByName("OutputTokens").Int())
 		}
 
-		result[endpointName] = aggregated
+		result[key] = aggregated
 	}
 
 	return result
@@ -334,8 +336,9 @@ func (s *Stats) GetDailyStats(date string) map[string]*DailyStats {
 	result := make(map[string]*DailyStats)
 
 	// For each endpoint, get stats for the specific date
-	for endpointName := range statsData {
-		dailyRecords, err := s.storage.GetDailyStats(endpointName, "", date, date)
+	for key := range statsData {
+		clientType, endpointName := splitClientEndpointKey(key)
+		dailyRecords, err := s.storage.GetDailyStats(endpointName, clientType, date, date)
 		if err != nil {
 			logger.Error("Failed to get daily stats for %s: %v", endpointName, err)
 			continue
@@ -348,7 +351,7 @@ func (s *Stats) GetDailyStats(date string) map[string]*DailyStats {
 				v = v.Elem()
 			}
 
-			result[endpointName] = &DailyStats{
+			result[key] = &DailyStats{
 				Date:                v.FieldByName("Date").String(),
 				Requests:            int(v.FieldByName("Requests").Int()),
 				Errors:              int(v.FieldByName("Errors").Int()),
@@ -361,6 +364,15 @@ func (s *Stats) GetDailyStats(date string) map[string]*DailyStats {
 	}
 
 	return result
+}
+
+// splitClientEndpointKey separates the stored key into client type and endpoint name
+func splitClientEndpointKey(key string) (clientType string, endpointName string) {
+	parts := strings.SplitN(key, ":", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return "claude", key
 }
 
 // FlushSave forces an immediate save, canceling any pending debounced save

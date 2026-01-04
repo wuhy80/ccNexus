@@ -3,8 +3,11 @@ import { formatTokens } from '../utils/format.js';
 let endpointStats = {};
 let currentPeriod = 'daily'; // 'daily', 'weekly', 'monthly'
 
-export function getEndpointStats() {
-    return endpointStats;
+export function getEndpointStats(clientType) {
+    if (!clientType) {
+        return endpointStats;
+    }
+    return endpointStats[clientType] || {};
 }
 
 export function getCurrentPeriod() {
@@ -45,7 +48,7 @@ export async function loadStats() {
         document.getElementById('totalInputTokens').textContent = formatTokens(totalInputWithCache);
         document.getElementById('totalOutputTokens').textContent = formatTokens(totalOutputTokens);
 
-        endpointStats = stats.endpoints || {};
+        endpointStats = normalizeEndpointStats(stats.endpoints);
 
         return stats;
     } catch (error) {
@@ -129,7 +132,7 @@ export async function loadStatsByPeriod(period = 'daily') {
         await loadTrend(period);
 
         // Store endpoint stats for today
-        endpointStats = stats.endpoints || {};
+        endpointStats = normalizeEndpointStats(stats.endpoints);
 
         return stats;
     } catch (error) {
@@ -218,6 +221,37 @@ function formatAverageTokens(value) {
         return value.toFixed(1);
     }
     return value.toFixed(2);
+}
+
+function normalizeEndpointStats(rawStats) {
+    const normalized = {};
+    if (!rawStats) {
+        return normalized;
+    }
+
+    for (const [key, stats] of Object.entries(rawStats)) {
+        const [clientType, endpointName] = splitEndpointKey(key);
+        if (!normalized[clientType]) {
+            normalized[clientType] = {};
+        }
+        normalized[clientType][endpointName] = stats;
+    }
+
+    return normalized;
+}
+
+function splitEndpointKey(key) {
+    if (!key) {
+        return ['claude', ''];
+    }
+    const separatorIndex = key.indexOf(':');
+    if (separatorIndex === -1) {
+        return ['claude', key];
+    }
+
+    const clientType = separatorIndex === 0 ? 'claude' : key.slice(0, separatorIndex);
+    const endpointName = key.slice(separatorIndex + 1);
+    return [clientType || 'claude', endpointName];
 }
 
 // Switch statistics period

@@ -215,7 +215,7 @@ export async function renderEndpoints(endpoints) {
 
     container.innerHTML = '';
 
-    const endpointStats = getEndpointStats();
+    const endpointStats = getEndpointStats(currentClientType);
     // Display endpoints in config file order (no sorting by enabled status)
     const sortedEndpoints = filteredEndpoints.map((ep, index) => {
         const stats = endpointStats[ep.name] || { requests: 0, errors: 0, inputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
