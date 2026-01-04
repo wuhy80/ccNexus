@@ -80,18 +80,44 @@ export async function loadStatsByPeriod(period = 'daily') {
         const stats = JSON.parse(statsStr);
 
         // Update UI elements
-        document.getElementById('periodTotalRequests').textContent = stats.totalRequests || 0;
-        document.getElementById('periodSuccess').textContent = stats.totalSuccess || 0;
-        document.getElementById('periodFailed').textContent = stats.totalErrors || 0;
+        const totalRequests = stats.totalRequests || 0;
+        const totalSuccess = stats.totalSuccess || 0;
+        const totalErrors = stats.totalErrors || 0;
+
+        document.getElementById('periodTotalRequests').textContent = totalRequests;
+        document.getElementById('periodSuccess').textContent = totalSuccess;
+        document.getElementById('periodFailed').textContent = totalErrors;
 
         // Include cache tokens in the total (cache_creation + cache_read are part of input)
+        const totalCacheCreationTokens = stats.totalCacheCreationTokens || 0;
+        const totalCacheReadTokens = stats.totalCacheReadTokens || 0;
         const totalInputWithCache = (stats.totalInputTokens || 0) +
-            (stats.totalCacheCreationTokens || 0) +
-            (stats.totalCacheReadTokens || 0);
-        const totalTokens = totalInputWithCache + (stats.totalOutputTokens || 0);
+            totalCacheCreationTokens +
+            totalCacheReadTokens;
+        const totalOutputTokens = stats.totalOutputTokens || 0;
+        const totalTokens = totalInputWithCache + totalOutputTokens;
         document.getElementById('periodTotalTokens').textContent = formatTokens(totalTokens);
         document.getElementById('periodInputTokens').textContent = formatTokens(totalInputWithCache);
-        document.getElementById('periodOutputTokens').textContent = formatTokens(stats.totalOutputTokens || 0);
+        document.getElementById('periodOutputTokens').textContent = formatTokens(totalOutputTokens);
+
+        // Derived metrics for better diagnostics
+        const successRateValue = totalRequests ? (totalSuccess / totalRequests) * 100 : 0;
+        const errorRateValue = totalRequests ? (totalErrors / totalRequests) * 100 : 0;
+        document.getElementById('periodSuccessRate').textContent = formatPercentageValue(successRateValue);
+        document.getElementById('periodErrorRate').textContent = formatPercentageValue(errorRateValue);
+
+        const avgTokensPerRequest = totalRequests ? totalTokens / totalRequests : 0;
+        const avgInputPerRequest = totalRequests ? totalInputWithCache / totalRequests : 0;
+        const avgOutputPerRequest = totalRequests ? totalOutputTokens / totalRequests : 0;
+        document.getElementById('periodAvgTokens').textContent = formatAverageTokens(avgTokensPerRequest);
+        document.getElementById('periodAvgInputTokens').textContent = formatAverageTokens(avgInputPerRequest);
+        document.getElementById('periodAvgOutputTokens').textContent = formatAverageTokens(avgOutputPerRequest);
+
+        document.getElementById('cacheCreationTokens').textContent = formatTokens(totalCacheCreationTokens);
+        document.getElementById('cacheReadTokens').textContent = formatTokens(totalCacheReadTokens);
+        const totalCacheTokens = totalCacheCreationTokens + totalCacheReadTokens;
+        const cacheHitRateValue = totalCacheTokens ? (totalCacheReadTokens / totalCacheTokens) * 100 : 0;
+        document.getElementById('cacheHitRate').textContent = formatPercentageValue(cacheHitRateValue);
 
         // Update endpoint stats (active / total)
         const activeEndpoints = stats.activeEndpoints || 0;
@@ -167,6 +193,31 @@ function formatTrend(value) {
             className: 'trend-flat'
         };
     }
+}
+
+function formatPercentageValue(value) {
+    if (!isFinite(value) || value <= 0) {
+        return '0%';
+    }
+    const rounded = Number(value.toFixed(1));
+    return `${rounded}%`;
+}
+
+function formatAverageTokens(value) {
+    if (!isFinite(value) || value <= 0) {
+        return '0';
+    }
+
+    if (value >= 1000) {
+        return formatTokens(Math.round(value));
+    }
+    if (value >= 100) {
+        return Math.round(value).toString();
+    }
+    if (value >= 1) {
+        return value.toFixed(1);
+    }
+    return value.toFixed(2);
 }
 
 // Switch statistics period
