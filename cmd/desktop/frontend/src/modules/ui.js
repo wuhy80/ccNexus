@@ -25,7 +25,6 @@ export function initUI() {
                         </button>
                         <button class="header-link about-btn" id="aboutBtn" onclick="window.showWelcomeModal()" title="${t('header.about')}">
                             📖
-                            <span class="update-badge" id="updateBadge"></span>
                         </button>
                         <button class="header-link" onclick="window.showSettingsModal()" title="${t('settings.title')}">
                             ⚙️
@@ -633,10 +632,6 @@ export function initUI() {
                         <button class="btn btn-secondary" onclick="window.showChangelogModal()">
                             ${t('welcome.changelog')}
                         </button>
-                        <button class="btn btn-secondary check-update-btn" onclick="window.checkForUpdates()">
-                            🔄 ${t('update.checkForUpdates')}
-                            <span class="update-badge" id="checkUpdateBadge"></span>
-                        </button>
                     </div>
                 </div>
                 <div class="modal-footer" style="display: flex; justify-content: flex-end; align-items: center; gap: 20px;">
@@ -793,19 +788,6 @@ export function initUI() {
                         <input type="text" id="settingsProxyUrl" placeholder="${t('settings.proxyUrlPlaceholder')}">
                         <p style="color: #666; font-size: 12px; margin-top: 5px;">
                             ${t('settings.proxyHelp')}
-                        </p>
-                    </div>
-                    <div class="form-group">
-                        <label><span class="required">*</span>${t('update.autoCheck')}</label>
-                        <select id="check-interval">
-                            <option value="1">${t('update.everyHour')}</option>
-                            <option value="24">${t('update.everyDay')}</option>
-                            <option value="168">${t('update.everyWeek')}</option>
-                            <option value="720">${t('update.everyMonth')}</option>
-                            <option value="0">${t('update.noAutoCheck')}</option>
-                        </select>
-                        <p style="color: #666; font-size: 12px; margin-top: 5px;">
-                            ${t('update.autoCheckHelp')}
                         </p>
                     </div>
                 </div>

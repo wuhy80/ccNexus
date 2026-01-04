@@ -5,15 +5,9 @@ export function AddEndpoint(arg1:string,arg2:string,arg3:string,arg4:string,arg5
 
 export function AddProjectDir(arg1:string):Promise<void>;
 
-export function ApplyUpdate(arg1:string):Promise<string>;
-
 export function BackupToProvider(arg1:string,arg2:string):Promise<void>;
 
 export function BackupToWebDAV(arg1:string):Promise<void>;
-
-export function CancelDownload():Promise<void>;
-
-export function CheckForUpdates():Promise<string>;
 
 export function ClearLogs():Promise<void>;
 
@@ -30,8 +24,6 @@ export function DetectBackupConflict(arg1:string,arg2:string):Promise<string>;
 export function DetectTerminals():Promise<string>;
 
 export function DetectWebDAVConflict(arg1:string):Promise<string>;
-
-export function DownloadUpdate(arg1:string,arg2:string):Promise<void>;
 
 export function FetchBroadcast(arg1:string):Promise<string>;
 
@@ -56,8 +48,6 @@ export function GetConfig():Promise<string>;
 export function GetCurrentEndpoint(arg1:string):Promise<string>;
 
 export function GetDailyRequestDetails(arg1:number,arg2:number):Promise<string>;
-
-export function GetDownloadProgress():Promise<string>;
 
 export function GetLanguage():Promise<string>;
 
@@ -97,13 +87,9 @@ export function GetThemeAuto():Promise<boolean>;
 
 export function GetTokenTrendData(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
-export function GetUpdateSettings():Promise<string>;
-
 export function GetVersion():Promise<string>;
 
 export function HideWindow():Promise<void>;
-
-export function InstallUpdate(arg1:string):Promise<string>;
 
 export function LaunchSessionTerminal(arg1:string,arg2:string):Promise<void>;
 
@@ -135,8 +121,6 @@ export function SaveTerminalConfig(arg1:string,arg2:Array<string>):Promise<void>
 
 export function SelectDirectory():Promise<string>;
 
-export function SendUpdateNotification(arg1:string,arg2:string):Promise<void>;
-
 export function SetAutoDarkTheme(arg1:string):Promise<void>;
 
 export function SetAutoLightTheme(arg1:string):Promise<void>;
@@ -153,11 +137,7 @@ export function SetTheme(arg1:string):Promise<void>;
 
 export function SetThemeAuto(arg1:boolean):Promise<void>;
 
-export function SetUpdateSettings(arg1:boolean,arg2:number):Promise<void>;
-
 export function ShowWindow():Promise<void>;
-
-export function SkipVersion(arg1:string):Promise<void>;
 
 export function SwitchToEndpoint(arg1:string,arg2:string):Promise<void>;
 

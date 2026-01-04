@@ -10,24 +10,12 @@ export function AddProjectDir(arg1) {
   return window['go']['main']['App']['AddProjectDir'](arg1);
 }
 
-export function ApplyUpdate(arg1) {
-  return window['go']['main']['App']['ApplyUpdate'](arg1);
-}
-
 export function BackupToProvider(arg1, arg2) {
   return window['go']['main']['App']['BackupToProvider'](arg1, arg2);
 }
 
 export function BackupToWebDAV(arg1) {
   return window['go']['main']['App']['BackupToWebDAV'](arg1);
-}
-
-export function CancelDownload() {
-  return window['go']['main']['App']['CancelDownload']();
-}
-
-export function CheckForUpdates() {
-  return window['go']['main']['App']['CheckForUpdates']();
 }
 
 export function ClearLogs() {
@@ -60,10 +48,6 @@ export function DetectTerminals() {
 
 export function DetectWebDAVConflict(arg1) {
   return window['go']['main']['App']['DetectWebDAVConflict'](arg1);
-}
-
-export function DownloadUpdate(arg1, arg2) {
-  return window['go']['main']['App']['DownloadUpdate'](arg1, arg2);
 }
 
 export function FetchBroadcast(arg1) {
@@ -112,10 +96,6 @@ export function GetCurrentEndpoint(arg1) {
 
 export function GetDailyRequestDetails(arg1, arg2) {
   return window['go']['main']['App']['GetDailyRequestDetails'](arg1, arg2);
-}
-
-export function GetDownloadProgress() {
-  return window['go']['main']['App']['GetDownloadProgress']();
 }
 
 export function GetLanguage() {
@@ -194,20 +174,12 @@ export function GetTokenTrendData(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetTokenTrendData'](arg1, arg2, arg3, arg4);
 }
 
-export function GetUpdateSettings() {
-  return window['go']['main']['App']['GetUpdateSettings']();
-}
-
 export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
 }
 
 export function HideWindow() {
   return window['go']['main']['App']['HideWindow']();
-}
-
-export function InstallUpdate(arg1) {
-  return window['go']['main']['App']['InstallUpdate'](arg1);
 }
 
 export function LaunchSessionTerminal(arg1, arg2) {
@@ -270,10 +242,6 @@ export function SelectDirectory() {
   return window['go']['main']['App']['SelectDirectory']();
 }
 
-export function SendUpdateNotification(arg1, arg2) {
-  return window['go']['main']['App']['SendUpdateNotification'](arg1, arg2);
-}
-
 export function SetAutoDarkTheme(arg1) {
   return window['go']['main']['App']['SetAutoDarkTheme'](arg1);
 }
@@ -306,16 +274,8 @@ export function SetThemeAuto(arg1) {
   return window['go']['main']['App']['SetThemeAuto'](arg1);
 }
 
-export function SetUpdateSettings(arg1, arg2) {
-  return window['go']['main']['App']['SetUpdateSettings'](arg1, arg2);
-}
-
 export function ShowWindow() {
   return window['go']['main']['App']['ShowWindow']();
-}
-
-export function SkipVersion(arg1) {
-  return window['go']['main']['App']['SkipVersion'](arg1);
 }
 
 export function SwitchToEndpoint(arg1, arg2) {

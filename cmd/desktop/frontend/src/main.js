@@ -15,7 +15,6 @@ import { initTerminal } from './modules/terminal.js'
 import { initSession } from './modules/session.js'
 import { showDailyDetailsModal, closeDailyDetailsModal, changeDetailsPageSize, loadPreviousDetailsPage, loadNextDetailsPage } from './modules/details.js'
 import { showSettingsModal, closeSettingsModal, saveSettings, applyTheme, initTheme, showAutoThemeConfigModal, closeAutoThemeConfigModal, saveAutoThemeConfig } from './modules/settings.js'
-import { checkUpdatesOnStartup, checkForUpdates, initUpdateSettings } from './modules/updater.js'
 import { initBroadcast } from './modules/broadcast.js'
 import {
     showAddEndpointModal,
@@ -139,14 +138,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     showWelcomeModalIfFirstTime();
     // showChangelogIfNewVersion(); // 暂时禁用自动弹窗
 
-    // Check for updates on startup
-    checkUpdatesOnStartup();
-
     // Initialize broadcast banner
     initBroadcast();
-
-    // Initialize update settings
-    initUpdateSettings();
 
     // Listen for close dialog event from backend
     if (window.runtime) {
@@ -200,7 +193,6 @@ window.clearLogs = clearLogs;
 window.changeLanguage = changeLanguage;
 window.togglePasswordVisibility = togglePasswordVisibility;
 window.acceptConfirm = acceptConfirm;
-window.checkForUpdates = checkForUpdates;
 window.cancelConfirm = cancelConfirm;
 window.showCloseActionDialog = showCloseActionDialog;
 window.quitApplication = quitApplication;

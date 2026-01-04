@@ -53,14 +53,6 @@ type BackupConfig struct {
 	S3       *S3BackupConfig    `json:"s3,omitempty"`
 }
 
-// UpdateConfig represents update configuration
-type UpdateConfig struct {
-	AutoCheck      bool   `json:"autoCheck"`      // Auto check for updates
-	CheckInterval  int    `json:"checkInterval"`  // Check interval in hours
-	LastCheckTime  string `json:"lastCheckTime"`  // Last check time (RFC3339)
-	SkippedVersion string `json:"skippedVersion"` // Skipped version
-}
-
 // TerminalConfig represents terminal launcher configuration
 type TerminalConfig struct {
 	SelectedTerminal string   `json:"selectedTerminal"` // Selected terminal ID
@@ -87,7 +79,6 @@ type Config struct {
 	CloseWindowBehavior string          `json:"closeWindowBehavior,omitempty"` // "quit", "minimize", "ask"
 	WebDAV              *WebDAVConfig   `json:"webdav,omitempty"`              // WebDAV synchronization config
 	Backup              *BackupConfig   `json:"backup,omitempty"`              // Backup/sync configuration
-	Update              *UpdateConfig   `json:"update,omitempty"`              // Update configuration
 	Terminal            *TerminalConfig `json:"terminal,omitempty"`            // Terminal launcher config
 	Proxy               *ProxyConfig    `json:"proxy,omitempty"`               // HTTP proxy config
 	mu                  sync.RWMutex
@@ -110,10 +101,6 @@ func DefaultConfig() *Config {
 				Enabled:     true,
 				Transformer: "claude",
 			},
-		},
-		Update: &UpdateConfig{
-			AutoCheck:     true,
-			CheckInterval: 24,
 		},
 	}
 }
@@ -375,26 +362,6 @@ func (c *Config) UpdateBackup(backup *BackupConfig) {
 	c.Backup = backup
 }
 
-// GetUpdate returns the Update configuration (thread-safe)
-func (c *Config) GetUpdate() *UpdateConfig {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if c.Update == nil {
-		return &UpdateConfig{
-			AutoCheck:     true,
-			CheckInterval: 24,
-		}
-	}
-	return c.Update
-}
-
-// UpdateUpdate updates the Update configuration (thread-safe)
-func (c *Config) UpdateUpdate(update *UpdateConfig) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.Update = update
-}
-
 // GetTerminal returns the Terminal configuration (thread-safe)
 func (c *Config) GetTerminal() *TerminalConfig {
 	c.mu.RLock()
@@ -614,26 +581,6 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 		}
 	}
 
-	// Load Update config
-	config.Update = &UpdateConfig{
-		AutoCheck:     true,
-		CheckInterval: 24,
-	}
-	if autoCheckStr, err := storage.GetConfig("update_autoCheck"); err == nil && autoCheckStr != "" {
-		config.Update.AutoCheck = autoCheckStr == "true"
-	}
-	if intervalStr, err := storage.GetConfig("update_checkInterval"); err == nil && intervalStr != "" {
-		if interval, err := strconv.Atoi(intervalStr); err == nil {
-			config.Update.CheckInterval = interval
-		}
-	}
-	if lastCheck, err := storage.GetConfig("update_lastCheckTime"); err == nil {
-		config.Update.LastCheckTime = lastCheck
-	}
-	if skipped, err := storage.GetConfig("update_skippedVersion"); err == nil {
-		config.Update.SkippedVersion = skipped
-	}
-
 	// Load Terminal config
 	config.Terminal = &TerminalConfig{
 		SelectedTerminal: "cmd",
@@ -757,14 +704,6 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 			storage.SetConfig("backup_s3_useSSL", strconv.FormatBool(c.Backup.S3.UseSSL))
 			storage.SetConfig("backup_s3_forcePathStyle", strconv.FormatBool(c.Backup.S3.ForcePathStyle))
 		}
-	}
-
-	// Save Update config
-	if c.Update != nil {
-		storage.SetConfig("update_autoCheck", strconv.FormatBool(c.Update.AutoCheck))
-		storage.SetConfig("update_checkInterval", strconv.Itoa(c.Update.CheckInterval))
-		storage.SetConfig("update_lastCheckTime", c.Update.LastCheckTime)
-		storage.SetConfig("update_skippedVersion", c.Update.SkippedVersion)
 	}
 
 	// Save Terminal config

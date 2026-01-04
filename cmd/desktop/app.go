@@ -53,7 +53,6 @@ type App struct {
 	webdav   *service.WebDAVService
 	backup   *service.BackupService
 	archive  *service.ArchiveService
-	update   *service.UpdateService
 	terminal *service.TerminalService
 }
 
@@ -152,7 +151,6 @@ func (a *App) startup(ctx context.Context) {
 	a.webdav = service.NewWebDAVService(a.config, a.storage, version)
 	a.backup = service.NewBackupService(a.config, a.storage, version, a.webdav)
 	a.archive = service.NewArchiveService(a.storage)
-	a.update = service.NewUpdateService(a.config, a.storage, version)
 	a.terminal = service.NewTerminalService(a.config, a.storage)
 
 	a.initTray()
@@ -519,25 +517,6 @@ func (a *App) GetArchiveTrend(month string) string { return a.archive.GetArchive
 func (a *App) DeleteArchive(month string) string   { return a.archive.DeleteArchive(month) }
 func (a *App) GenerateMockArchives(monthsCount int) string {
 	return a.archive.GenerateMockArchives(monthsCount)
-}
-
-// ========== Update Bindings ==========
-
-func (a *App) CheckForUpdates() string   { return a.update.CheckForUpdates() }
-func (a *App) GetUpdateSettings() string { return a.update.GetUpdateSettings() }
-func (a *App) SetUpdateSettings(autoCheck bool, checkInterval int) error {
-	return a.update.SetUpdateSettings(autoCheck, checkInterval)
-}
-func (a *App) SkipVersion(version string) error { return a.update.SkipVersion(version) }
-func (a *App) DownloadUpdate(url, filename string) error {
-	return a.update.DownloadUpdate(url, filename)
-}
-func (a *App) GetDownloadProgress() string          { return a.update.GetDownloadProgress() }
-func (a *App) CancelDownload()                      { a.update.CancelDownload() }
-func (a *App) InstallUpdate(filePath string) string { return a.update.InstallUpdate(filePath) }
-func (a *App) ApplyUpdate(newExePath string) string { return a.update.ApplyUpdate(newExePath) }
-func (a *App) SendUpdateNotification(title, message string) error {
-	return a.update.SendUpdateNotification(title, message)
 }
 
 // ========== Terminal Bindings ==========
