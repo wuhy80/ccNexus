@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -17,24 +18,19 @@ import (
 	"github.com/lich0821/ccNexus/internal/transformer/cx/responses"
 )
 
-// handleStreamingResponse processes streaming SSE responses
-func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Response, endpoint config.Endpoint, trans transformer.Transformer, transformerName string, thinkingEnabled bool, modelName string, bodyBytes []byte, clientType ClientType) (transformer.TokenUsageDetail, string) {
-	// Copy response headers except Content-Length and Content-Encoding
-	for key, values := range resp.Header {
-		if key == "Content-Length" || key == "Content-Encoding" {
-			continue
-		}
-		for _, value := range values {
-			w.Header().Add(key, value)
-		}
-	}
-	w.WriteHeader(resp.StatusCode)
+// ErrStreamRetryable indicates the stream failed before response headers were sent,
+// so the request can be retried with a different endpoint
+var ErrStreamRetryable = errors.New("stream failed before response sent, retryable")
 
+// handleStreamingResponse processes streaming SSE responses
+// Returns error for upstream/server-side errors (not client disconnection)
+// Returns ErrStreamRetryable if stream fails before response headers are sent (can retry with different endpoint)
+func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Response, endpoint config.Endpoint, trans transformer.Transformer, transformerName string, thinkingEnabled bool, modelName string, bodyBytes []byte, clientType ClientType) (transformer.TokenUsageDetail, string, error) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		logger.Error("[%s] ResponseWriter does not support flushing", endpoint.Name)
 		resp.Body.Close()
-		return transformer.TokenUsageDetail{}, ""
+		return transformer.TokenUsageDetail{}, "", ErrStreamRetryable
 	}
 
 	// Handle gzip-encoded response body
@@ -44,7 +40,7 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 		if err != nil {
 			logger.Error("[%s] Failed to create gzip reader: %v", endpoint.Name, err)
 			resp.Body.Close()
-			return transformer.TokenUsageDetail{}, ""
+			return transformer.TokenUsageDetail{}, "", ErrStreamRetryable
 		}
 		defer gzipReader.Close()
 		reader = gzipReader
@@ -72,8 +68,28 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 	var usage transformer.TokenUsageDetail
 	var buffer bytes.Buffer
 	var outputText strings.Builder
+	var streamErr error // Track upstream/server-side errors
 	eventCount := 0
 	streamDone := false
+	headersSent := false // Track if we've sent response headers to client
+
+	// Helper function to send headers (only once)
+	sendHeaders := func() {
+		if headersSent {
+			return
+		}
+		// Copy response headers except Content-Length and Content-Encoding
+		for key, values := range resp.Header {
+			if key == "Content-Length" || key == "Content-Encoding" {
+				continue
+			}
+			for _, value := range values {
+				w.Header().Add(key, value)
+			}
+		}
+		w.WriteHeader(resp.StatusCode)
+		headersSent = true
+	}
 
 	for scanner.Scan() && !streamDone {
 		line := scanner.Text()
@@ -93,6 +109,7 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 			transformedEvent, err := p.transformStreamEvent(eventData, trans, transformerName, streamCtx)
 			if err == nil && len(transformedEvent) > 0 {
 				logger.DebugLog("[%s] SSE Event #%d (Transformed): %s", endpoint.Name, eventCount+1, string(transformedEvent))
+				sendHeaders()
 				w.Write(transformedEvent)
 				flusher.Flush()
 			}
@@ -115,12 +132,17 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 				p.extractTokensFromEvent(transformedEvent, &usage)
 				p.extractTextFromEvent(transformedEvent, &outputText)
 
+				// Send headers before first write
+				sendHeaders()
+
 				if _, writeErr := w.Write(transformedEvent); writeErr != nil {
-					// Client disconnected (broken pipe) is normal for cancelled requests
+					// Client disconnected (broken pipe/connection reset) is normal, not an endpoint error
 					if strings.Contains(writeErr.Error(), "broken pipe") || strings.Contains(writeErr.Error(), "connection reset") {
 						logger.Debug("[%s] Client disconnected: %v", endpoint.Name, writeErr)
 					} else {
+						// Other write errors (wsasend abort, etc.) are server-side errors
 						logger.Error("[%s] Failed to write transformed event: %v", endpoint.Name, writeErr)
+						streamErr = writeErr
 					}
 					streamDone = true
 					break
@@ -133,10 +155,24 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 
 	if err := scanner.Err(); err != nil {
 		logger.Error("[%s] Scanner error: %v", endpoint.Name, err)
+		// If headers not sent yet, this error is retryable
+		if !headersSent {
+			resp.Body.Close()
+			return transformer.TokenUsageDetail{}, "", ErrStreamRetryable
+		}
+		streamErr = err
 	}
 
 	resp.Body.Close()
-	return usage, outputText.String()
+
+	// If we never sent headers (empty response or all events failed to transform),
+	// and no other error occurred, this is a retryable situation
+	if !headersSent && streamErr == nil {
+		logger.Warn("[%s] Stream ended without sending any data to client", endpoint.Name)
+		return transformer.TokenUsageDetail{}, "", ErrStreamRetryable
+	}
+
+	return usage, outputText.String(), streamErr
 }
 
 // transformStreamEvent transforms a single SSE event

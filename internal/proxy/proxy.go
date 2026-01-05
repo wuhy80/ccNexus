@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -562,7 +563,20 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		isStreaming := contentType == "text/event-stream" || (streamReq.Stream && strings.Contains(contentType, "text/event-stream"))
 
 		if resp.StatusCode == http.StatusOK && isStreaming {
-			usage, outputText := p.handleStreamingResponse(w, resp, endpoint, trans, transformerName, thinkingEnabled, streamReq.Model, bodyBytes, clientType)
+			usage, outputText, streamErr := p.handleStreamingResponse(w, resp, endpoint, trans, transformerName, thinkingEnabled, streamReq.Model, bodyBytes, clientType)
+
+			// Handle retryable streaming errors (before response headers sent)
+			if errors.Is(streamErr, ErrStreamRetryable) {
+				logger.Warn("[%s] Streaming failed before response sent, will retry: %v", endpoint.Name, streamErr)
+				p.stats.RecordError(endpoint.Name, string(clientType))
+				p.markRequestInactive(endpoint.Name)
+				// endpointAttempts already incremented at loop start (line 487)
+				if endpointAttempts >= 2 {
+					p.rotateEndpointForClient(clientType)
+					endpointAttempts = 0
+				}
+				continue // Retry with same or different endpoint
+			}
 
 			// Fallback: estimate tokens when usage is 0
 			if usage.TotalInputTokens() == 0 || usage.OutputTokens == 0 {
@@ -576,6 +590,27 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 			// Record daily aggregated stats
 			p.stats.RecordTokens(endpoint.Name, string(clientType), usage)
+
+			// Handle non-retryable streaming errors (after response headers sent)
+			if streamErr != nil {
+				logger.Error("[%s] Streaming completed with error: %v", endpoint.Name, streamErr)
+				p.stats.RecordError(endpoint.Name, string(clientType))
+				p.stats.RecordRequestStat(&RequestStatRecord{
+					EndpointName:        endpoint.Name,
+					ClientType:          string(clientType),
+					Timestamp:           time.Now(),
+					InputTokens:         usage.InputTokens,
+					CacheCreationTokens: usage.CacheCreationInputTokens,
+					CacheReadTokens:     usage.CacheReadInputTokens,
+					OutputTokens:        usage.OutputTokens,
+					Model:               streamReq.Model,
+					IsStreaming:         true,
+					Success:             false,
+				})
+				p.markRequestInactive(endpoint.Name)
+				// Cannot retry: HTTP headers already sent to client
+				return
+			}
 
 			// Record request-level stats
 			p.stats.RecordRequestStat(&RequestStatRecord{
