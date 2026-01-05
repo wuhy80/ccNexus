@@ -494,6 +494,8 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
     }
 
     req.Header.Set("Content-Type", "application/json")
+    // Specify which endpoint to use for this test request
+    req.Header.Set("X-CCNexus-Endpoint", endpoint.Name)
     switch transformer {
     case "claude":
         req.Header.Set("x-api-key", endpoint.APIKey)

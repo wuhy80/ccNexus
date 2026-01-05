@@ -471,8 +471,30 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 	endpointAttempts := 0
 	lastEndpointName := ""
 
+	// Check if a specific endpoint is requested via header (used for testing)
+	specifiedEndpoint := r.Header.Get("X-CCNexus-Endpoint")
+	var fixedEndpoint *config.Endpoint
+	if specifiedEndpoint != "" {
+		for _, ep := range endpoints {
+			if ep.Name == specifiedEndpoint {
+				fixedEndpoint = &ep
+				break
+			}
+		}
+		if fixedEndpoint == nil {
+			http.Error(w, fmt.Sprintf("Specified endpoint '%s' not found or not enabled for client type: %s", specifiedEndpoint, clientType), http.StatusBadRequest)
+			return
+		}
+		logger.DebugLog("Using specified endpoint: %s", specifiedEndpoint)
+	}
+
 	for retry := 0; retry < maxRetries; retry++ {
-		endpoint := p.getCurrentEndpointForClient(clientType)
+		var endpoint config.Endpoint
+		if fixedEndpoint != nil {
+			endpoint = *fixedEndpoint
+		} else {
+			endpoint = p.getCurrentEndpointForClient(clientType)
+		}
 		if endpoint.Name == "" {
 			http.Error(w, fmt.Sprintf("No enabled endpoints available for client type: %s", clientType), http.StatusServiceUnavailable)
 			return
