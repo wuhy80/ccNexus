@@ -39,6 +39,9 @@ export function applyTheme(theme) {
     // 重新初始化节日效果（根据主题判断默认效果）
     destroyFestivalEffects();
     initFestivalEffects();
+
+    // 重新渲染图表以应用新主题颜色
+    refreshChartWithTheme();
 }
 
 // Get theme based on current time and user's auto theme settings
@@ -359,4 +362,21 @@ function showNotification(message, type = 'info') {
         notification.style.animation = 'slideOutRight 0.3s ease-out';
         setTimeout(() => notification.remove(), 300);
     }, 3000);
+}
+
+// Refresh chart with new theme colors
+async function refreshChartWithTheme() {
+    // Check if chart module is loaded and chart exists
+    if (typeof window.initTokenChart === 'function') {
+        try {
+            // Get current period from the active stats tab
+            const activeTab = document.querySelector('.stats-tab-btn.active');
+            const currentPeriod = activeTab ? activeTab.dataset.period : 'daily';
+
+            // Re-initialize chart with current period to apply new theme colors
+            await window.initTokenChart(currentPeriod);
+        } catch (error) {
+            console.error('Failed to refresh chart with theme:', error);
+        }
+    }
 }
