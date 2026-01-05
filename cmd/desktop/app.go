@@ -53,7 +53,6 @@ type App struct {
 	webdav   *service.WebDAVService
 	backup   *service.BackupService
 	archive  *service.ArchiveService
-	terminal *service.TerminalService
 }
 
 // NewApp creates a new App application struct
@@ -151,7 +150,6 @@ func (a *App) startup(ctx context.Context) {
 	a.webdav = service.NewWebDAVService(a.config, a.storage, version)
 	a.backup = service.NewBackupService(a.config, a.storage, version, a.webdav)
 	a.archive = service.NewArchiveService(a.storage)
-	a.terminal = service.NewTerminalService(a.config, a.storage)
 
 	a.initTray()
 
@@ -362,18 +360,6 @@ func (a *App) FetchBroadcast(url string) string {
 	return string(data)
 }
 
-// SelectDirectory opens a directory selection dialog
-func (a *App) SelectDirectory() string {
-	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Select Project Directory",
-	})
-	if err != nil {
-		logger.Error("Failed to open directory dialog: %v", err)
-		return ""
-	}
-	return dir
-}
-
 // ========== Stats Bindings ==========
 
 func (a *App) GetStats() string          { return a.stats.GetStats() }
@@ -517,28 +503,4 @@ func (a *App) GetArchiveTrend(month string) string { return a.archive.GetArchive
 func (a *App) DeleteArchive(month string) string   { return a.archive.DeleteArchive(month) }
 func (a *App) GenerateMockArchives(monthsCount int) string {
 	return a.archive.GenerateMockArchives(monthsCount)
-}
-
-// ========== Terminal Bindings ==========
-
-func (a *App) DetectTerminals() string   { return a.terminal.DetectTerminals() }
-func (a *App) GetTerminalConfig() string { return a.terminal.GetTerminalConfig() }
-func (a *App) SaveTerminalConfig(selectedTerminal string, projectDirs []string) error {
-	return a.terminal.SaveTerminalConfig(selectedTerminal, projectDirs)
-}
-func (a *App) AddProjectDir(dir string) error       { return a.terminal.AddProjectDir(dir) }
-func (a *App) RemoveProjectDir(dir string) error    { return a.terminal.RemoveProjectDir(dir) }
-func (a *App) LaunchTerminal(dir string) error      { return a.terminal.LaunchTerminal(dir) }
-func (a *App) GetSessions(projectDir string) string { return a.terminal.GetSessions(projectDir) }
-func (a *App) DeleteSession(projectDir, sessionID string) error {
-	return a.terminal.DeleteSession(projectDir, sessionID)
-}
-func (a *App) RenameSession(projectDir, sessionID, alias string) error {
-	return a.terminal.RenameSession(projectDir, sessionID, alias)
-}
-func (a *App) GetSessionData(projectDir, sessionID string) string {
-	return a.terminal.GetSessionData(projectDir, sessionID)
-}
-func (a *App) LaunchSessionTerminal(dir, sessionID string) error {
-	return a.terminal.LaunchSessionTerminal(dir, sessionID)
 }

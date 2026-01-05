@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"sync"
@@ -53,12 +52,6 @@ type BackupConfig struct {
 	S3       *S3BackupConfig    `json:"s3,omitempty"`
 }
 
-// TerminalConfig represents terminal launcher configuration
-type TerminalConfig struct {
-	SelectedTerminal string   `json:"selectedTerminal"` // Selected terminal ID
-	ProjectDirs      []string `json:"projectDirs"`      // Project directories
-}
-
 // ProxyConfig represents HTTP proxy configuration
 type ProxyConfig struct {
 	URL string `json:"url"` // Proxy URL, e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080
@@ -79,7 +72,6 @@ type Config struct {
 	CloseWindowBehavior string          `json:"closeWindowBehavior,omitempty"` // "quit", "minimize", "ask"
 	WebDAV              *WebDAVConfig   `json:"webdav,omitempty"`              // WebDAV synchronization config
 	Backup              *BackupConfig   `json:"backup,omitempty"`              // Backup/sync configuration
-	Terminal            *TerminalConfig `json:"terminal,omitempty"`            // Terminal launcher config
 	Proxy               *ProxyConfig    `json:"proxy,omitempty"`               // HTTP proxy config
 	mu                  sync.RWMutex
 }
@@ -362,26 +354,6 @@ func (c *Config) UpdateBackup(backup *BackupConfig) {
 	c.Backup = backup
 }
 
-// GetTerminal returns the Terminal configuration (thread-safe)
-func (c *Config) GetTerminal() *TerminalConfig {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	if c.Terminal == nil {
-		return &TerminalConfig{
-			SelectedTerminal: "cmd",
-			ProjectDirs:      []string{},
-		}
-	}
-	return c.Terminal
-}
-
-// UpdateTerminal updates the Terminal configuration (thread-safe)
-func (c *Config) UpdateTerminal(terminal *TerminalConfig) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.Terminal = terminal
-}
-
 // GetProxy returns the Proxy configuration (thread-safe)
 func (c *Config) GetProxy() *ProxyConfig {
 	c.mu.RLock()
@@ -581,21 +553,6 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 		}
 	}
 
-	// Load Terminal config
-	config.Terminal = &TerminalConfig{
-		SelectedTerminal: "cmd",
-		ProjectDirs:      []string{},
-	}
-	if selectedTerminal, err := storage.GetConfig("terminal_selected"); err == nil && selectedTerminal != "" {
-		config.Terminal.SelectedTerminal = selectedTerminal
-	}
-	if projectDirsStr, err := storage.GetConfig("terminal_projectDirs"); err == nil && projectDirsStr != "" {
-		var dirs []string
-		if err := json.Unmarshal([]byte(projectDirsStr), &dirs); err == nil {
-			config.Terminal.ProjectDirs = dirs
-		}
-	}
-
 	// Load Proxy config
 	if proxyURL, err := storage.GetConfig("proxy_url"); err == nil && proxyURL != "" {
 		config.Proxy = &ProxyConfig{URL: proxyURL}
@@ -703,14 +660,6 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 			storage.SetConfig("backup_s3_sessionToken", c.Backup.S3.SessionToken)
 			storage.SetConfig("backup_s3_useSSL", strconv.FormatBool(c.Backup.S3.UseSSL))
 			storage.SetConfig("backup_s3_forcePathStyle", strconv.FormatBool(c.Backup.S3.ForcePathStyle))
-		}
-	}
-
-	// Save Terminal config
-	if c.Terminal != nil {
-		storage.SetConfig("terminal_selected", c.Terminal.SelectedTerminal)
-		if dirsJSON, err := json.Marshal(c.Terminal.ProjectDirs); err == nil {
-			storage.SetConfig("terminal_projectDirs", string(dirsJSON))
 		}
 	}
 

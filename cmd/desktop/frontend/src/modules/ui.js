@@ -1,9 +1,6 @@
 import { t } from '../i18n/index.js';
 
 export function initUI() {
-    const platform = navigator.platform.toLowerCase();
-    const isShowBtn = platform.includes('win') || platform.includes('mac');
-
     const app = document.getElementById('app');
     app.innerHTML = `
         <div class="header">
@@ -383,10 +380,6 @@ export function initUI() {
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        ${isShowBtn ? `
-                        <button class="btn btn-secondary" onclick="window.showTerminalModal()">
-                            🖥️ ${t('terminal.title')}
-                        </button>` : ''}
                         <button class="btn btn-secondary" onclick="window.showDataSyncDialog()">
                             🔄 ${t('webdav.dataSync')}
                         </button>
@@ -518,58 +511,6 @@ export function initUI() {
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="window.closeModal()">${t('modal.cancel')}</button>
                     <button class="btn btn-primary" onclick="window.saveEndpoint()">${t('modal.save')}</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Terminal Modal -->
-        <div id="terminalModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>🖥️ ${t('terminal.title')}</h2>
-                    <button class="modal-close" onclick="window.closeTerminalModal()">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label><span class="required">*</span>${t('terminal.selectTerminal')}</label>
-                        <select id="terminalSelect" onchange="window.onTerminalChange()">
-                            <option value="">Loading...</option>
-                        </select>
-                        <small class="form-help">${t('terminal.selectTerminalHelp')}</small>
-                    </div>
-                    <div class="form-group">
-                        <label><span class="required">*</span>${t('terminal.projectDirs')}</label>
-                        <small class="form-help">${t('terminal.projectDirsHelp')}</small>
-                        <div id="projectDirList" class="project-dir-list">
-                            <div class="empty-tip">${t('terminal.noDirs')}</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-primary btn-add-dir" onclick="window.addProjectDir()">
-                        ➕ ${t('terminal.addDir')}
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Session Modal -->
-        <div id="sessionModal" class="modal">
-            <div class="modal-content session-modal-content">
-                <div class="modal-header">
-                    <h2>📋 ${t('session.title')}</h2>
-                    <button class="modal-close" onclick="window.closeSessionModal()">&times;</button>
-                </div>
-                <div class="modal-body session-modal-body">
-                    <div class="session-hint">${t('session.selectHint')}</div>
-                    <div id="sessionList" class="session-list">
-                        <div class="session-loading">${t('session.loading')}</div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-primary btn-add-dir" onclick="window.confirmSessionSelection()">
-                        ✅ ${t('session.confirmAndReturn')}
-                    </button>
                 </div>
             </div>
         </div>
