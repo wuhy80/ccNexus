@@ -485,7 +485,9 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("Specified endpoint '%s' not found or not enabled for client type: %s", specifiedEndpoint, clientType), http.StatusBadRequest)
 			return
 		}
-		logger.DebugLog("Using specified endpoint: %s", specifiedEndpoint)
+		// For test requests, use reduced retry count
+		maxRetries = 3
+		logger.Debug("[TEST:%s] Using fixed endpoint: %s (max retries: %d)", clientType, specifiedEndpoint, maxRetries)
 	}
 
 	for retry := 0; retry < maxRetries; retry++ {
@@ -510,13 +512,17 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		p.markRequestActive(endpoint.Name)
 		p.stats.RecordRequest(endpoint.Name, string(clientType))
 
+		// Log request attempt with test indication if applicable
+		if fixedEndpoint != nil {
+			logger.Debug("[TEST:%s][%s] Testing endpoint (attempt %d/%d)", clientType, endpoint.Name, endpointAttempts, maxRetries)
+		}
+
 		trans, err := prepareTransformerForClient(clientFormat, endpoint)
 		if err != nil {
-			logger.Error("[%s] %v", endpoint.Name, err)
+			logger.Error("[%s:%s] %v", clientType, endpoint.Name, err)
 			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpointForClient(clientType)
+			if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
 				endpointAttempts = 0
 			}
 			continue
@@ -526,11 +532,10 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 		transformedBody, err := trans.TransformRequest(bodyBytes)
 		if err != nil {
-			logger.Error("[%s] Failed to transform request: %v", endpoint.Name, err)
+			logger.Error("[%s:%s] Failed to transform request: %v", clientType, endpoint.Name, err)
 			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpointForClient(clientType)
+			if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
 				endpointAttempts = 0
 			}
 			continue
@@ -558,11 +563,10 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 		proxyReq, err := buildProxyRequest(r, endpoint, transformedBody, transformerName)
 		if err != nil {
-			logger.Error("[%s] Failed to create request: %v", endpoint.Name, err)
+			logger.Error("[%s:%s] Failed to create request: %v", clientType, endpoint.Name, err)
 			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpointForClient(clientType)
+			if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
 				endpointAttempts = 0
 			}
 			continue
@@ -571,11 +575,10 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		ctx := p.getEndpointContext(endpoint.Name)
 		resp, err := sendRequest(ctx, proxyReq, p.config)
 		if err != nil {
-			logger.Error("[%s] Request failed: %v", endpoint.Name, err)
+			logger.Error("[%s:%s] Request failed: %v", clientType, endpoint.Name, err)
 			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpointForClient(clientType)
+			if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
 				endpointAttempts = 0
 			}
 			continue
@@ -589,12 +592,11 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 			// Handle retryable streaming errors (before response headers sent)
 			if errors.Is(streamErr, ErrStreamRetryable) {
-				logger.Warn("[%s] Streaming failed before response sent, will retry: %v", endpoint.Name, streamErr)
+				logger.Warn("[%s:%s] Streaming failed before response sent, will retry: %v", clientType, endpoint.Name, streamErr)
 				p.stats.RecordError(endpoint.Name, string(clientType))
 				p.markRequestInactive(endpoint.Name)
 				// endpointAttempts already incremented at loop start (line 487)
-				if endpointAttempts >= 2 {
-					p.rotateEndpointForClient(clientType)
+				if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
 					endpointAttempts = 0
 				}
 				continue // Retry with same or different endpoint
@@ -707,12 +709,11 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			if len(errMsg) > 200 {
 				errMsg = errMsg[:200] + "..."
 			}
-			logger.Warn("[%s] Request failed %d: %s", endpoint.Name, resp.StatusCode, errMsg)
-			logger.DebugLog("[%s] Request failed %d: %s", endpoint.Name, resp.StatusCode, errMsg)
+			logger.Warn("[%s:%s] Request failed %d: %s", clientType, endpoint.Name, resp.StatusCode, errMsg)
+			logger.DebugLog("[%s:%s] Request failed %d: %s", clientType, endpoint.Name, resp.StatusCode, errMsg)
 			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpointForClient(clientType)
+			if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
 				endpointAttempts = 0
 			}
 			continue
@@ -750,4 +751,23 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, "All endpoints failed", http.StatusServiceUnavailable)
+}
+
+// handleEndpointRotation handles endpoint rotation logic for retry scenarios
+// Returns true if rotation occurred, false if endpoint was fixed (test mode)
+func (p *Proxy) handleEndpointRotation(fixedEndpoint *config.Endpoint, clientType ClientType, endpoint config.Endpoint, attempts int) bool {
+	if attempts < 2 {
+		return false
+	}
+
+	if fixedEndpoint == nil {
+		// Normal mode: rotate to next endpoint
+		p.rotateEndpointForClient(clientType)
+		return true
+	} else {
+		// Test mode: endpoint is fixed, don't rotate
+		logger.Warn("[TEST:%s][%s] Test failed after %d attempts (endpoint fixed, not rotating)",
+			clientType, endpoint.Name, attempts)
+		return false
+	}
 }
