@@ -3,8 +3,6 @@
 
 export function AddEndpoint(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:string):Promise<void>;
 
-export function AddProjectDir(arg1:string):Promise<void>;
-
 export function BackupToProvider(arg1:string,arg2:string):Promise<void>;
 
 export function BackupToWebDAV(arg1:string):Promise<void>;
@@ -15,13 +13,9 @@ export function DeleteArchive(arg1:string):Promise<string>;
 
 export function DeleteBackups(arg1:string,arg2:Array<string>):Promise<void>;
 
-export function DeleteSession(arg1:string,arg2:string):Promise<void>;
-
 export function DeleteWebDAVBackups(arg1:Array<string>):Promise<void>;
 
 export function DetectBackupConflict(arg1:string,arg2:string):Promise<string>;
-
-export function DetectTerminals():Promise<string>;
 
 export function DetectWebDAVConflict(arg1:string):Promise<string>;
 
@@ -59,10 +53,6 @@ export function GetLogsByLevel(arg1:number):Promise<string>;
 
 export function GetProxyURL():Promise<string>;
 
-export function GetSessionData(arg1:string,arg2:string):Promise<string>;
-
-export function GetSessions(arg1:string):Promise<string>;
-
 export function GetStats():Promise<string>;
 
 export function GetStatsDaily():Promise<string>;
@@ -79,8 +69,6 @@ export function GetStatsYesterday():Promise<string>;
 
 export function GetSystemLanguage():Promise<string>;
 
-export function GetTerminalConfig():Promise<string>;
-
 export function GetTheme():Promise<string>;
 
 export function GetThemeAuto():Promise<boolean>;
@@ -90,10 +78,6 @@ export function GetTokenTrendData(arg1:string,arg2:string,arg3:string,arg4:strin
 export function GetVersion():Promise<string>;
 
 export function HideWindow():Promise<void>;
-
-export function LaunchSessionTerminal(arg1:string,arg2:string):Promise<void>;
-
-export function LaunchTerminal(arg1:string):Promise<void>;
 
 export function ListArchives():Promise<string>;
 
@@ -107,19 +91,11 @@ export function Quit():Promise<void>;
 
 export function RemoveEndpoint(arg1:string,arg2:number):Promise<void>;
 
-export function RemoveProjectDir(arg1:string):Promise<void>;
-
-export function RenameSession(arg1:string,arg2:string,arg3:string):Promise<void>;
-
 export function ReorderEndpoints(arg1:string,arg2:Array<string>):Promise<void>;
 
 export function RestoreFromProvider(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function RestoreFromWebDAV(arg1:string,arg2:string):Promise<void>;
-
-export function SaveTerminalConfig(arg1:string,arg2:Array<string>):Promise<void>;
-
-export function SelectDirectory():Promise<string>;
 
 export function SetAutoDarkTheme(arg1:string):Promise<void>;
 

@@ -6,10 +6,6 @@ export function AddEndpoint(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['main']['App']['AddEndpoint'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
-export function AddProjectDir(arg1) {
-  return window['go']['main']['App']['AddProjectDir'](arg1);
-}
-
 export function BackupToProvider(arg1, arg2) {
   return window['go']['main']['App']['BackupToProvider'](arg1, arg2);
 }
@@ -30,20 +26,12 @@ export function DeleteBackups(arg1, arg2) {
   return window['go']['main']['App']['DeleteBackups'](arg1, arg2);
 }
 
-export function DeleteSession(arg1, arg2) {
-  return window['go']['main']['App']['DeleteSession'](arg1, arg2);
-}
-
 export function DeleteWebDAVBackups(arg1) {
   return window['go']['main']['App']['DeleteWebDAVBackups'](arg1);
 }
 
 export function DetectBackupConflict(arg1, arg2) {
   return window['go']['main']['App']['DetectBackupConflict'](arg1, arg2);
-}
-
-export function DetectTerminals() {
-  return window['go']['main']['App']['DetectTerminals']();
 }
 
 export function DetectWebDAVConflict(arg1) {
@@ -118,14 +106,6 @@ export function GetProxyURL() {
   return window['go']['main']['App']['GetProxyURL']();
 }
 
-export function GetSessionData(arg1, arg2) {
-  return window['go']['main']['App']['GetSessionData'](arg1, arg2);
-}
-
-export function GetSessions(arg1) {
-  return window['go']['main']['App']['GetSessions'](arg1);
-}
-
 export function GetStats() {
   return window['go']['main']['App']['GetStats']();
 }
@@ -158,10 +138,6 @@ export function GetSystemLanguage() {
   return window['go']['main']['App']['GetSystemLanguage']();
 }
 
-export function GetTerminalConfig() {
-  return window['go']['main']['App']['GetTerminalConfig']();
-}
-
 export function GetTheme() {
   return window['go']['main']['App']['GetTheme']();
 }
@@ -180,14 +156,6 @@ export function GetVersion() {
 
 export function HideWindow() {
   return window['go']['main']['App']['HideWindow']();
-}
-
-export function LaunchSessionTerminal(arg1, arg2) {
-  return window['go']['main']['App']['LaunchSessionTerminal'](arg1, arg2);
-}
-
-export function LaunchTerminal(arg1) {
-  return window['go']['main']['App']['LaunchTerminal'](arg1);
 }
 
 export function ListArchives() {
@@ -214,14 +182,6 @@ export function RemoveEndpoint(arg1, arg2) {
   return window['go']['main']['App']['RemoveEndpoint'](arg1, arg2);
 }
 
-export function RemoveProjectDir(arg1) {
-  return window['go']['main']['App']['RemoveProjectDir'](arg1);
-}
-
-export function RenameSession(arg1, arg2, arg3) {
-  return window['go']['main']['App']['RenameSession'](arg1, arg2, arg3);
-}
-
 export function ReorderEndpoints(arg1, arg2) {
   return window['go']['main']['App']['ReorderEndpoints'](arg1, arg2);
 }
@@ -232,14 +192,6 @@ export function RestoreFromProvider(arg1, arg2, arg3) {
 
 export function RestoreFromWebDAV(arg1, arg2) {
   return window['go']['main']['App']['RestoreFromWebDAV'](arg1, arg2);
-}
-
-export function SaveTerminalConfig(arg1, arg2) {
-  return window['go']['main']['App']['SaveTerminalConfig'](arg1, arg2);
-}
-
-export function SelectDirectory() {
-  return window['go']['main']['App']['SelectDirectory']();
 }
 
 export function SetAutoDarkTheme(arg1) {
