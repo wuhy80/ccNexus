@@ -91,7 +91,13 @@ func (h *Handler) listEndpoints(w http.ResponseWriter, r *http.Request) {
 
 // getEndpoint returns a specific endpoint
 func (h *Handler) getEndpoint(w http.ResponseWriter, r *http.Request, name string) {
-	endpoints, err := h.storage.GetEndpoints()
+	// Get clientType from query parameter, default to "claude"
+	clientType := r.URL.Query().Get("clientType")
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	endpoints, err := h.storage.GetEndpointsByClient(clientType)
 	if err != nil {
 		logger.Error("Failed to get endpoints: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to get endpoints")
@@ -188,6 +194,7 @@ func (h *Handler) createEndpoint(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) updateEndpoint(w http.ResponseWriter, r *http.Request, name string) {
 	var req struct {
 		Name        string `json:"name"`
+		ClientType  string `json:"clientType"`
 		APIUrl      string `json:"apiUrl"`
 		APIKey      string `json:"apiKey"`
 		Enabled     bool   `json:"enabled"`
@@ -201,8 +208,14 @@ func (h *Handler) updateEndpoint(w http.ResponseWriter, r *http.Request, name st
 		return
 	}
 
-	// Get existing endpoint
-	endpoints, err := h.storage.GetEndpoints()
+	// Default clientType to "claude"
+	clientType := req.ClientType
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	// Get existing endpoint for this client type
+	endpoints, err := h.storage.GetEndpointsByClient(clientType)
 	if err != nil {
 		logger.Error("Failed to get endpoints: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to get endpoints")
@@ -289,7 +302,8 @@ func (h *Handler) toggleEndpoint(w http.ResponseWriter, r *http.Request, name st
 	}
 
 	var req struct {
-		Enabled bool `json:"enabled"`
+		Enabled    bool   `json:"enabled"`
+		ClientType string `json:"clientType"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -297,8 +311,14 @@ func (h *Handler) toggleEndpoint(w http.ResponseWriter, r *http.Request, name st
 		return
 	}
 
-	// Get existing endpoint
-	endpoints, err := h.storage.GetEndpoints()
+	// Default clientType to "claude"
+	clientType := req.ClientType
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	// Get existing endpoint for this client type
+	endpoints, err := h.storage.GetEndpointsByClient(clientType)
 	if err != nil {
 		logger.Error("Failed to get endpoints: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to get endpoints")

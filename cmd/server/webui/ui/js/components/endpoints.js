@@ -8,6 +8,7 @@ class Endpoints {
         this.container = document.getElementById('view-container');
         this.endpoints = [];
         this.currentEndpoint = null;
+        this.currentClientType = localStorage.getItem('ccNexus_clientType') || 'claude';
         this.draggedIndex = null;
     }
 
@@ -15,7 +16,14 @@ class Endpoints {
         this.container.innerHTML = `
             <div class="endpoints">
                 <div class="flex-between mb-3">
-                    <h1>Endpoints</h1>
+                    <div class="flex gap-3 align-center">
+                        <h1>Endpoints</h1>
+                        <select id="client-type-selector" class="form-select" style="width: auto;">
+                            <option value="claude" ${this.currentClientType === 'claude' ? 'selected' : ''}>Claude Code</option>
+                            <option value="gemini" ${this.currentClientType === 'gemini' ? 'selected' : ''}>Gemini CLI</option>
+                            <option value="codex" ${this.currentClientType === 'codex' ? 'selected' : ''}>Codex CLI</option>
+                        </select>
+                    </div>
                     <button class="btn btn-primary" id="add-endpoint-btn">
                         <span>+ Add Endpoint</span>
                     </button>
@@ -30,18 +38,25 @@ class Endpoints {
         `;
 
         document.getElementById('add-endpoint-btn').addEventListener('click', () => this.showAddModal());
+        document.getElementById('client-type-selector').addEventListener('change', (e) => this.onClientTypeChange(e.target.value));
 
         await this.loadEndpoints();
     }
 
+    onClientTypeChange(clientType) {
+        this.currentClientType = clientType;
+        localStorage.setItem('ccNexus_clientType', clientType);
+        this.loadEndpoints();
+    }
+
     async loadEndpoints() {
         try {
-            const data = await api.getEndpoints();
+            const data = await api.getEndpoints(this.currentClientType);
             this.endpoints = data.endpoints || [];
 
-            // Get current endpoint
+            // Get current endpoint for this client type
             try {
-                const currentData = await api.getCurrentEndpoint();
+                const currentData = await api.getCurrentEndpoint(this.currentClientType);
                 this.currentEndpoint = currentData.name || null;
             } catch (error) {
                 console.error('Failed to get current endpoint:', error);
@@ -96,7 +111,7 @@ class Endpoints {
 
     renderEndpointRow(ep, index) {
         const isCurrentEndpoint = ep.name === this.currentEndpoint;
-        const testStatus = this.getTestStatus(ep.name);
+        const testStatus = this.getTestStatus(ep.name, this.currentClientType);
         let testStatusIcon = '⚠️';
         let testStatusTitle = 'Not tested';
 
@@ -226,7 +241,7 @@ class Endpoints {
 
             // Send new order to backend
             const names = this.endpoints.map(ep => ep.name);
-            await api.reorderEndpoints(names);
+            await api.reorderEndpoints(names, this.currentClientType);
 
             notifications.success('Endpoints reordered successfully');
             await this.loadEndpoints();
@@ -238,7 +253,7 @@ class Endpoints {
 
     async switchEndpoint(name) {
         try {
-            await api.switchEndpoint(name);
+            await api.switchEndpoint(name, this.currentClientType);
             notifications.success(`Switched to endpoint: ${name}`);
             await this.loadEndpoints();
         } catch (error) {
@@ -258,19 +273,21 @@ class Endpoints {
         });
     }
 
-    getTestStatus(endpointName) {
+    getTestStatus(endpointName, clientType) {
         try {
+            const key = `${clientType}:${endpointName}`;
             const statusMap = JSON.parse(localStorage.getItem('ccNexus_endpointTestStatus') || '{}');
-            return statusMap[endpointName];
+            return statusMap[key];
         } catch {
             return undefined;
         }
     }
 
-    saveTestStatus(endpointName, success) {
+    saveTestStatus(endpointName, clientType, success) {
         try {
+            const key = `${clientType}:${endpointName}`;
             const statusMap = JSON.parse(localStorage.getItem('ccNexus_endpointTestStatus') || '{}');
-            statusMap[endpointName] = success;
+            statusMap[key] = success;
             localStorage.setItem('ccNexus_endpointTestStatus', JSON.stringify(statusMap));
         } catch (error) {
             console.error('Failed to save test status:', error);
@@ -460,6 +477,7 @@ class Endpoints {
 
         const data = {
             name: formData.get('name'),
+            clientType: this.currentClientType,
             apiUrl: formData.get('apiUrl'),
             apiKey: formData.get('apiKey'),
             transformer: formData.get('transformer'),
@@ -491,7 +509,7 @@ class Endpoints {
 
     async toggleEndpoint(name, enabled) {
         try {
-            await api.toggleEndpoint(name, enabled);
+            await api.toggleEndpoint(name, enabled, this.currentClientType);
             notifications.success(`Endpoint ${enabled ? 'enabled' : 'disabled'}`);
             await this.loadEndpoints();
         } catch (error) {
@@ -503,20 +521,20 @@ class Endpoints {
     async testEndpoint(name) {
         try {
             notifications.info('Testing endpoint...');
-            const result = await api.testEndpoint(name);
+            const result = await api.testEndpoint(name, this.currentClientType);
 
             if (result.success) {
-                this.saveTestStatus(name, true);
+                this.saveTestStatus(name, this.currentClientType, true);
                 notifications.success(`Test successful! Latency: ${result.latency}ms`);
                 this.showTestResultModal(name, result);
                 await this.loadEndpoints(); // Refresh to show test status
             } else {
-                this.saveTestStatus(name, false);
+                this.saveTestStatus(name, this.currentClientType, false);
                 notifications.error(`Test failed: ${result.error}`);
                 await this.loadEndpoints(); // Refresh to show test status
             }
         } catch (error) {
-            this.saveTestStatus(name, false);
+            this.saveTestStatus(name, this.currentClientType, false);
             notifications.error('Test failed: ' + error.message);
             await this.loadEndpoints(); // Refresh to show test status
         }
@@ -561,7 +579,7 @@ class Endpoints {
         }
 
         try {
-            await api.deleteEndpoint(name);
+            await api.deleteEndpoint(name, this.currentClientType);
             notifications.success('Endpoint deleted successfully');
             await this.loadEndpoints();
         } catch (error) {

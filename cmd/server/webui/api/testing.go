@@ -19,8 +19,14 @@ func (h *Handler) testEndpoint(w http.ResponseWriter, r *http.Request, name stri
 		return
 	}
 
-	// Get endpoint
-	endpoints, err := h.storage.GetEndpoints()
+	// Get clientType from query parameter, default to "claude"
+	clientType := r.URL.Query().Get("clientType")
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	// Get endpoint for this client type
+	endpoints, err := h.storage.GetEndpointsByClient(clientType)
 	if err != nil {
 		logger.Error("Failed to get endpoints: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to get endpoints")

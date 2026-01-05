@@ -32,8 +32,9 @@ class APIClient {
     }
 
     // Endpoint management
-    async getEndpoints() {
-        return this.request('GET', '/endpoints');
+    async getEndpoints(clientType = '') {
+        const query = clientType ? `?clientType=${clientType}` : '';
+        return this.request('GET', `/endpoints${query}`);
     }
 
     async createEndpoint(data) {
@@ -44,28 +45,28 @@ class APIClient {
         return this.request('PUT', `/endpoints/${encodeURIComponent(name)}`, data);
     }
 
-    async deleteEndpoint(name) {
-        return this.request('DELETE', `/endpoints/${encodeURIComponent(name)}`);
+    async deleteEndpoint(name, clientType = 'claude') {
+        return this.request('DELETE', `/endpoints/${encodeURIComponent(name)}?clientType=${clientType}`);
     }
 
-    async toggleEndpoint(name, enabled) {
-        return this.request('PATCH', `/endpoints/${encodeURIComponent(name)}/toggle`, { enabled });
+    async toggleEndpoint(name, enabled, clientType = 'claude') {
+        return this.request('PATCH', `/endpoints/${encodeURIComponent(name)}/toggle`, { enabled, clientType });
     }
 
-    async testEndpoint(name) {
-        return this.request('POST', `/endpoints/${encodeURIComponent(name)}/test`);
+    async testEndpoint(name, clientType = 'claude') {
+        return this.request('POST', `/endpoints/${encodeURIComponent(name)}/test?clientType=${clientType}`);
     }
 
-    async reorderEndpoints(names) {
-        return this.request('POST', '/endpoints/reorder', { names });
+    async reorderEndpoints(names, clientType = 'claude') {
+        return this.request('POST', '/endpoints/reorder', { names, clientType });
     }
 
-    async getCurrentEndpoint() {
-        return this.request('GET', '/endpoints/current');
+    async getCurrentEndpoint(clientType = 'claude') {
+        return this.request('GET', `/endpoints/current?clientType=${clientType}`);
     }
 
-    async switchEndpoint(name) {
-        return this.request('POST', '/endpoints/switch', { name });
+    async switchEndpoint(name, clientType = 'claude') {
+        return this.request('POST', '/endpoints/switch', { name, clientType });
     }
 
     async fetchModels(apiUrl, apiKey, transformer) {
