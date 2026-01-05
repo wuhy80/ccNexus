@@ -23,6 +23,9 @@ const ICONS = {
 
 // 初始化广播
 export async function initBroadcast() {
+    // 暂时禁用广播功能
+    return;
+
     await fetchAndRender();
     // 定时刷新
     if (refreshTimer) clearInterval(refreshTimer);
