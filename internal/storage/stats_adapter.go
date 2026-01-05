@@ -60,6 +60,7 @@ func (a *StatsStorageAdapter) RecordRequestStat(stat interface{}) error {
 		IsStreaming:         v.FieldByName("IsStreaming").Bool(),
 		Success:             v.FieldByName("Success").Bool(),
 		DeviceID:            v.FieldByName("DeviceID").String(),
+		DurationMs:          v.FieldByName("DurationMs").Int(),
 	}
 	return a.storage.RecordRequestStat(requestStat)
 }

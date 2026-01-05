@@ -204,12 +204,12 @@ export async function initTokenChart(period = 'daily') {
 }
 
 /**
- * Get CSS variable value from root
+ * Get CSS variable value from body (to support theme classes like dark-theme)
  * @param {string} varName - CSS variable name (e.g., '--primary-color')
  * @returns {string} The CSS variable value
  */
 function getCSSVariable(varName) {
-    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    return getComputedStyle(document.body).getPropertyValue(varName).trim();
 }
 
 /**
