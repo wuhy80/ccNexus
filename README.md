@@ -78,18 +78,7 @@ wire_api = "responses"  # 或 "chat"
 
 ## 获取帮助
 
-<table>
-  <tr>
-    <td align="center"><img src="https://gitee.com/hea7en/images/raw/master/group/chat.png" alt="微信群" width="200"></td>
-    <td align="center"><img src="cmd/desktop/frontend/public/WeChat.jpg" alt="公众号" width="200"></td>
-    <td align="center"><img src="cmd/desktop/frontend/public/ME.png" alt="个人微信" width="200"></td>
-  </tr>
-  <tr>
-    <td align="center">问题反馈请加群</td>
-    <td align="center">公众号</td>
-    <td align="center">群过期请加好友</td>
-  </tr>
-</table>
+如有问题或建议，请在 [GitHub Issues](https://github.com/lich0821/ccNexus/issues) 提交反馈。
 
 ## 文档
 
