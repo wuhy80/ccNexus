@@ -61,7 +61,7 @@ func (s *SQLiteStorage) initSchema() error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS endpoints (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT UNIQUE NOT NULL,
+		name TEXT NOT NULL,
 		api_url TEXT NOT NULL,
 		api_key TEXT NOT NULL,
 		enabled BOOLEAN DEFAULT TRUE,
@@ -76,6 +76,7 @@ func (s *SQLiteStorage) initSchema() error {
 	CREATE TABLE IF NOT EXISTS daily_stats (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		endpoint_name TEXT NOT NULL,
+		client_type TEXT DEFAULT 'claude',
 		date TEXT NOT NULL,
 		requests INTEGER DEFAULT 0,
 		errors INTEGER DEFAULT 0,
@@ -83,7 +84,7 @@ func (s *SQLiteStorage) initSchema() error {
 		output_tokens INTEGER DEFAULT 0,
 		device_id TEXT DEFAULT 'default',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(endpoint_name, date, device_id)
+		UNIQUE(endpoint_name, client_type, date, device_id)
 	);
 
 	CREATE TABLE IF NOT EXISTS app_config (
@@ -277,7 +278,197 @@ func (s *SQLiteStorage) migrateClientType() error {
 		}
 	}
 
+	// 4. Remove the UNIQUE constraint on name column if it exists
+	// SQLite creates an auto-index named 'sqlite_autoindex_endpoints_1' for UNIQUE constraints
+	// We need to rebuild the table to remove it
+	if err := s.migrateRemoveNameUniqueConstraint(); err != nil {
+		return err
+	}
+
+	// 5. Fix daily_stats unique constraint to include client_type
+	if err := s.migrateDailyStatsUniqueConstraint(); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// migrateRemoveNameUniqueConstraint removes the UNIQUE constraint on name column
+// by rebuilding the endpoints table
+func (s *SQLiteStorage) migrateRemoveNameUniqueConstraint() error {
+	// Check if the auto-generated unique index exists
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='sqlite_autoindex_endpoints_1'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	// If the auto-index doesn't exist, no migration needed
+	if count == 0 {
+		return nil
+	}
+
+	// SQLite doesn't support dropping constraints directly, so we need to rebuild the table
+	// Use a transaction to ensure atomicity
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// 1. Create a new table without the UNIQUE constraint on name
+	_, err = tx.Exec(`
+		CREATE TABLE endpoints_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			client_type TEXT DEFAULT 'claude',
+			api_url TEXT NOT NULL,
+			api_key TEXT NOT NULL,
+			enabled BOOLEAN DEFAULT TRUE,
+			transformer TEXT DEFAULT 'claude',
+			model TEXT,
+			remark TEXT,
+			sort_order INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// 2. Copy data from old table to new table
+	_, err = tx.Exec(`
+		INSERT INTO endpoints_new (id, name, client_type, api_url, api_key, enabled, transformer, model, remark, sort_order, created_at, updated_at)
+		SELECT id, name, COALESCE(client_type, 'claude'), api_url, api_key, enabled, transformer, model, remark, sort_order, created_at, updated_at
+		FROM endpoints
+	`)
+	if err != nil {
+		return err
+	}
+
+	// 3. Drop the old table
+	_, err = tx.Exec(`DROP TABLE endpoints`)
+	if err != nil {
+		return err
+	}
+
+	// 4. Rename new table to endpoints
+	_, err = tx.Exec(`ALTER TABLE endpoints_new RENAME TO endpoints`)
+	if err != nil {
+		return err
+	}
+
+	// 5. Recreate the composite unique index on (name, client_type)
+	_, err = tx.Exec(`CREATE UNIQUE INDEX idx_endpoints_name_client ON endpoints(name, client_type)`)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// migrateDailyStatsUniqueConstraint updates the unique constraint on daily_stats
+// to include client_type column
+func (s *SQLiteStorage) migrateDailyStatsUniqueConstraint() error {
+	// Check if the old unique index exists (without client_type)
+	// The auto-generated index for UNIQUE(endpoint_name, date, device_id) is sqlite_autoindex_daily_stats_1
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='sqlite_autoindex_daily_stats_1'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	// If the old auto-index doesn't exist, check if the table needs migration by looking at index info
+	if count == 0 {
+		// Check if the new correct index exists
+		err = s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_daily_stats_unique'`).Scan(&count)
+		if err != nil {
+			return err
+		}
+		if count > 0 {
+			// Already migrated
+			return nil
+		}
+		// If neither index exists, check table structure
+		// This handles the case where the table was created with the new schema
+		return nil
+	}
+
+	// Need to rebuild the table to fix the unique constraint
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// 1. Create new table with correct unique constraint
+	_, err = tx.Exec(`
+		CREATE TABLE daily_stats_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			endpoint_name TEXT NOT NULL,
+			client_type TEXT DEFAULT 'claude',
+			date TEXT NOT NULL,
+			requests INTEGER DEFAULT 0,
+			errors INTEGER DEFAULT 0,
+			input_tokens INTEGER DEFAULT 0,
+			cache_creation_tokens INTEGER DEFAULT 0,
+			cache_read_tokens INTEGER DEFAULT 0,
+			output_tokens INTEGER DEFAULT 0,
+			device_id TEXT DEFAULT 'default',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(endpoint_name, client_type, date, device_id)
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// 2. Copy data, merging rows that would conflict under the new constraint
+	_, err = tx.Exec(`
+		INSERT INTO daily_stats_new (endpoint_name, client_type, date, requests, errors, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens, device_id, created_at)
+		SELECT endpoint_name, COALESCE(client_type, 'claude'), date,
+			SUM(requests), SUM(errors), SUM(input_tokens),
+			SUM(COALESCE(cache_creation_tokens, 0)), SUM(COALESCE(cache_read_tokens, 0)), SUM(output_tokens),
+			device_id, MIN(created_at)
+		FROM daily_stats
+		GROUP BY endpoint_name, COALESCE(client_type, 'claude'), date, device_id
+	`)
+	if err != nil {
+		return err
+	}
+
+	// 3. Drop old table
+	_, err = tx.Exec(`DROP TABLE daily_stats`)
+	if err != nil {
+		return err
+	}
+
+	// 4. Rename new table
+	_, err = tx.Exec(`ALTER TABLE daily_stats_new RENAME TO daily_stats`)
+	if err != nil {
+		return err
+	}
+
+	// 5. Recreate indexes
+	_, err = tx.Exec(`CREATE INDEX idx_daily_stats_date ON daily_stats(date)`)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(`CREATE INDEX idx_daily_stats_endpoint ON daily_stats(endpoint_name)`)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(`CREATE INDEX idx_daily_stats_device ON daily_stats(device_id)`)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(`CREATE INDEX idx_daily_stats_client ON daily_stats(client_type)`)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (s *SQLiteStorage) GetEndpoints() ([]Endpoint, error) {
@@ -391,7 +582,7 @@ func (s *SQLiteStorage) RecordDailyStat(stat *DailyStat) error {
 	_, err := s.db.Exec(`
 		INSERT INTO daily_stats (endpoint_name, client_type, date, requests, errors, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens, device_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(endpoint_name, date, device_id) DO UPDATE SET
+		ON CONFLICT(endpoint_name, client_type, date, device_id) DO UPDATE SET
 			requests = requests + excluded.requests,
 			errors = errors + excluded.errors,
 			input_tokens = input_tokens + excluded.input_tokens,
@@ -687,6 +878,7 @@ func (s *SQLiteStorage) GetArchiveMonths() ([]string, error) {
 type MonthlyArchiveData struct {
 	Month               string
 	EndpointName        string
+	ClientType          string
 	Date                string
 	Requests            int
 	Errors              int
@@ -701,12 +893,12 @@ func (s *SQLiteStorage) GetMonthlyArchiveData(month string) ([]MonthlyArchiveDat
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	query := `SELECT endpoint_name, date, SUM(requests), SUM(errors),
+	query := `SELECT endpoint_name, COALESCE(client_type, 'claude') as client_type, date, SUM(requests), SUM(errors),
 		SUM(input_tokens), SUM(COALESCE(cache_creation_tokens, 0)), SUM(COALESCE(cache_read_tokens, 0)), SUM(output_tokens)
 		FROM daily_stats
 		WHERE strftime('%Y-%m', date) = ?
-		GROUP BY endpoint_name, date
-		ORDER BY date DESC, endpoint_name`
+		GROUP BY endpoint_name, client_type, date
+		ORDER BY date DESC, client_type, endpoint_name`
 
 	rows, err := s.db.Query(query, month)
 	if err != nil {
@@ -718,7 +910,7 @@ func (s *SQLiteStorage) GetMonthlyArchiveData(month string) ([]MonthlyArchiveDat
 	for rows.Next() {
 		var data MonthlyArchiveData
 		data.Month = month
-		if err := rows.Scan(&data.EndpointName, &data.Date, &data.Requests, &data.Errors,
+		if err := rows.Scan(&data.EndpointName, &data.ClientType, &data.Date, &data.Requests, &data.Errors,
 			&data.InputTokens, &data.CacheCreationTokens, &data.CacheReadTokens, &data.OutputTokens); err != nil {
 			return nil, err
 		}
@@ -805,17 +997,27 @@ func (s *SQLiteStorage) DetectEndpointConflicts(remoteDBPath string) ([]MergeCon
 		return nil, err
 	}
 
-	// Build local endpoint map
+	// Build local endpoint map using composite key (clientType:name)
 	localMap := make(map[string]Endpoint)
 	for _, ep := range localEndpoints {
-		localMap[ep.Name] = ep
+		clientType := ep.ClientType
+		if clientType == "" {
+			clientType = "claude"
+		}
+		key := clientType + ":" + ep.Name
+		localMap[key] = ep
 	}
 
 	// Detect conflicts
 	var conflicts []MergeConflict
 	for _, remote := range remoteEndpoints {
-		if local, exists := localMap[remote.Name]; exists {
-			// Check for differences
+		remoteClientType := remote.ClientType
+		if remoteClientType == "" {
+			remoteClientType = "claude"
+		}
+		key := remoteClientType + ":" + remote.Name
+		if local, exists := localMap[key]; exists {
+			// Check for differences (same client type, same name)
 			conflictFields := compareEndpoints(local, remote)
 			if len(conflictFields) > 0 {
 				conflicts = append(conflicts, MergeConflict{
@@ -970,20 +1172,21 @@ func (s *SQLiteStorage) mergeDailyStats(tx *sql.Tx, strategy MergeStrategy) erro
 		// 使用本地 device_id 替代备份的 device_id 以避免重复
 		_, err := tx.Exec(`
 			INSERT OR IGNORE INTO daily_stats
-			(endpoint_name, date, requests, errors, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens, device_id)
-			SELECT endpoint_name, date, requests, errors, input_tokens,
+			(endpoint_name, client_type, date, requests, errors, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens, device_id)
+			SELECT endpoint_name, COALESCE(client_type, 'claude'), date, requests, errors, input_tokens,
 				COALESCE(cache_creation_tokens, 0), COALESCE(cache_read_tokens, 0), output_tokens, ?
 			FROM backup.daily_stats
 		`, localDeviceID)
 		return err
 	case MergeStrategyOverwriteLocal:
 		// 用备份数据覆盖本地数据
-		// 步骤1：删除主数据库中的冲突记录（只匹配 endpoint_name 和 date）
+		// 步骤1：删除主数据库中的冲突记录（匹配 endpoint_name, client_type 和 date）
 		_, err := tx.Exec(`
 			DELETE FROM daily_stats
 			WHERE EXISTS (
 				SELECT 1 FROM backup.daily_stats b
 				WHERE b.endpoint_name = daily_stats.endpoint_name
+				AND COALESCE(b.client_type, 'claude') = COALESCE(daily_stats.client_type, 'claude')
 				AND b.date = daily_stats.date
 			)
 		`)
@@ -994,8 +1197,8 @@ func (s *SQLiteStorage) mergeDailyStats(tx *sql.Tx, strategy MergeStrategy) erro
 		// 步骤2：使用本地 device_id 插入备份数据
 		_, err = tx.Exec(`
 			INSERT INTO daily_stats
-			(endpoint_name, date, requests, errors, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens, device_id)
-			SELECT endpoint_name, date, requests, errors, input_tokens,
+			(endpoint_name, client_type, date, requests, errors, input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens, device_id)
+			SELECT endpoint_name, COALESCE(client_type, 'claude'), date, requests, errors, input_tokens,
 				COALESCE(cache_creation_tokens, 0), COALESCE(cache_read_tokens, 0), output_tokens, ?
 			FROM backup.daily_stats
 		`, localDeviceID)
