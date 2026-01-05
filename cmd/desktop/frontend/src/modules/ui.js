@@ -546,29 +546,37 @@ export function initUI() {
                     <button class="modal-close" onclick="window.closeWelcomeModal()">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <p style="font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-                        ${t('welcome.message')}
-                    </p>
-
-                    <div style="display: flex; justify-content: center; gap: 30px; margin: 30px 0;">
-                        <div style="text-align: center;">
-                            <img src="/WeChat.jpg" alt="WeChat QR Code" style="width: 200px; height: 200px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                            <p style="margin-top: 10px; color: #666; font-size: 14px;">${t('welcome.qrCodeTip')}</p>
-                        </div>
-                        <div style="text-align: center;">
-                            <img
-                                id="chatQRCodeImg"
-                                src="/ME.png"
-                                alt="Chat Group QR Code"
-                                style="width: 200px; height: 200px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"
-                            >
-                            <p id="chatQRCodeTip" style="margin-top: 10px; color: #666; font-size: 14px;">${t('welcome.chatGroupFallbackTip')}</p>
-                        </div>
+                    <div style="margin-bottom: 25px;">
+                        <h3 style="font-size: 18px; margin-bottom: 12px; color: var(--primary-color);">🚀 ${t('welcome.whatIs')}</h3>
+                        <p style="font-size: 15px; line-height: 1.8; color: var(--text-primary);">
+                            ${t('welcome.description')}
+                        </p>
                     </div>
 
-                    <div style="display: flex; gap: 15px; justify-content: center; margin-top: 20px;">
-                        <button class="btn btn-secondary" onclick="window.openArticle()">
-                            ${t('welcome.readArticle')}
+                    <div style="margin-bottom: 25px;">
+                        <h3 style="font-size: 18px; margin-bottom: 12px; color: var(--primary-color);">✨ ${t('welcome.features')}</h3>
+                        <ul style="font-size: 14px; line-height: 2; color: var(--text-primary); padding-left: 20px;">
+                            <li>${t('welcome.feature1')}</li>
+                            <li>${t('welcome.feature2')}</li>
+                            <li>${t('welcome.feature3')}</li>
+                            <li>${t('welcome.feature4')}</li>
+                            <li>${t('welcome.feature5')}</li>
+                        </ul>
+                    </div>
+
+                    <div style="margin-bottom: 25px;">
+                        <h3 style="font-size: 18px; margin-bottom: 12px; color: var(--primary-color);">🎯 ${t('welcome.quickStart')}</h3>
+                        <ol style="font-size: 14px; line-height: 2; color: var(--text-primary); padding-left: 20px;">
+                            <li>${t('welcome.step1')}</li>
+                            <li>${t('welcome.step2')}</li>
+                            <li>${t('welcome.step3')}</li>
+                            <li>${t('welcome.step4')}</li>
+                        </ol>
+                    </div>
+
+                    <div style="display: flex; gap: 15px; justify-content: center; margin-top: 25px;">
+                        <button class="btn btn-secondary" onclick="window.openGitHub()">
+                            ${t('welcome.viewGitHub')}
                         </button>
                         <button class="btn btn-secondary" onclick="window.showChangelogModal()">
                             ${t('welcome.changelog')}
