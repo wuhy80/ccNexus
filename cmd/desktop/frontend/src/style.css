@@ -384,10 +384,10 @@ body {
 
 /* Chart Container */
 .chart-container {
-    background: white;
+    background: var(--card-bg);
     border-radius: 12px;
     padding: 20px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px var(--shadow-color);
     height: 320px;
     display: flex;
     flex-direction: column;
@@ -419,13 +419,13 @@ body {
 
 .time-select {
     padding: 5px 8px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-light);
     border-radius: 6px;
     font-size: 12px;
-    background: white;
+    background: var(--input-bg);
     cursor: pointer;
     min-width: 75px;
-    color: #666;
+    color: var(--text-secondary);
     transition: all 0.2s;
 }
 
@@ -470,15 +470,15 @@ body {
 
 .chart-type-btn {
     padding: 5px 8px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-light);
     border-radius: 6px;
-    background: white;
+    background: var(--input-bg);
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #666;
+    color: var(--text-secondary);
 }
 
 .chart-type-btn:hover {
