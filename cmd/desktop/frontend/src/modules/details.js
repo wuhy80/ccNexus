@@ -67,7 +67,7 @@ function renderDetailsTable(requests) {
 
     if (requests.length === 0) {
         const row = document.createElement('tr');
-        row.innerHTML = `<td colspan="9" style="text-align: center; padding: 20px;">${t('statistics.noData')}</td>`;
+        row.innerHTML = `<td colspan="8" style="text-align: center; padding: 20px;">${t('statistics.noData')}</td>`;
         tbody.appendChild(row);
         return;
     }
@@ -77,33 +77,51 @@ function renderDetailsTable(requests) {
         const row = document.createElement('tr');
 
         // Format timestamp
-        const time = formatTimestamp(req.Timestamp || req.timestamp);
+        const time = formatTimestamp(req.timestamp);
 
         // Calculate total tokens (including cache)
-        const totalTokens = (req.InputTokens || 0) +
-                           (req.CacheCreationTokens || 0) +
-                           (req.CacheReadTokens || 0) +
-                           (req.OutputTokens || 0);
+        const inputTotal = (req.inputTokens || 0) +
+                          (req.cacheCreationTokens || 0) +
+                          (req.cacheReadTokens || 0);
+        const outputTotal = req.outputTokens || 0;
+
+        // Calculate performance metrics
+        const durationMs = req.durationMs || 0;
+        const durationSec = durationMs / 1000;
+        const outputTokensPerSec = durationSec > 0 ? (outputTotal / durationSec).toFixed(1) : '-';
+        const durationDisplay = durationMs > 0 ? formatDuration(durationMs) : '-';
 
         // Status
-        const status = req.Success ?
+        const status = req.success ?
             `<span style="color: #4caf50;">✓ ${t('statistics.success')}</span>` :
             `<span style="color: #f44336;">✗ ${t('statistics.failed')}</span>`;
 
         row.innerHTML = `
             <td>${time}</td>
-            <td>${escapeHtml(req.EndpointName || req.endpoint_name || '-')}</td>
-            <td>${escapeHtml(req.Model || req.model || '-')}</td>
-            <td>${formatTokens(req.InputTokens || 0)}</td>
-            <td>${formatTokens(req.CacheCreationTokens || 0)}</td>
-            <td>${formatTokens(req.CacheReadTokens || 0)}</td>
-            <td>${formatTokens(req.OutputTokens || 0)}</td>
-            <td>${formatTokens(totalTokens)}</td>
+            <td>${escapeHtml(req.endpointName || '-')}</td>
+            <td>${escapeHtml(req.model || '-')}</td>
+            <td>${formatTokens(inputTotal)}</td>
+            <td>${formatTokens(outputTotal)}</td>
+            <td>${durationDisplay}</td>
+            <td>${outputTokensPerSec}</td>
             <td>${status}</td>
         `;
 
         tbody.appendChild(row);
     });
+}
+
+// Format duration in milliseconds to readable format
+function formatDuration(ms) {
+    if (ms < 1000) {
+        return `${ms}ms`;
+    } else if (ms < 60000) {
+        return `${(ms / 1000).toFixed(2)}s`;
+    } else {
+        const minutes = Math.floor(ms / 60000);
+        const seconds = ((ms % 60000) / 1000).toFixed(0);
+        return `${minutes}m ${seconds}s`;
+    }
 }
 
 // Format timestamp

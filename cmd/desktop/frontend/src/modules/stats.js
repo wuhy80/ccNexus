@@ -131,6 +131,9 @@ export async function loadStatsByPeriod(period = 'daily') {
         // Load and display trend for current period
         await loadTrend(period);
 
+        // Load performance metrics for current period
+        await loadPerformanceMetrics(period);
+
         // Store endpoint stats for today
         endpointStats = normalizeEndpointStats(stats.endpoints);
 
@@ -138,6 +141,40 @@ export async function loadStatsByPeriod(period = 'daily') {
     } catch (error) {
         console.error('Failed to load stats by period:', error);
         return null;
+    }
+}
+
+// Load performance metrics for specified period
+async function loadPerformanceMetrics(period = 'daily') {
+    try {
+        const metricsStr = await window.go.main.App.GetPerformanceStats(period);
+        const metrics = JSON.parse(metricsStr);
+
+        if (!metrics.success) {
+            console.error('Failed to load performance metrics:', metrics.message);
+            return;
+        }
+
+        const overall = metrics.overallMetrics;
+
+        // Update UI elements
+        const avgDurationEl = document.getElementById('avgDurationMs');
+        const outputTokensPerSecEl = document.getElementById('avgOutputTokensPerSec');
+
+        if (avgDurationEl && overall) {
+            avgDurationEl.textContent = overall.avgDurationMs > 0
+                ? `${overall.avgDurationMs.toFixed(0)}ms`
+                : '-';
+        }
+
+        if (outputTokensPerSecEl && overall) {
+            outputTokensPerSecEl.textContent = overall.outputTokensPerSec > 0
+                ? `${overall.outputTokensPerSec.toFixed(1)} tok/s`
+                : '-';
+        }
+
+    } catch (error) {
+        console.error('Failed to load performance metrics:', error);
     }
 }
 

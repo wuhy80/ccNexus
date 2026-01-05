@@ -51,6 +51,8 @@ export function GetLogs():Promise<string>;
 
 export function GetLogsByLevel(arg1:number):Promise<string>;
 
+export function GetPerformanceStats(arg1:string):Promise<string>;
+
 export function GetProxyURL():Promise<string>;
 
 export function GetStats():Promise<string>;

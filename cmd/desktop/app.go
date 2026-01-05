@@ -376,6 +376,10 @@ func (a *App) GetDailyRequestDetails(limit, offset int) string {
 	return a.stats.GetDailyRequestDetails(limit, offset)
 }
 
+func (a *App) GetPerformanceStats(period string) string {
+	return a.stats.GetPerformanceStats(period)
+}
+
 func (a *App) GetTokenTrendData(granularity, period, startTime, endTime string) string {
 	return a.stats.GetTokenTrendData(granularity, period, startTime, endTime)
 }

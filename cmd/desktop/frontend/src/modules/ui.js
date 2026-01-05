@@ -151,6 +151,28 @@ export function initUI() {
                                     <span id="cacheHitRate" class="stat-primary">0%</span>
                                 </div>
                             </div>
+                            <div class="stat-box-compact stat-box-condensed">
+                                <div class="stat-info">
+                                    <div class="stat-label">${t('statistics.avgDuration')}</div>
+                                    <div class="stat-detail">
+                                        <span class="stat-text">${t('statistics.requestLatency')}</span>
+                                    </div>
+                                </div>
+                                <div class="stat-value">
+                                    <span id="avgDurationMs" class="stat-primary">-</span>
+                                </div>
+                            </div>
+                            <div class="stat-box-compact stat-box-condensed">
+                                <div class="stat-info">
+                                    <div class="stat-label">${t('statistics.avgOutputSpeed')}</div>
+                                    <div class="stat-detail">
+                                        <span class="stat-text">${t('statistics.generationSpeed')}</span>
+                                    </div>
+                                </div>
+                                <div class="stat-value">
+                                    <span id="avgOutputTokensPerSec" class="stat-primary">-</span>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Token Trend Chart -->
@@ -326,10 +348,9 @@ export function initUI() {
                                         <th>${t('statistics.endpoint')}</th>
                                         <th>${t('statistics.model')}</th>
                                         <th>${t('statistics.inputTokens')}</th>
-                                        <th>${t('statistics.cacheCreationTokens')}</th>
-                                        <th>${t('statistics.cacheReadTokens')}</th>
                                         <th>${t('statistics.outputTokens')}</th>
-                                        <th>${t('statistics.totalTokens')}</th>
+                                        <th>${t('statistics.duration')}</th>
+                                        <th>${t('statistics.outputTokensPerSec')}</th>
                                         <th>${t('statistics.status')}</th>
                                     </tr>
                                 </thead>

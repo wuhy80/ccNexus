@@ -263,6 +263,10 @@ func (s *StatsService) getRequestDetailsByDate(date string, limit, offset int) s
 		return string(data)
 	}
 
+	// Calculate performance metrics from all requests (not just paginated ones)
+	allRequests, _ := s.storage.GetRequestStats("", "", date, date, 10000, 0)
+	metrics := calculatePerformanceMetrics(allRequests)
+
 	result := map[string]interface{}{
 		"success":  true,
 		"date":     date,
@@ -270,6 +274,7 @@ func (s *StatsService) getRequestDetailsByDate(date string, limit, offset int) s
 		"total":    total,
 		"limit":    limit,
 		"offset":   offset,
+		"metrics":  metrics,
 	}
 
 	data, _ := json.Marshal(result)
@@ -600,6 +605,115 @@ func jsonError(message string) string {
 		"success": false,
 		"message": message,
 	}
+	data, _ := json.Marshal(result)
+	return string(data)
+}
+
+// calculateTokensPerSecond calculates tokens per second from duration
+func calculateTokensPerSecond(tokens int, durationMs int64) float64 {
+	if durationMs <= 0 {
+		return 0
+	}
+	durationSec := float64(durationMs) / 1000.0
+	return float64(tokens) / durationSec
+}
+
+// calculatePerformanceMetrics calculates performance metrics from request stats
+// Includes all requests (both successful and failed) with non-zero duration
+func calculatePerformanceMetrics(requests []storage.RequestStat) map[string]interface{} {
+	var totalOutputTokens, totalTokens int
+	var totalDurationMs int64
+	validCount := 0
+
+	for _, req := range requests {
+		if req.DurationMs > 0 { // Only filter out zero duration (old records from before migration)
+			inputTotal := req.InputTokens + req.CacheCreationTokens + req.CacheReadTokens
+			totalOutputTokens += req.OutputTokens
+			totalTokens += inputTotal + req.OutputTokens
+			totalDurationMs += req.DurationMs
+			validCount++
+		}
+	}
+
+	if validCount == 0 || totalDurationMs == 0 {
+		return map[string]interface{}{
+			"outputTokensPerSec": 0.0,
+			"totalTokensPerSec":  0.0,
+			"avgDurationMs":      0.0,
+			"validRequests":      0,
+		}
+	}
+
+	durationSec := float64(totalDurationMs) / 1000.0
+	avgDurationMs := float64(totalDurationMs) / float64(validCount)
+
+	return map[string]interface{}{
+		"outputTokensPerSec": float64(totalOutputTokens) / durationSec,
+		"totalTokensPerSec":  float64(totalTokens) / durationSec,
+		"avgDurationMs":      avgDurationMs,
+		"validRequests":      validCount,
+	}
+}
+
+// GetPerformanceStats returns performance metrics for a time period
+func (s *StatsService) GetPerformanceStats(period string) string {
+	if s.storage == nil {
+		return jsonError("Storage not initialized")
+	}
+
+	// Calculate date range based on period
+	var startDate, endDate string
+	now := time.Now()
+
+	switch period {
+	case "yesterday":
+		startDate = now.AddDate(0, 0, -1).Format("2006-01-02")
+		endDate = startDate
+	case "weekly":
+		weekday := int(now.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+		startDate = now.AddDate(0, 0, -(weekday - 1)).Format("2006-01-02")
+		endDate = now.Format("2006-01-02")
+	case "monthly":
+		startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+		endDate = now.Format("2006-01-02")
+	default: // daily
+		startDate = now.Format("2006-01-02")
+		endDate = startDate
+	}
+
+	// Fetch all requests for the period
+	requests, err := s.storage.GetRequestStats("", "", startDate, endDate, 10000, 0)
+	if err != nil {
+		return jsonError("Failed to get request stats: " + err.Error())
+	}
+
+	// Calculate overall metrics
+	overallMetrics := calculatePerformanceMetrics(requests)
+
+	// Group requests by endpoint
+	endpointRequests := make(map[string][]storage.RequestStat)
+	for _, req := range requests {
+		key := req.ClientType + ":" + req.EndpointName
+		endpointRequests[key] = append(endpointRequests[key], req)
+	}
+
+	// Calculate per-endpoint metrics
+	endpointMetrics := make(map[string]map[string]interface{})
+	for key, reqs := range endpointRequests {
+		endpointMetrics[key] = calculatePerformanceMetrics(reqs)
+	}
+
+	result := map[string]interface{}{
+		"success":         true,
+		"period":          period,
+		"dateRange":       map[string]string{"start": startDate, "end": endDate},
+		"overallMetrics":  overallMetrics,
+		"endpointMetrics": endpointMetrics,
+	}
+
 	data, _ := json.Marshal(result)
 	return string(data)
 }

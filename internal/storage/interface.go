@@ -43,20 +43,21 @@ type EndpointStats struct {
 
 // RequestStat 请求级别统计（新增）
 type RequestStat struct {
-	ID                  int64
-	EndpointName        string
-	ClientType          string // 客户端类型: claude, gemini, codex
-	RequestID           string
-	Timestamp           time.Time
-	Date                string
-	InputTokens         int
-	CacheCreationTokens int
-	CacheReadTokens     int
-	OutputTokens        int
-	Model               string
-	IsStreaming         bool
-	Success             bool
-	DeviceID            string
+	ID                  int64     `json:"id"`
+	EndpointName        string    `json:"endpointName"`
+	ClientType          string    `json:"clientType"` // 客户端类型: claude, gemini, codex
+	RequestID           string    `json:"requestId"`
+	Timestamp           time.Time `json:"timestamp"`
+	Date                string    `json:"date"`
+	InputTokens         int       `json:"inputTokens"`
+	CacheCreationTokens int       `json:"cacheCreationTokens"`
+	CacheReadTokens     int       `json:"cacheReadTokens"`
+	OutputTokens        int       `json:"outputTokens"`
+	Model               string    `json:"model"`
+	IsStreaming         bool      `json:"isStreaming"`
+	Success             bool      `json:"success"`
+	DeviceID            string    `json:"deviceId"`
+	DurationMs          int64     `json:"durationMs"` // 请求时长（毫秒）
 }
 
 type Storage interface {

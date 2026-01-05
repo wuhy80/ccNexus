@@ -228,7 +228,13 @@ export default {
         previous: 'Previous',
         next: 'Next',
         noData: 'No data available',
-        loadFailed: 'Failed to load data'
+        loadFailed: 'Failed to load data',
+        avgDuration: 'Avg Duration',
+        requestLatency: 'Request Latency',
+        avgOutputSpeed: 'Avg Output Speed',
+        generationSpeed: 'Generation Speed',
+        duration: 'Duration',
+        outputTokensPerSec: 'Output Speed (tok/s)'
     },
     chart: {
         minutes: 'min',

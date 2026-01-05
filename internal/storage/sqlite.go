@@ -290,6 +290,11 @@ func (s *SQLiteStorage) migrateClientType() error {
 		return err
 	}
 
+	// 6. Add duration_ms column to request_stats table
+	if err := s.migrateDurationTracking(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -469,6 +474,30 @@ func (s *SQLiteStorage) migrateDailyStatsUniqueConstraint() error {
 	}
 
 	return tx.Commit()
+}
+
+// migrateDurationTracking adds duration_ms column to request_stats table
+func (s *SQLiteStorage) migrateDurationTracking() error {
+	// Check if duration_ms column exists
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('request_stats') WHERE name='duration_ms'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		// Add the column with default 0 for existing records
+		if _, err := s.db.Exec(`ALTER TABLE request_stats ADD COLUMN duration_ms INTEGER DEFAULT 0`); err != nil {
+			return err
+		}
+
+		// Create index for duration queries (useful for performance analysis)
+		if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_request_stats_duration ON request_stats(duration_ms)`); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *SQLiteStorage) GetEndpoints() ([]Endpoint, error) {
@@ -1259,13 +1288,13 @@ func (s *SQLiteStorage) RecordRequestStat(stat *RequestStat) error {
 		INSERT INTO request_stats (
 			endpoint_name, client_type, request_id, timestamp, date,
 			input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
-			model, is_streaming, success, device_id
+			model, is_streaming, success, device_id, duration_ms
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		stat.EndpointName, clientType, stat.RequestID, stat.Timestamp, stat.Date,
 		stat.InputTokens, stat.CacheCreationTokens, stat.CacheReadTokens, stat.OutputTokens,
-		stat.Model, stat.IsStreaming, stat.Success, stat.DeviceID,
+		stat.Model, stat.IsStreaming, stat.Success, stat.DeviceID, stat.DurationMs,
 	)
 
 	return err
@@ -1289,7 +1318,7 @@ func (s *SQLiteStorage) GetRequestStats(endpointName string, clientType string, 
 		query = `
 			SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type, request_id, timestamp, date,
 				input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
-				model, is_streaming, success, device_id
+				model, is_streaming, success, device_id, COALESCE(duration_ms, 0) as duration_ms
 			FROM request_stats
 			WHERE COALESCE(client_type, 'claude')=? AND date>=? AND date<=?
 			ORDER BY timestamp DESC
@@ -1301,7 +1330,7 @@ func (s *SQLiteStorage) GetRequestStats(endpointName string, clientType string, 
 		query = `
 			SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type, request_id, timestamp, date,
 				input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
-				model, is_streaming, success, device_id
+				model, is_streaming, success, device_id, COALESCE(duration_ms, 0) as duration_ms
 			FROM request_stats
 			WHERE endpoint_name=? AND COALESCE(client_type, 'claude')=? AND date>=? AND date<=?
 			ORDER BY timestamp DESC
@@ -1322,7 +1351,7 @@ func (s *SQLiteStorage) GetRequestStats(endpointName string, clientType string, 
 		if err := rows.Scan(
 			&stat.ID, &stat.EndpointName, &stat.ClientType, &stat.RequestID, &stat.Timestamp, &stat.Date,
 			&stat.InputTokens, &stat.CacheCreationTokens, &stat.CacheReadTokens, &stat.OutputTokens,
-			&stat.Model, &stat.IsStreaming, &stat.Success, &stat.DeviceID,
+			&stat.Model, &stat.IsStreaming, &stat.Success, &stat.DeviceID, &stat.DurationMs,
 		); err != nil {
 			return nil, err
 		}

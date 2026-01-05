@@ -438,6 +438,9 @@ func extractClientAndFormat(path string) (ClientType, ClientFormat, string) {
 
 // handleProxy handles the main proxy logic
 func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
+	// Capture request start time for duration tracking
+	requestStartTime := time.Now()
+
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		logger.Error("Failed to read request body: %v", err)
@@ -619,6 +622,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			if streamErr != nil {
 				logger.Error("[%s] Streaming completed with error: %v", endpoint.Name, streamErr)
 				p.stats.RecordError(endpoint.Name, string(clientType))
+				durationMs := time.Since(requestStartTime).Milliseconds()
 				p.stats.RecordRequestStat(&RequestStatRecord{
 					EndpointName:        endpoint.Name,
 					ClientType:          string(clientType),
@@ -630,6 +634,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 					Model:               streamReq.Model,
 					IsStreaming:         true,
 					Success:             false,
+					DurationMs:          durationMs,
 				})
 				p.markRequestInactive(endpoint.Name)
 				// Cannot retry: HTTP headers already sent to client
@@ -637,6 +642,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Record request-level stats
+			durationMs := time.Since(requestStartTime).Milliseconds()
 			p.stats.RecordRequestStat(&RequestStatRecord{
 				EndpointName:        endpoint.Name,
 				ClientType:          string(clientType),
@@ -648,6 +654,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 				Model:               streamReq.Model,
 				IsStreaming:         true,
 				Success:             true,
+				DurationMs:          durationMs,
 			})
 
 			p.markRequestInactive(endpoint.Name)
@@ -675,6 +682,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 				json.Unmarshal(bodyBytes, &reqBody)
 				modelName, _ := reqBody["model"].(string)
 
+				durationMs := time.Since(requestStartTime).Milliseconds()
 				p.stats.RecordRequestStat(&RequestStatRecord{
 					EndpointName:        endpoint.Name,
 					ClientType:          string(clientType),
@@ -686,6 +694,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 					Model:               modelName,
 					IsStreaming:         false,
 					Success:             true,
+					DurationMs:          durationMs,
 				})
 
 				p.markRequestInactive(endpoint.Name)

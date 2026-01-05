@@ -70,6 +70,7 @@ type RequestStatRecord struct {
 	IsStreaming         bool
 	Success             bool
 	DeviceID            string
+	DurationMs          int64 // 请求时长（毫秒）
 }
 
 // StatsData represents aggregated stats data

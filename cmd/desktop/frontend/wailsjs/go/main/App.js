@@ -102,6 +102,10 @@ export function GetLogsByLevel(arg1) {
   return window['go']['main']['App']['GetLogsByLevel'](arg1);
 }
 
+export function GetPerformanceStats(arg1) {
+  return window['go']['main']['App']['GetPerformanceStats'](arg1);
+}
+
 export function GetProxyURL() {
   return window['go']['main']['App']['GetProxyURL']();
 }
