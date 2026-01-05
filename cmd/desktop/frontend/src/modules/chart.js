@@ -519,7 +519,7 @@ function updateChartTypeButtons() {
 }
 
 /**
- * Initialize time selectors with 5-minute intervals
+ * Initialize time selectors with hourly intervals
  */
 function initTimeSelectors() {
     const startSelect = document.getElementById('chartStartTime');
@@ -527,13 +527,11 @@ function initTimeSelectors() {
 
     if (!startSelect || !endSelect) return;
 
-    // Generate time options (30-minute intervals)
+    // Generate time options (hourly intervals)
     const options = [];
     for (let h = 0; h < 24; h++) {
-        for (let m = 0; m < 60; m += 30) {
-            const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-            options.push(time);
-        }
+        const time = `${h.toString().padStart(2, '0')}:00`;
+        options.push(time);
     }
 
     // Populate start time selector
@@ -554,6 +552,7 @@ function initTimeSelectors() {
 
 /**
  * Update time selector values based on data range
+ * Round down start time to the nearest hour, round up end time to the nearest hour
  */
 function updateTimeSelectorValues(effectiveStart, effectiveEnd) {
     const startSelect = document.getElementById('chartStartTime');
@@ -562,10 +561,22 @@ function updateTimeSelectorValues(effectiveStart, effectiveEnd) {
     if (!startSelect || !endSelect) return;
 
     if (effectiveStart) {
-        startSelect.value = effectiveStart;
+        // Round down to nearest hour (e.g., 5:25 -> 5:00)
+        const [hours] = effectiveStart.split(':');
+        const roundedStart = `${hours.padStart(2, '0')}:00`;
+        startSelect.value = roundedStart;
     }
     if (effectiveEnd) {
-        endSelect.value = effectiveEnd;
+        // Round up to nearest hour (e.g., 17:45 -> 18:00)
+        const [hours, minutes] = effectiveEnd.split(':');
+        let endHour = parseInt(hours);
+        if (parseInt(minutes) > 0) {
+            endHour += 1;
+        }
+        // Cap at 24:00
+        if (endHour > 24) endHour = 24;
+        const roundedEnd = endHour === 24 ? '24:00' : `${endHour.toString().padStart(2, '0')}:00`;
+        endSelect.value = roundedEnd;
     }
 }
 
