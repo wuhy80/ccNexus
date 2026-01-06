@@ -829,7 +829,7 @@ export function initUI() {
                     <button class="modal-close" onclick="window.closeConnectedClientsModal()">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <div class="clients-filters" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <div class="clients-filters">
                         <div style="display: flex; align-items: center; gap: 12px;">
                             <label>${t('clients.timeRange')}:</label>
                             <select id="clientsHoursFilter" onchange="window.changeClientsHoursFilter(this.value)">
@@ -845,23 +845,23 @@ export function initUI() {
                             </button>
                         </div>
                     </div>
-                    <div class="clients-table-wrapper" style="max-height: 400px; overflow-y: auto;">
-                        <table class="clients-table" style="width: 100%; border-collapse: collapse;">
+                    <div class="clients-table-wrapper">
+                        <table class="clients-table">
                             <thead>
                                 <tr>
-                                    <th style="text-align: left; padding: 12px; border-bottom: 2px solid var(--border-color);">${t('clients.ip')}</th>
-                                    <th style="text-align: left; padding: 12px; border-bottom: 2px solid var(--border-color);">${t('clients.lastSeen')}</th>
-                                    <th style="text-align: right; padding: 12px; border-bottom: 2px solid var(--border-color);">${t('clients.requests')}</th>
-                                    <th style="text-align: right; padding: 12px; border-bottom: 2px solid var(--border-color);">${t('clients.inputTokens')}</th>
-                                    <th style="text-align: right; padding: 12px; border-bottom: 2px solid var(--border-color);">${t('clients.outputTokens')}</th>
-                                    <th style="text-align: left; padding: 12px; border-bottom: 2px solid var(--border-color);">${t('clients.endpoints')}</th>
+                                    <th>${t('clients.ip')}</th>
+                                    <th>${t('clients.lastSeen')}</th>
+                                    <th>${t('clients.requests')}</th>
+                                    <th>${t('clients.inputTokens')}</th>
+                                    <th>${t('clients.outputTokens')}</th>
+                                    <th>${t('clients.endpoints')}</th>
                                 </tr>
                             </thead>
                             <tbody id="clientsTableBody">
                             </tbody>
                         </table>
                     </div>
-                    <div id="clientsEmptyState" class="empty-state" style="display: none; text-align: center; padding: 40px;">
+                    <div id="clientsEmptyState" class="empty-state" style="display: none;">
                         <p>${t('clients.noClients')}</p>
                     </div>
                 </div>
