@@ -3738,40 +3738,42 @@ body {
     flex: 1;
 }
 
-/* Interactions Controls */
-.interactions-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+/* Interactions Toolbar */
+.interactions-toolbar {
     margin-bottom: 20px;
-    gap: 15px;
-    flex-wrap: wrap;
 }
 
-.interactions-controls-left {
+.interactions-filters {
     display: flex;
+    justify-content: flex-start;
     align-items: center;
     gap: 15px;
+    padding: 20px;
+    background: var(--bg-secondary, #f5f7fa);
+    border-radius: 8px;
 }
 
-.interactions-controls-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.interactions-toggle {
+.interactions-filters .toggle-label {
     display: flex;
     align-items: center;
     gap: 8px;
-}
-
-.interactions-toggle label {
     font-size: 14px;
     color: var(--text-secondary, #666);
+    cursor: pointer;
+    user-select: none;
 }
 
-.interactions-date-select {
+.interactions-filters .toggle-label input[type="checkbox"] {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+}
+
+.interactions-filters .toggle-label span {
+    white-space: nowrap;
+}
+
+.interactions-filters select {
     padding: 8px 12px;
     border: 1px solid var(--border-color, #ddd);
     border-radius: 6px;
@@ -3780,12 +3782,31 @@ body {
     font-size: 14px;
     cursor: pointer;
     min-width: 150px;
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.interactions-date-select:focus {
+.interactions-filters select:focus {
     outline: none;
     border-color: var(--primary-color, #667eea);
     box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.interactions-filters select:hover {
+    border-color: var(--primary-color, #667eea);
+}
+
+.interactions-filters .btn {
+    padding: 8px 16px;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+/* Interactions Hint */
+.interactions-hint {
+    margin-top: 15px;
+    font-size: 13px;
+    color: var(--text-tertiary, #999);
+    text-align: center;
 }
 
 /* Interactions Table */
