@@ -22,6 +22,22 @@ import (
 // so the request can be retried with a different endpoint
 var ErrStreamRetryable = errors.New("stream failed before response sent, retryable")
 
+// isClientDisconnectError checks if the error indicates client disconnection
+// This is normal behavior when user cancels request or client times out
+func isClientDisconnectError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	// Linux/Mac: broken pipe, connection reset by peer
+	// Windows: wsasend abort, connection was aborted
+	return strings.Contains(errStr, "broken pipe") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "wsasend") ||
+		strings.Contains(errStr, "connection was aborted") ||
+		strings.Contains(errStr, "An established connection was aborted")
+}
+
 // handleStreamingResponse processes streaming SSE responses
 // Returns error for upstream/server-side errors (not client disconnection)
 // Returns ErrStreamRetryable if stream fails before response headers are sent (can retry with different endpoint)
@@ -156,13 +172,12 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 				sendHeaders()
 
 				if _, writeErr := w.Write(transformedEvent); writeErr != nil {
-					// Client disconnected (broken pipe/connection reset) is normal, not an endpoint error
-					if strings.Contains(writeErr.Error(), "broken pipe") || strings.Contains(writeErr.Error(), "connection reset") {
-						logger.Debug("[%s] Client disconnected: %v", endpoint.Name, writeErr)
+					// Client disconnected - this is normal, not an endpoint error
+					// Common patterns: broken pipe (Linux/Mac), connection reset, wsasend abort (Windows)
+					if isClientDisconnectError(writeErr) {
+						logger.Info("[%s] 客户端已断开连接（可能是用户取消或超时）", endpoint.Name)
 					} else {
-						// Other write errors (wsasend abort, etc.) are server-side errors
-						logger.Error("[%s] Failed to write transformed event: %v", endpoint.Name, writeErr)
-						streamErr = writeErr
+						logger.Warn("[%s] 写入响应失败: %v", endpoint.Name, writeErr)
 					}
 					streamDone = true
 					break
@@ -174,13 +189,19 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 	}
 
 	if err := scanner.Err(); err != nil {
-		logger.Error("[%s] Scanner error: %v", endpoint.Name, err)
 		// If headers not sent yet, this error is retryable
 		if !headersSent {
+			logger.Warn("[%s] 读取上游响应失败: %v", endpoint.Name, err)
 			resp.Body.Close()
 			return transformer.TokenUsageDetail{}, "", nil, nil, ErrStreamRetryable
 		}
-		streamErr = err
+		// After headers sent, check if it's client disconnect
+		if isClientDisconnectError(err) {
+			logger.Info("[%s] 客户端已断开连接（可能是用户取消或超时）", endpoint.Name)
+		} else {
+			logger.Warn("[%s] 流式传输读取错误: %v", endpoint.Name, err)
+			streamErr = err
+		}
 	}
 
 	resp.Body.Close()

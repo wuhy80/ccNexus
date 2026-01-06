@@ -697,7 +697,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 			// Handle non-retryable streaming errors (after response headers sent)
 			if streamErr != nil {
-				logger.Error("[%s] Streaming completed with error: %v", endpoint.Name, streamErr)
+				logger.Warn("[%s] 流式传输异常结束: %v", endpoint.Name, streamErr)
 				p.stats.RecordError(endpoint.Name, string(clientType))
 				durationMs := time.Since(requestStartTime).Milliseconds()
 				p.stats.RecordRequestStat(&RequestStatRecord{
