@@ -4,7 +4,7 @@ import { t } from '../i18n/index.js';
 let chartInstance = null;
 let currentGranularity = '5min';
 let currentPeriod = 'daily';
-let currentChartType = 'line';  // 'line' | 'bar'
+let currentChartType = 'bar';  // 'line' | 'bar'
 let customStartTime = null;     // null means auto, otherwise "HH:MM"
 let customEndTime = null;       // null means auto, otherwise "HH:MM"
 let dataRange = null;           // Store data range info from backend

@@ -421,45 +421,60 @@ func (s *StatsService) aggregateByMinutes(requests []storage.RequestStat, startD
 
 // calculateEffectiveTimeRange calculates the effective time range for display
 // If startTime/endTime are provided, use them; otherwise auto-calculate based on data
+// Default range is 9:00~18:00, expanded by hour if data exists outside this range
 func calculateEffectiveTimeRange(startTime, endTime, firstRequest, lastRequest string, intervalMinutes int) (string, string) {
-	// Default to full day if no data
-	if firstRequest == "" || lastRequest == "" {
-		if startTime != "" && endTime != "" {
-			return startTime, endTime
-		}
-		return "00:00", "24:00"
+	// Default time range: 9:00 ~ 18:00
+	defaultStart := 9 * 60   // 9:00 in minutes
+	defaultEnd := 18 * 60    // 18:00 in minutes
+
+	// If custom time range is specified, use it directly
+	if startTime != "" && endTime != "" {
+		return startTime, endTime
 	}
 
-	var effectiveStart, effectiveEnd string
+	// If no data, return default range
+	if firstRequest == "" || lastRequest == "" {
+		if startTime != "" {
+			return startTime, minutesToTimeString(defaultEnd)
+		}
+		if endTime != "" {
+			return minutesToTimeString(defaultStart), endTime
+		}
+		return minutesToTimeString(defaultStart), minutesToTimeString(defaultEnd)
+	}
 
-	// Calculate auto start: max(00:00, firstRequest - 5min), rounded down to interval
+	var effectiveStart, effectiveEnd int
+
+	// Calculate effective start
 	if startTime == "" {
 		firstMinutes := parseTimeToMinutes(firstRequest)
-		autoStartMinutes := firstMinutes - 5
-		if autoStartMinutes < 0 {
-			autoStartMinutes = 0
+		// Start with default, expand by hour if data is earlier
+		effectiveStart = defaultStart
+		if firstMinutes < defaultStart {
+			// Round down to hour boundary
+			effectiveStart = (firstMinutes / 60) * 60
 		}
-		// Round down to interval
-		autoStartMinutes = (autoStartMinutes / intervalMinutes) * intervalMinutes
-		effectiveStart = minutesToTimeString(autoStartMinutes)
 	} else {
-		effectiveStart = startTime
+		effectiveStart = parseTimeToMinutes(startTime)
 	}
 
-	// Calculate auto end: lastRequest rounded up to next interval
+	// Calculate effective end
 	if endTime == "" {
 		lastMinutes := parseTimeToMinutes(lastRequest)
-		// Round up to next interval
-		autoEndMinutes := ((lastMinutes / intervalMinutes) + 1) * intervalMinutes
-		if autoEndMinutes > 24*60 {
-			autoEndMinutes = 24 * 60
+		// Start with default, expand by hour if data is later
+		effectiveEnd = defaultEnd
+		if lastMinutes >= defaultEnd {
+			// Round up to next hour boundary
+			effectiveEnd = ((lastMinutes / 60) + 1) * 60
+			if effectiveEnd > 24*60 {
+				effectiveEnd = 24 * 60
+			}
 		}
-		effectiveEnd = minutesToTimeString(autoEndMinutes)
 	} else {
-		effectiveEnd = endTime
+		effectiveEnd = parseTimeToMinutes(endTime)
 	}
 
-	return effectiveStart, effectiveEnd
+	return minutesToTimeString(effectiveStart), minutesToTimeString(effectiveEnd)
 }
 
 // generateTimeSlotsInRange generates time slot labels for a given time range
