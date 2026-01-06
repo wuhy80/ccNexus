@@ -230,11 +230,11 @@ export default {
         noData: 'No data available',
         loadFailed: 'Failed to load data',
         avgDuration: 'Avg Duration',
-        requestLatency: 'Request Latency',
-        avgOutputSpeed: 'Avg Output Speed',
-        generationSpeed: 'Generation Speed',
+        requestLatency: 'Latency',
+        avgOutputSpeed: 'Output Speed',
+        generationSpeed: 'Generation',
         duration: 'Duration',
-        outputTokensPerSec: 'Output Speed (tok/s)'
+        outputTokensPerSec: 'tok/s'
     },
     chart: {
         minutes: 'min',

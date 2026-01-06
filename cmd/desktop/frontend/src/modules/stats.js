@@ -163,13 +163,13 @@ async function loadPerformanceMetrics(period = 'daily') {
 
         if (avgDurationEl && overall) {
             avgDurationEl.textContent = overall.avgDurationMs > 0
-                ? `${overall.avgDurationMs.toFixed(0)}ms`
+                ? `${(overall.avgDurationMs / 1000).toFixed(1)}s`
                 : '-';
         }
 
         if (outputTokensPerSecEl && overall) {
             outputTokensPerSecEl.textContent = overall.outputTokensPerSec > 0
-                ? `${overall.outputTokensPerSec.toFixed(1)} tok/s`
+                ? `${overall.outputTokensPerSec.toFixed(1)}`
                 : '-';
         }
 

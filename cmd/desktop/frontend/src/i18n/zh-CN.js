@@ -230,11 +230,11 @@ export default {
         noData: '暂无数据',
         loadFailed: '加载数据失败',
         avgDuration: '平均时长',
-        requestLatency: '请求延迟',
-        avgOutputSpeed: '平均输出速度',
-        generationSpeed: '生成速度',
+        requestLatency: '延迟',
+        avgOutputSpeed: '输出速度',
+        generationSpeed: '生成',
         duration: '时长',
-        outputTokensPerSec: '输出速度 (tok/s)'
+        outputTokensPerSec: 'tok/s'
     },
     chart: {
         minutes: '分钟',
