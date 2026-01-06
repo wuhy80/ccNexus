@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lich0821/ccNexus/internal/config"
+	"github.com/lich0821/ccNexus/internal/interaction"
 	"github.com/lich0821/ccNexus/internal/logger"
 )
 
@@ -46,6 +47,7 @@ type Proxy struct {
 	endpointCancel   map[string]context.CancelFunc // cancel functions per endpoint
 	ctxMu            sync.RWMutex                 // protects context maps
 	onEndpointSuccess func(endpointName string, clientType string)   // callback when endpoint request succeeds
+	interactionStorage *interaction.Storage       // interaction recording storage
 }
 
 // New creates a new Proxy instance
@@ -66,6 +68,11 @@ func New(cfg *config.Config, statsStorage StatsStorage, deviceID string) *Proxy 
 // SetOnEndpointSuccess sets the callback for successful endpoint requests
 func (p *Proxy) SetOnEndpointSuccess(callback func(endpointName string, clientType string)) {
 	p.onEndpointSuccess = callback
+}
+
+// SetInteractionStorage sets the interaction storage for recording requests/responses
+func (p *Proxy) SetInteractionStorage(storage *interaction.Storage) {
+	p.interactionStorage = storage
 }
 
 // Start starts the proxy server
@@ -489,12 +496,38 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 	logger.DebugLog("Method: %s, Path: %s, ClientType: %s, ClientFormat: %s", r.Method, r.URL.Path, clientType, clientFormat)
 	logger.DebugLog("Request Body: %s", string(bodyBytes))
 
+	// Create interaction record for logging
+	var interactionRecord *interaction.Record
+	if p.interactionStorage != nil && p.interactionStorage.IsEnabled() {
+		var rawReq interface{}
+		json.Unmarshal(bodyBytes, &rawReq)
+
+		interactionRecord = &interaction.Record{
+			RequestID: interaction.GenerateRequestID(),
+			Timestamp: requestStartTime,
+			Client: interaction.ClientInfo{
+				Type:   string(clientType),
+				Format: string(clientFormat),
+				IP:     clientIP,
+			},
+			Request: interaction.RequestData{
+				Path: r.URL.Path,
+				Raw:  rawReq,
+			},
+		}
+	}
+
 	var streamReq struct {
 		Model    string      `json:"model"`
 		Thinking interface{} `json:"thinking"`
 		Stream   bool        `json:"stream"`
 	}
 	json.Unmarshal(bodyBytes, &streamReq)
+
+	// Set model in interaction record
+	if interactionRecord != nil {
+		interactionRecord.Request.Model = streamReq.Model
+	}
 
 	endpoints := p.getEnabledEndpointsForClient(clientType)
 	if len(endpoints) == 0 {
@@ -580,6 +613,17 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		logger.DebugLog("[%s] Transformer: %s", endpoint.Name, transformerName)
 		logger.DebugLog("[%s] Transformed Request: %s", endpoint.Name, string(transformedBody))
 
+		// Record transformed request in interaction record
+		if interactionRecord != nil {
+			var transformedReq interface{}
+			json.Unmarshal(transformedBody, &transformedReq)
+			interactionRecord.Request.Transformed = transformedReq
+			interactionRecord.Endpoint = interaction.EndpointInfo{
+				Name:        endpoint.Name,
+				Transformer: transformerName,
+			}
+		}
+
 		cleanedBody, err := cleanIncompleteToolCalls(transformedBody)
 		if err != nil {
 			logger.Warn("[%s] Failed to clean tool calls: %v", endpoint.Name, err)
@@ -624,7 +668,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		isStreaming := contentType == "text/event-stream" || (streamReq.Stream && strings.Contains(contentType, "text/event-stream"))
 
 		if resp.StatusCode == http.StatusOK && isStreaming {
-			usage, outputText, streamErr := p.handleStreamingResponse(w, resp, endpoint, trans, transformerName, thinkingEnabled, streamReq.Model, bodyBytes, clientType)
+			usage, outputText, rawEvents, transformedEvents, streamErr := p.handleStreamingResponse(w, resp, endpoint, trans, transformerName, thinkingEnabled, streamReq.Model, bodyBytes, clientType)
 
 			// Handle retryable streaming errors (before response headers sent)
 			if errors.Is(streamErr, ErrStreamRetryable) {
@@ -670,6 +714,27 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 					Success:             false,
 					DurationMs:          durationMs,
 				})
+
+				// Save interaction record (with error)
+				if interactionRecord != nil {
+					interactionRecord.Response = interaction.ResponseData{
+						Status:      resp.StatusCode,
+						Raw:         rawEvents,
+						Transformed: transformedEvents,
+					}
+					interactionRecord.Stats = interaction.StatsData{
+						DurationMs:          time.Since(requestStartTime).Milliseconds(),
+						IsStreaming:         true,
+						InputTokens:         usage.InputTokens,
+						CacheCreationTokens: usage.CacheCreationInputTokens,
+						CacheReadTokens:     usage.CacheReadInputTokens,
+						OutputTokens:        usage.OutputTokens,
+						Success:             false,
+						ErrorMessage:        streamErr.Error(),
+					}
+					go p.interactionStorage.Save(interactionRecord)
+				}
+
 				p.markRequestInactive(endpoint.Name)
 				// Cannot retry: HTTP headers already sent to client
 				return
@@ -692,6 +757,25 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 				DurationMs:          durationMs,
 			})
 
+			// Save interaction record (success)
+			if interactionRecord != nil {
+				interactionRecord.Response = interaction.ResponseData{
+					Status:      resp.StatusCode,
+					Raw:         rawEvents,
+					Transformed: transformedEvents,
+				}
+				interactionRecord.Stats = interaction.StatsData{
+					DurationMs:          time.Since(requestStartTime).Milliseconds(),
+					IsStreaming:         true,
+					InputTokens:         usage.InputTokens,
+					CacheCreationTokens: usage.CacheCreationInputTokens,
+					CacheReadTokens:     usage.CacheReadInputTokens,
+					OutputTokens:        usage.OutputTokens,
+					Success:             true,
+				}
+				go p.interactionStorage.Save(interactionRecord)
+			}
+
 			p.markRequestInactive(endpoint.Name)
 			if p.onEndpointSuccess != nil {
 				p.onEndpointSuccess(endpoint.Name, string(clientType))
@@ -701,7 +785,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if resp.StatusCode == http.StatusOK {
-			usage, err := p.handleNonStreamingResponse(w, resp, endpoint, trans)
+			usage, rawResp, transformedResp, err := p.handleNonStreamingResponse(w, resp, endpoint, trans)
 			if err == nil {
 				// Fallback: estimate tokens when usage is 0
 				if usage.TotalInputTokens() == 0 {
@@ -732,6 +816,25 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 					Success:             true,
 					DurationMs:          durationMs,
 				})
+
+				// Save interaction record (success)
+				if interactionRecord != nil {
+					interactionRecord.Response = interaction.ResponseData{
+						Status:      resp.StatusCode,
+						Raw:         rawResp,
+						Transformed: transformedResp,
+					}
+					interactionRecord.Stats = interaction.StatsData{
+						DurationMs:          time.Since(requestStartTime).Milliseconds(),
+						IsStreaming:         false,
+						InputTokens:         usage.InputTokens,
+						CacheCreationTokens: usage.CacheCreationInputTokens,
+						CacheReadTokens:     usage.CacheReadInputTokens,
+						OutputTokens:        usage.OutputTokens,
+						Success:             true,
+					}
+					go p.interactionStorage.Save(interactionRecord)
+				}
 
 				p.markRequestInactive(endpoint.Name)
 				if p.onEndpointSuccess != nil {

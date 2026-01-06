@@ -15,6 +15,16 @@ import { showDailyDetailsModal, closeDailyDetailsModal, changeDetailsPageSize, l
 import { showSettingsModal, closeSettingsModal, saveSettings, applyTheme, initTheme, showAutoThemeConfigModal, closeAutoThemeConfigModal, saveAutoThemeConfig } from './modules/settings.js'
 import { initBroadcast } from './modules/broadcast.js'
 import {
+    showInteractionsModal,
+    closeInteractionsModal,
+    toggleInteractionEnabled,
+    changeInteractionDate,
+    showInteractionDetail,
+    closeInteractionDetailModal,
+    switchDetailTab,
+    exportInteractions
+} from './modules/interactions.js'
+import {
     showAddEndpointModal,
     editEndpoint,
     saveEndpoint,
@@ -225,3 +235,13 @@ window.closeDailyDetailsModal = closeDailyDetailsModal;
 window.changeDetailsPageSize = changeDetailsPageSize;
 window.loadPreviousDetailsPage = loadPreviousDetailsPage;
 window.loadNextDetailsPage = loadNextDetailsPage;
+
+// Interactions modal functions
+window.showInteractionsModal = showInteractionsModal;
+window.closeInteractionsModal = closeInteractionsModal;
+window.toggleInteractionEnabled = toggleInteractionEnabled;
+window.changeInteractionDate = changeInteractionDate;
+window.showInteractionDetail = showInteractionDetail;
+window.closeInteractionDetailModal = closeInteractionDetailModal;
+window.switchDetailTab = switchDetailTab;
+window.exportInteractions = exportInteractions;

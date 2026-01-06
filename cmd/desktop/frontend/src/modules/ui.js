@@ -401,6 +401,9 @@ export function initUI() {
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-secondary" onclick="window.showInteractionsModal()">
+                            📝 ${t('interactions.viewInteractions')}
+                        </button>
                         <button class="btn btn-secondary" onclick="window.showConnectedClientsModal()">
                             👥 ${t('clients.viewClients')}
                         </button>
@@ -864,6 +867,91 @@ export function initUI() {
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-primary" onclick="window.closeConnectedClientsModal()">${t('clients.close')}</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactions Modal -->
+        <div id="interactionsModal" class="modal">
+            <div class="modal-content modal-xl">
+                <div class="modal-header">
+                    <h2>📝 ${t('interactions.title')}</h2>
+                    <button class="modal-close" onclick="window.closeInteractionsModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="interactions-toolbar">
+                        <div class="interactions-filters">
+                            <label class="toggle-label">
+                                <input type="checkbox" id="interactionEnabledToggle" onchange="window.toggleInteractionEnabled()">
+                                <span>${t('interactions.enableRecording')}</span>
+                            </label>
+                            <select id="interactionDateSelect" onchange="window.changeInteractionDate()">
+                                <option value="">${t('interactions.selectDate')}</option>
+                            </select>
+                            <button class="btn btn-secondary" onclick="window.exportInteractions()">
+                                📥 ${t('interactions.export')}
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                  <table id="interactionsTable" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>${t('interactions.time')}</th>
+                                    <th>${t('interactions.endpoint')}</th>
+                                    <th>${t('interactions.client')}</th>
+                                    <th>${t('interactions.model')}</th>
+                                    <th>${t('interactions.inputTokens')}</th>
+                                    <th>${t('interactions.outputTokens')}</th>
+                                    <th>${t('interactions.duration')}</th>
+                                    <th>${t('interactions.status')}</th>
+                                    <th>${t('interactions.actions')}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="9" class="empty-message">${t('interactions.noData')}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="interactions-hint">${t('interactions.retention')}</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" onclick="window.closeInteractionsModal()">${t('interactions.close')}</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interaction Detail Modal -->
+        <div id="interactionDetailModal" class="modal">
+            <div class="modal-content modal-xl">
+                <div class="modal-header">
+                    <h2>🔍 ${t('interactions.detailTitle')}</h2>
+                    <button class="modal-close" onclick="window.closeInteractionDetailModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="interactionDetailMeta" class="interaction-meta"></div>
+                    <div class="interaction-tabs">
+                        <button class="interaction-tab-btn active" data-tab="request-raw" onclick="window.switchDetailTab('request-raw')">
+                            ${t('interactions.requestRaw')}
+                        </button>
+                        <button class="interaction-tab-btn" data-tab="request-transformed" onclick="window.switchDetailTab('request-transformed')">
+                            ${t('interactions.requestTransformed')}
+                        </button>
+                        <button class="interaction-tab-btn" data-tab="response-raw" onclick="window.switchDetailTab('response-raw')">
+                            ${t('interactions.responseRaw')}
+                        </button>
+                        <button class="interaction-tab-btn" data-tab="response-transformed" onclick="window.switchDetailTab('response-transformed')">
+                            ${t('interactions.responseTransformed')}
+                        </button>
+                    </div>
+                    <div id="interactionDetailContent" class="interaction-content">
+                        <pre class="json-viewer"></pre>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" onclick="window.closeInteractionDetailModal()">${t('interactions.close')}</button>
                 </div>
             </div>
         </div>

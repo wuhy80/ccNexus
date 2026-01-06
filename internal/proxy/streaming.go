@@ -25,12 +25,13 @@ var ErrStreamRetryable = errors.New("stream failed before response sent, retryab
 // handleStreamingResponse processes streaming SSE responses
 // Returns error for upstream/server-side errors (not client disconnection)
 // Returns ErrStreamRetryable if stream fails before response headers are sent (can retry with different endpoint)
-func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Response, endpoint config.Endpoint, trans transformer.Transformer, transformerName string, thinkingEnabled bool, modelName string, bodyBytes []byte, clientType ClientType) (transformer.TokenUsageDetail, string, error) {
+// Returns: usage, outputText, rawEvents, transformedEvents, error
+func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Response, endpoint config.Endpoint, trans transformer.Transformer, transformerName string, thinkingEnabled bool, modelName string, bodyBytes []byte, clientType ClientType) (transformer.TokenUsageDetail, string, []interface{}, []interface{}, error) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		logger.Error("[%s] ResponseWriter does not support flushing", endpoint.Name)
 		resp.Body.Close()
-		return transformer.TokenUsageDetail{}, "", ErrStreamRetryable
+		return transformer.TokenUsageDetail{}, "", nil, nil, ErrStreamRetryable
 	}
 
 	// Handle gzip-encoded response body
@@ -40,7 +41,7 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 		if err != nil {
 			logger.Error("[%s] Failed to create gzip reader: %v", endpoint.Name, err)
 			resp.Body.Close()
-			return transformer.TokenUsageDetail{}, "", ErrStreamRetryable
+			return transformer.TokenUsageDetail{}, "", nil, nil, ErrStreamRetryable
 		}
 		defer gzipReader.Close()
 		reader = gzipReader
@@ -69,6 +70,8 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 	var buffer bytes.Buffer
 	var outputText strings.Builder
 	var streamErr error // Track upstream/server-side errors
+	var rawEvents []interface{}
+	var transformedEvents []interface{}
 	eventCount := 0
 	streamDone := false
 	headersSent := false // Track if we've sent response headers to client
@@ -106,9 +109,16 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 			eventData := buffer.Bytes()
 			logger.DebugLog("[%s] SSE Event #%d (Original): %s", endpoint.Name, eventCount+1, string(eventData))
 
+			// Collect raw event for interaction recording
+			rawEvents = append(rawEvents, map[string]interface{}{"done": true})
+
 			transformedEvent, err := p.transformStreamEvent(eventData, trans, transformerName, streamCtx)
 			if err == nil && len(transformedEvent) > 0 {
 				logger.DebugLog("[%s] SSE Event #%d (Transformed): %s", endpoint.Name, eventCount+1, string(transformedEvent))
+
+				// Collect transformed event for interaction recording
+				transformedEvents = append(transformedEvents, map[string]interface{}{"done": true})
+
 				sendHeaders()
 				w.Write(transformedEvent)
 				flusher.Flush()
@@ -123,11 +133,21 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 			eventData := buffer.Bytes()
 			logger.DebugLog("[%s] SSE Event #%d (Original): %s", endpoint.Name, eventCount, string(eventData))
 
+			// Parse and collect raw event for interaction recording
+			if rawEvent := p.parseSSEEvent(eventData); rawEvent != nil {
+				rawEvents = append(rawEvents, rawEvent)
+			}
+
 			transformedEvent, err := p.transformStreamEvent(eventData, trans, transformerName, streamCtx)
 			if err != nil {
 				logger.Error("[%s] Failed to transform SSE event: %v", endpoint.Name, err)
 			} else if len(transformedEvent) > 0 {
 				logger.DebugLog("[%s] SSE Event #%d (Transformed): %s", endpoint.Name, eventCount, string(transformedEvent))
+
+				// Parse and collect transformed event for interaction recording
+				if transEvent := p.parseSSEEvent(transformedEvent); transEvent != nil {
+					transformedEvents = append(transformedEvents, transEvent)
+				}
 
 				p.extractTokensFromEvent(transformedEvent, &usage)
 				p.extractTextFromEvent(transformedEvent, &outputText)
@@ -158,7 +178,7 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 		// If headers not sent yet, this error is retryable
 		if !headersSent {
 			resp.Body.Close()
-			return transformer.TokenUsageDetail{}, "", ErrStreamRetryable
+			return transformer.TokenUsageDetail{}, "", nil, nil, ErrStreamRetryable
 		}
 		streamErr = err
 	}
@@ -169,10 +189,10 @@ func (p *Proxy) handleStreamingResponse(w http.ResponseWriter, resp *http.Respon
 	// and no other error occurred, this is a retryable situation
 	if !headersSent && streamErr == nil {
 		logger.Warn("[%s] Stream ended without sending any data to client", endpoint.Name)
-		return transformer.TokenUsageDetail{}, "", ErrStreamRetryable
+		return transformer.TokenUsageDetail{}, "", nil, nil, ErrStreamRetryable
 	}
 
-	return usage, outputText.String(), streamErr
+	return usage, outputText.String(), rawEvents, transformedEvents, streamErr
 }
 
 // transformStreamEvent transforms a single SSE event
@@ -276,4 +296,27 @@ func decompressGzip(body io.ReadCloser) ([]byte, error) {
 	}
 	defer gzipReader.Close()
 	return io.ReadAll(gzipReader)
+}
+
+// parseSSEEvent parses SSE event data and returns the JSON object
+func (p *Proxy) parseSSEEvent(eventData []byte) interface{} {
+	scanner := bufio.NewScanner(bytes.NewReader(eventData))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+
+		jsonData := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if jsonData == "[DONE]" {
+			return map[string]interface{}{"done": true}
+		}
+
+		var event interface{}
+		if err := json.Unmarshal([]byte(jsonData), &event); err != nil {
+			continue
+		}
+		return event
+	}
+	return nil
 }

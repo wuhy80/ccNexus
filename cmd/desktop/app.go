@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/lich0821/ccNexus/internal/config"
+	"github.com/lich0821/ccNexus/internal/interaction"
 	"github.com/lich0821/ccNexus/internal/logger"
 	"github.com/lich0821/ccNexus/internal/proxy"
 	"github.com/lich0821/ccNexus/internal/service"
@@ -47,13 +48,17 @@ type App struct {
 	trayIcon []byte
 
 	// Services
-	stats    *service.StatsService
-	endpoint *service.EndpointService
-	settings *service.SettingsService
-	webdav   *service.WebDAVService
-	backup   *service.BackupService
-	archive  *service.ArchiveService
-	client   *service.ClientService
+	stats       *service.StatsService
+	endpoint    *service.EndpointService
+	settings    *service.SettingsService
+	webdav      *service.WebDAVService
+	backup      *service.BackupService
+	archive     *service.ArchiveService
+	client      *service.ClientService
+	interaction *service.InteractionService
+
+	// Interaction storage
+	interactionStorage *interaction.Storage
 }
 
 // NewApp creates a new App application struct
@@ -152,6 +157,27 @@ func (a *App) startup(ctx context.Context) {
 	a.backup = service.NewBackupService(a.config, a.storage, version, a.webdav)
 	a.archive = service.NewArchiveService(a.storage)
 	a.client = service.NewClientService(a.storage)
+
+	// Initialize interaction storage and service
+	exePath, err := os.Executable()
+	if err != nil {
+		logger.Warn("Failed to get executable path: %v", err)
+		exePath = "."
+	}
+	interactionsDir := filepath.Join(filepath.Dir(exePath), "interactions")
+	a.interactionStorage = interaction.NewStorage(interactionsDir)
+	a.interaction = service.NewInteractionService(a.interactionStorage)
+	a.proxy.SetInteractionStorage(a.interactionStorage)
+
+	// Cleanup old interactions (30 days retention)
+	go func() {
+		deleted, err := a.interactionStorage.Cleanup(30)
+		if err != nil {
+			logger.Warn("Failed to cleanup old interactions: %v", err)
+		} else if deleted > 0 {
+			logger.Info("Cleaned up %d old interaction folders", deleted)
+		}
+	}()
 
 	a.initTray()
 
@@ -515,4 +541,38 @@ func (a *App) GenerateMockArchives(monthsCount int) string {
 
 func (a *App) GetConnectedClients(hoursAgo int) string {
 	return a.client.GetConnectedClients(hoursAgo)
+}
+
+// ========== Interaction Bindings ==========
+
+func (a *App) GetInteractionEnabled() string {
+	return a.interaction.GetEnabled()
+}
+
+func (a *App) SetInteractionEnabled(enabled bool) string {
+	return a.interaction.SetEnabled(enabled)
+}
+
+func (a *App) GetInteractionDates() string {
+	return a.interaction.GetDates()
+}
+
+func (a *App) GetInteractions(date string) string {
+	return a.interaction.GetInteractions(date)
+}
+
+func (a *App) GetInteractionDetail(date, requestID string) string {
+	return a.interaction.GetInteractionDetail(date, requestID)
+}
+
+func (a *App) ExportInteractions(date string) string {
+	return a.interaction.ExportInteractions(date)
+}
+
+func (a *App) CleanupInteractions(daysToKeep int) string {
+	return a.interaction.Cleanup(daysToKeep)
+}
+
+func (a *App) GetInteractionStoragePath() string {
+	return a.interaction.GetStoragePath()
 }
