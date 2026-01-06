@@ -278,8 +278,8 @@ body {
 }
 
 .stats-compact-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 10px;
 }
 
@@ -296,6 +296,9 @@ body {
     justify-content: space-between;
     gap: 12px;
     text-align: left;
+    flex: 1 1 auto;
+    min-width: 140px;
+    max-width: 220px;
 }
 
 .stat-box-compact:hover {
@@ -373,12 +376,6 @@ body {
 @media (max-width: 1200px) {
     .chart-container {
         height: 280px;
-    }
-}
-
-@media (max-width: 768px) {
-    .stats-compact-grid {
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     }
 }
 
