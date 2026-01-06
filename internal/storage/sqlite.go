@@ -1495,14 +1495,41 @@ func (s *SQLiteStorage) GetConnectedClients(hoursAgo int) ([]ClientStats, error)
 	var clients []ClientStats
 	for rows.Next() {
 		var c ClientStats
+		var lastSeenStr string
 		var endpointsStr sql.NullString
 		if err := rows.Scan(
-			&c.ClientIP, &c.LastSeen, &c.RequestCount,
+			&c.ClientIP, &lastSeenStr, &c.RequestCount,
 			&c.InputTokens, &c.CacheCreationTokens, &c.CacheReadTokens, &c.OutputTokens,
 			&endpointsStr,
 		); err != nil {
 			return nil, err
 		}
+
+		// Parse last_seen time from SQLite string format
+		if lastSeenStr != "" {
+			// Try parsing with common SQLite datetime formats
+			formats := []string{
+				"2006-01-02 15:04:05",           // SQLite default DATETIME format
+				"2006-01-02T15:04:05Z",          // ISO 8601 UTC
+				"2006-01-02T15:04:05.999999999", // With nanoseconds
+				time.RFC3339,                    // RFC3339 format
+			}
+
+			var parseErr error
+			for _, format := range formats {
+				c.LastSeen, parseErr = time.Parse(format, lastSeenStr)
+				if parseErr == nil {
+					break
+				}
+			}
+			// If all formats fail, use current time as fallback
+			if parseErr != nil {
+				c.LastSeen = time.Now()
+			}
+		} else {
+			c.LastSeen = time.Now()
+		}
+
 		if endpointsStr.Valid && endpointsStr.String != "" {
 			c.EndpointsUsed = strings.Split(endpointsStr.String, ",")
 		} else {
