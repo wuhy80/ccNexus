@@ -166,7 +166,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	interactionsDir := filepath.Join(filepath.Dir(exePath), "interactions")
 	a.interactionStorage = interaction.NewStorage(interactionsDir)
-	a.interaction = service.NewInteractionService(a.interactionStorage)
+	a.interaction = service.NewInteractionService(a.interactionStorage, a.storage)
 	a.proxy.SetInteractionStorage(a.interactionStorage)
 
 	// Cleanup old interactions (30 days retention)

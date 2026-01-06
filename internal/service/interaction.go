@@ -2,20 +2,34 @@ package service
 
 import (
 	"encoding/json"
+	"strconv"
 
 	"github.com/lich0821/ccNexus/internal/interaction"
+	"github.com/lich0821/ccNexus/internal/storage"
 )
 
 // InteractionService 交互记录服务
 type InteractionService struct {
-	storage *interaction.Storage
+	storage    *interaction.Storage
+	sqlStorage *storage.SQLiteStorage
 }
 
 // NewInteractionService 创建交互服务实例
-func NewInteractionService(storage *interaction.Storage) *InteractionService {
-	return &InteractionService{
-		storage: storage,
+func NewInteractionService(interactionStorage *interaction.Storage, sqlStorage *storage.SQLiteStorage) *InteractionService {
+	s := &InteractionService{
+		storage:    interactionStorage,
+		sqlStorage: sqlStorage,
 	}
+
+	// 从数据库加载 enabled 状态
+	if enabledStr, err := sqlStorage.GetConfig("interaction_enabled"); err == nil && enabledStr != "" {
+		if enabled, err := strconv.ParseBool(enabledStr); err == nil {
+			interactionStorage.SetEnabled(enabled)
+		}
+	}
+	// 如果数据库中没有配置，使用 Storage 的默认值（true）
+
+	return s
 }
 
 // GetEnabled 获取交互记录是否启用
@@ -32,6 +46,17 @@ func (s *InteractionService) GetEnabled() string {
 // SetEnabled 设置交互记录是否启用
 func (s *InteractionService) SetEnabled(enabled bool) string {
 	s.storage.SetEnabled(enabled)
+
+	// 保存到数据库
+	if err := s.sqlStorage.SetConfig("interaction_enabled", strconv.FormatBool(enabled)); err != nil {
+		result := map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		}
+		data, _ := json.Marshal(result)
+		return string(data)
+	}
+
 	result := map[string]interface{}{
 		"success": true,
 		"enabled": enabled,
