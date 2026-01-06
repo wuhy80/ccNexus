@@ -1,0 +1,130 @@
+/* Endpoint Panel Styles */
+
+.endpoint-panel {
+    transition: all 0.3s ease;
+    overflow: visible;
+}
+
+.endpoint-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+}
+
+/* Responsive: single column on smaller screens */
+@media (max-width: 900px) {
+    .endpoint-list {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Endpoint Item */
+.endpoint-item {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: grab;
+    user-select: none;
+}
+
+.endpoint-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.endpoint-item:active {
+    cursor: grabbing;
+}
+
+/* Dragging state - semi-transparent with tilt effect and glow */
+.endpoint-item.dragging {
+    opacity: 0.6;
+    transform: rotate(3deg) scale(1.02);
+    box-shadow:
+        0 0 0 1px rgba(102, 126, 234, 0.4),
+        0 0 10px rgba(102, 126, 234, 0.5),
+        0 0 20px rgba(102, 126, 234, 0.3),
+        0 0 30px rgba(102, 126, 234, 0.2),
+        0 8px 24px rgba(0, 0, 0, 0.15);
+    cursor: grabbing;
+    z-index: 1000;
+    animation: dragGlow 2s ease-in-out infinite;
+}
+
+@keyframes dragGlow {
+    0%, 100% {
+        box-shadow:
+            0 0 0 1px rgba(102, 126, 234, 0.4),
+            0 0 10px rgba(102, 126, 234, 0.5),
+            0 0 20px rgba(102, 126, 234, 0.3),
+            0 0 30px rgba(102, 126, 234, 0.2),
+            0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+    50% {
+        box-shadow:
+            0 0 0 1px rgba(102, 126, 234, 0.6),
+            0 0 15px rgba(102, 126, 234, 0.7),
+            0 0 25px rgba(102, 126, 234, 0.5),
+            0 0 35px rgba(102, 126, 234, 0.3),
+            0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+}
+
+/* Drag over state - highlighted border */
+.endpoint-item.drag-over {
+    border: 2px dashed #667eea;
+    background: rgba(102, 126, 234, 0.05);
+    transform: translateY(-2px);
+}
+
+/* Endpoint Info */
+.endpoint-info {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.endpoint-info p {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.endpoint-info h3 {
+    min-width: 0;
+    max-width: 100%;
+    font-size: 16px;
+    margin-bottom: 5px;
+    color: #333;
+}
+
+.endpoint-info p {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 3px;
+}
+
+/* Endpoint Actions */
+.endpoint-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+    min-width: 60px;
+    flex-shrink: 0;
+}
+
+.endpoint-actions .toggle-switch {
+    width: 50px;
+    height: 24px;
+}
+
+.endpoint-actions .btn {
+    width: 100%;
+}
+

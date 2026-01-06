@@ -1,5 +1,4 @@
 import './style.css'
-import './styles/details.css'
 import './effects/festival-effects.css'
 import '../wailsjs/runtime/runtime.js'
 import { setLanguage } from './i18n/index.js'

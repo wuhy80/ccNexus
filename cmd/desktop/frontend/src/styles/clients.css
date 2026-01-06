@@ -1,0 +1,175 @@
+/* Client Type Selector */
+.client-type-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.client-type-selector label {
+    font-size: 14px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.client-type-selector select {
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-size: 14px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.client-type-selector select:hover {
+    border-color: var(--primary-color);
+}
+
+.client-type-selector select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+/* ============================================
+   连接的客户端表格样式
+   ============================================ */
+
+/* 客户端过滤器样式 */
+.clients-filters {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    margin-bottom: 0;
+}
+
+.clients-filters label {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.clients-filters select {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.clients-filters select:hover {
+    border-color: var(--primary-color);
+}
+
+.clients-filters select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* 表格包装器 */
+.clients-table-wrapper {
+    max-height: 500px;
+    overflow-y: auto;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    margin-top: 20px;
+}
+
+/* 客户端表格 */
+.clients-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card-bg);
+}
+
+.clients-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.clients-table th {
+    background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+    color: white;
+    padding: 14px 16px;
+    font-weight: 500;
+    font-size: 14px;
+    white-space: nowrap;
+    border: none;
+}
+
+.clients-table th:first-child {
+    border-top-left-radius: 8px;
+}
+
+.clients-table th:last-child {
+    border-top-right-radius: 8px;
+}
+
+.clients-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-light);
+    color: var(--text-primary);
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.clients-table tbody tr:hover {
+    background: var(--hover-bg);
+}
+
+.clients-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.clients-table code {
+    background: var(--bg-secondary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    color: var(--primary-color);
+}
+
+/* 列宽度优化 - 确保每列都有足够宽度，不会换行 */
+.clients-table th:nth-child(1),
+.clients-table td:nth-child(1) {
+    min-width: 140px; /* IP 地址 */
+}
+
+.clients-table th:nth-child(2),
+.clients-table td:nth-child(2) {
+    min-width: 150px; /* 最后连接时间 */
+}
+
+.clients-table th:nth-child(3),
+.clients-table td:nth-child(3) {
+    min-width: 100px; /* 请求次数 */
+    text-align: right;
+}
+
+.clients-table th:nth-child(4),
+.clients-table td:nth-child(4) {
+    min-width: 120px; /* 输入 Token */
+    text-align: right;
+}
+
+.clients-table th:nth-child(5),
+.clients-table td:nth-child(5) {
+    min-width: 120px; /* 输出 Token */
+    text-align: right;
+}
+
+.clients-table th:nth-child(6),
+.clients-table td:nth-child(6) {
+    min-width: 200px; /* 使用的端点 */
+}
+

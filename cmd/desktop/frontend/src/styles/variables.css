@@ -1,0 +1,20 @@
+/* CSS Variables - Light Theme (Default) */
+:root {
+    --bg-gradient-start: #667eea;
+    --bg-gradient-end: #764ba2;
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --bg-tertiary: #f3f4f6;
+    --text-primary: #333;
+    --text-secondary: #666;
+    --text-tertiary: #999;
+    --border-color: #ddd;
+    --border-light: #e0e0e0;
+    --card-bg: #ffffff;
+    --modal-bg: #ffffff;
+    --input-bg: #ffffff;
+    --hover-bg: #f8f9fa;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --primary-color: #667eea;
+    --primary-hover: #5568d3;
+}
