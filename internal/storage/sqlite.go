@@ -1323,11 +1323,23 @@ func (s *SQLiteStorage) RecordRequestStat(stat *RequestStat) error {
 			input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
 			model, is_streaming, success, device_id, duration_ms
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
-		stat.EndpointName, clientType, stat.ClientIP, stat.RequestID, stat.Timestamp, stat.Date,
-		stat.InputTokens, stat.CacheCreationTokens, stat.CacheReadTokens, stat.OutputTokens,
-		stat.Model, stat.IsStreaming, stat.Success, stat.DeviceID, stat.DurationMs,
+		stat.EndpointName,        // endpoint_name
+		clientType,               // client_type
+		stat.ClientIP,            // client_ip
+		stat.RequestID,           // request_id
+		stat.Timestamp,           // timestamp
+		stat.Date,                // date
+		stat.InputTokens,         // input_tokens
+		stat.CacheCreationTokens, // cache_creation_tokens
+		stat.CacheReadTokens,     // cache_read_tokens
+		stat.OutputTokens,        // output_tokens
+		stat.Model,               // model
+		stat.IsStreaming,         // is_streaming
+		stat.Success,             // success
+		stat.DeviceID,            // device_id
+		stat.DurationMs,          // duration_ms
 	)
 
 	return err

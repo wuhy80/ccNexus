@@ -296,9 +296,8 @@ body {
     justify-content: space-between;
     gap: 12px;
     text-align: left;
-    flex: 1 1 auto;
-    min-width: 140px;
-    max-width: 220px;
+    flex: 1 1 calc(25% - 10px);
+    min-width: 240px;
 }
 
 .stat-box-compact:hover {
