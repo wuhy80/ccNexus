@@ -7,6 +7,8 @@ export function BackupToProvider(arg1:string,arg2:string):Promise<void>;
 
 export function BackupToWebDAV(arg1:string):Promise<void>;
 
+export function CleanupInteractions(arg1:number):Promise<string>;
+
 export function ClearLogs():Promise<void>;
 
 export function DeleteArchive(arg1:string):Promise<string>;
@@ -18,6 +20,8 @@ export function DeleteWebDAVBackups(arg1:Array<string>):Promise<void>;
 export function DetectBackupConflict(arg1:string,arg2:string):Promise<string>;
 
 export function DetectWebDAVConflict(arg1:string):Promise<string>;
+
+export function ExportInteractions(arg1:string):Promise<string>;
 
 export function FetchBroadcast(arg1:string):Promise<string>;
 
@@ -39,9 +43,21 @@ export function GetChangelog(arg1:string):Promise<string>;
 
 export function GetConfig():Promise<string>;
 
+export function GetConnectedClients(arg1:number):Promise<string>;
+
 export function GetCurrentEndpoint(arg1:string):Promise<string>;
 
 export function GetDailyRequestDetails(arg1:number,arg2:number):Promise<string>;
+
+export function GetInteractionDates():Promise<string>;
+
+export function GetInteractionDetail(arg1:string,arg2:string):Promise<string>;
+
+export function GetInteractionEnabled():Promise<string>;
+
+export function GetInteractionStoragePath():Promise<string>;
+
+export function GetInteractions(arg1:string):Promise<string>;
 
 export function GetLanguage():Promise<string>;
 
@@ -104,6 +120,8 @@ export function SetAutoDarkTheme(arg1:string):Promise<void>;
 export function SetAutoLightTheme(arg1:string):Promise<void>;
 
 export function SetCloseWindowBehavior(arg1:string):Promise<void>;
+
+export function SetInteractionEnabled(arg1:boolean):Promise<string>;
 
 export function SetLanguage(arg1:string):Promise<void>;
 

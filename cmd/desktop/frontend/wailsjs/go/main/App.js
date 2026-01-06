@@ -14,6 +14,10 @@ export function BackupToWebDAV(arg1) {
   return window['go']['main']['App']['BackupToWebDAV'](arg1);
 }
 
+export function CleanupInteractions(arg1) {
+  return window['go']['main']['App']['CleanupInteractions'](arg1);
+}
+
 export function ClearLogs() {
   return window['go']['main']['App']['ClearLogs']();
 }
@@ -36,6 +40,10 @@ export function DetectBackupConflict(arg1, arg2) {
 
 export function DetectWebDAVConflict(arg1) {
   return window['go']['main']['App']['DetectWebDAVConflict'](arg1);
+}
+
+export function ExportInteractions(arg1) {
+  return window['go']['main']['App']['ExportInteractions'](arg1);
 }
 
 export function FetchBroadcast(arg1) {
@@ -78,12 +86,36 @@ export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
 }
 
+export function GetConnectedClients(arg1) {
+  return window['go']['main']['App']['GetConnectedClients'](arg1);
+}
+
 export function GetCurrentEndpoint(arg1) {
   return window['go']['main']['App']['GetCurrentEndpoint'](arg1);
 }
 
 export function GetDailyRequestDetails(arg1, arg2) {
   return window['go']['main']['App']['GetDailyRequestDetails'](arg1, arg2);
+}
+
+export function GetInteractionDates() {
+  return window['go']['main']['App']['GetInteractionDates']();
+}
+
+export function GetInteractionDetail(arg1, arg2) {
+  return window['go']['main']['App']['GetInteractionDetail'](arg1, arg2);
+}
+
+export function GetInteractionEnabled() {
+  return window['go']['main']['App']['GetInteractionEnabled']();
+}
+
+export function GetInteractionStoragePath() {
+  return window['go']['main']['App']['GetInteractionStoragePath']();
+}
+
+export function GetInteractions(arg1) {
+  return window['go']['main']['App']['GetInteractions'](arg1);
 }
 
 export function GetLanguage() {
@@ -208,6 +240,10 @@ export function SetAutoLightTheme(arg1) {
 
 export function SetCloseWindowBehavior(arg1) {
   return window['go']['main']['App']['SetCloseWindowBehavior'](arg1);
+}
+
+export function SetInteractionEnabled(arg1) {
+  return window['go']['main']['App']['SetInteractionEnabled'](arg1);
 }
 
 export function SetLanguage(arg1) {

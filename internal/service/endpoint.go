@@ -448,16 +448,19 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
         })
 
     case "gemini":
+        // Gemini endpoints use Claude format through proxy with /gemini/ prefix
+        // The proxy will convert Claude format to Gemini format
+        apiPath = "/gemini/v1/messages"
         model := endpoint.Model
         if model == "" {
-            model = "gemini-pro"
+            model = "gemini-2.0-flash"
         }
-        apiPath = "/v1beta/models/" + model + ":generateContent"
         requestBody, err = json.Marshal(map[string]interface{}{
-            "contents": []map[string]interface{}{
-                {"parts": []map[string]string{{"text": testMessage}}},
+            "model":      model,
+            "max_tokens": testMaxTokens,
+            "messages": []map[string]string{
+                {"role": "user", "content": testMessage},
             },
-            "generationConfig": map[string]int{"maxOutputTokens": testMaxTokens},
         })
 
     default:
@@ -497,15 +500,12 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
     // Specify which endpoint to use for this test request
     req.Header.Set("X-CCNexus-Endpoint", endpoint.Name)
     switch transformer {
-    case "claude":
+    case "claude", "gemini":
+        // Both use Claude format through proxy
         req.Header.Set("x-api-key", endpoint.APIKey)
         req.Header.Set("anthropic-version", "2023-06-01")
     case "openai", "openai2":
         req.Header.Set("Authorization", "Bearer "+endpoint.APIKey)
-    case "gemini":
-        q := req.URL.Query()
-        q.Add("key", endpoint.APIKey)
-        req.URL.RawQuery = q.Encode()
     }
 
     client := e.createHTTPClient(30 * time.Second)
@@ -573,17 +573,31 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
                 }
             }
         }
-    case "gemini":
-        if candidates, ok := responseData["candidates"].([]interface{}); ok && len(candidates) > 0 {
-            if candidate, ok := candidates[0].(map[string]interface{}); ok {
-                if content, ok := candidate["content"].(map[string]interface{}); ok {
-                    if parts, ok := content["parts"].([]interface{}); ok && len(parts) > 0 {
-                        if part, ok := parts[0].(map[string]interface{}); ok {
-                            if text, ok := part["text"].(string); ok {
-                                message = text
+    case "openai2":
+        // OpenAI Responses API format: output[].content[].text where type="output_text"
+        if output, ok := responseData["output"].([]interface{}); ok && len(output) > 0 {
+            for _, item := range output {
+                if itemMap, ok := item.(map[string]interface{}); ok {
+                    if content, ok := itemMap["content"].([]interface{}); ok {
+                        for _, part := range content {
+                            if partMap, ok := part.(map[string]interface{}); ok {
+                                if partMap["type"] == "output_text" {
+                                    if text, ok := partMap["text"].(string); ok {
+                                        message += text
+                                    }
+                                }
                             }
                         }
                     }
+                }
+            }
+        }
+    case "gemini":
+        // Gemini response comes back in Claude format through proxy
+        if content, ok := responseData["content"].([]interface{}); ok && len(content) > 0 {
+            if textBlock, ok := content[0].(map[string]interface{}); ok {
+                if text, ok := textBlock["text"].(string); ok {
+                    message = text
                 }
             }
         }
@@ -749,8 +763,14 @@ func (e *EndpointService) testModelsAPI(apiUrl, apiKey, transformer string) (int
         return 0, err
     }
 
-    if transformer != "gemini" {
+    // Set authentication headers based on transformer type
+    switch transformer {
+    case "claude":
+        req.Header.Set("x-api-key", apiKey)
+        req.Header.Set("anthropic-version", "2023-06-01")
+    case "openai", "openai2":
         req.Header.Set("Authorization", "Bearer "+apiKey)
+    // gemini uses query parameter, already set in URL
     }
 
     client := e.createHTTPClient(15 * time.Second)
