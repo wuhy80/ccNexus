@@ -24,7 +24,7 @@ type Storage struct {
 func NewStorage(baseDir string) *Storage {
 	return &Storage{
 		baseDir: baseDir,
-		enabled: false, // 默认关闭
+		enabled: true, // 默认启用
 	}
 }
 
