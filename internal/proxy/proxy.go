@@ -643,7 +643,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 		proxyReq, err := buildProxyRequest(r, endpoint, transformedBody, transformerName)
 		if err != nil {
-			logger.Error("[%s:%s] Failed to create request: %v", clientType, endpoint.Name, err)
+			logger.Error("[%s:%s] Failed to create request: %v (URL: %s)", clientType, endpoint.Name, err, endpoint.APIUrl)
 			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.markRequestInactive(endpoint.Name)
 			if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
@@ -655,7 +655,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		ctx := p.getEndpointContext(endpoint.Name)
 		resp, err := sendRequest(ctx, proxyReq, p.config)
 		if err != nil {
-			logger.Error("[%s:%s] Request failed: %v", clientType, endpoint.Name, err)
+			logger.Error("[%s:%s] Request failed: %v (URL: %s, Model: %s)", clientType, endpoint.Name, err, endpoint.APIUrl, streamReq.Model)
 			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.markRequestInactive(endpoint.Name)
 			if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
@@ -854,11 +854,13 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			}
 			resp.Body.Close()
 			errMsg := string(errBody)
-			if len(errMsg) > 200 {
+			if errMsg == "" {
+				errMsg = "(empty response body)"
+			} else if len(errMsg) > 200 {
 				errMsg = errMsg[:200] + "..."
 			}
-			logger.Warn("[%s:%s] Request failed %d: %s", clientType, endpoint.Name, resp.StatusCode, errMsg)
-			logger.DebugLog("[%s:%s] Request failed %d: %s", clientType, endpoint.Name, resp.StatusCode, errMsg)
+			logger.Warn("[%s:%s] Request failed %d: %s (URL: %s, Model: %s)", clientType, endpoint.Name, resp.StatusCode, errMsg, endpoint.APIUrl, streamReq.Model)
+			logger.DebugLog("[%s:%s] Request failed %d: %s (URL: %s, Model: %s)", clientType, endpoint.Name, resp.StatusCode, errMsg, endpoint.APIUrl, streamReq.Model)
 			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.markRequestInactive(endpoint.Name)
 			if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
@@ -878,11 +880,13 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		// Log non-200 responses for debugging
 		if resp.StatusCode != http.StatusOK {
 			errMsg := string(respBody)
-			if len(errMsg) > 500 {
+			if errMsg == "" {
+				errMsg = "(empty response body)"
+			} else if len(errMsg) > 500 {
 				errMsg = errMsg[:500] + "..."
 			}
-			logger.Warn("[%s] Response %d: %s", endpoint.Name, resp.StatusCode, errMsg)
-			logger.DebugLog("[%s] Response %d: %s", endpoint.Name, resp.StatusCode, errMsg)
+			logger.Warn("[%s] Response %d: %s (URL: %s, Model: %s)", endpoint.Name, resp.StatusCode, errMsg, endpoint.APIUrl, streamReq.Model)
+			logger.DebugLog("[%s] Response %d: %s (URL: %s, Model: %s)", endpoint.Name, resp.StatusCode, errMsg, endpoint.APIUrl, streamReq.Model)
 		}
 		// Remove Content-Encoding header since we've decompressed
 		for key, values := range resp.Header {
