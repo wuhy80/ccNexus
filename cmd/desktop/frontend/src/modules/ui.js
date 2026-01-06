@@ -401,6 +401,9 @@ export function initUI() {
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-secondary" onclick="window.showConnectedClientsModal()">
+                            👥 ${t('clients.viewClients')}
+                        </button>
                         <button class="btn btn-secondary" onclick="window.showDataSyncDialog()">
                             🔄 ${t('webdav.dataSync')}
                         </button>
@@ -811,6 +814,56 @@ export function initUI() {
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="window.closeAutoThemeConfigModal()">${t('settings.cancel')}</button>
                     <button class="btn btn-primary" onclick="window.saveAutoThemeConfig()">${t('settings.save')}</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connected Clients Modal -->
+        <div id="connectedClientsModal" class="modal">
+            <div class="modal-content modal-lg">
+                <div class="modal-header">
+                    <h2>👥 ${t('clients.title')}</h2>
+                    <button class="modal-close" onclick="window.closeConnectedClientsModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="clients-filters" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <label>${t('clients.timeRange')}:</label>
+                            <select id="clientsHoursFilter" onchange="window.changeClientsHoursFilter(this.value)">
+                                <option value="1">${t('clients.lastHour')}</option>
+                                <option value="6">${t('clients.last6Hours')}</option>
+                                <option value="24" selected>${t('clients.last24Hours')}</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span>${t('clients.count')}: <strong id="clientsCount">0</strong></span>
+                            <button class="btn btn-secondary btn-sm" onclick="window.refreshConnectedClients()">
+                                🔄 ${t('clients.refresh')}
+                            </button>
+                        </div>
+                    </div>
+                    <div class="clients-table-wrapper" style="max-height: 400px; overflow-y: auto;">
+                        <table class="clients-table" style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left; padding: 12px; border-bottom: 2px solid var(--border-color);">${t('clients.ip')}</th>
+                                    <th style="text-align: left; padding: 12px; border-bottom: 2px solid var(--border-color);">${t('clients.lastSeen')}</th>
+                                    <th style="text-align: right; padding: 12px; border-bottom: 2px solid var(--border-color);">${t('clients.requests')}</th>
+                                    <th style="text-align: right; padding: 12px; border-bottom: 2px solid var(--border-color);">${t('clients.inputTokens')}</th>
+                                    <th style="text-align: right; padding: 12px; border-bottom: 2px solid var(--border-color);">${t('clients.outputTokens')}</th>
+                                    <th style="text-align: left; padding: 12px; border-bottom: 2px solid var(--border-color);">${t('clients.endpoints')}</th>
+                                </tr>
+                            </thead>
+                            <tbody id="clientsTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="clientsEmptyState" class="empty-state" style="display: none; text-align: center; padding: 40px;">
+                        <p>${t('clients.noClients')}</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" onclick="window.closeConnectedClientsModal()">${t('clients.close')}</button>
                 </div>
             </div>
         </div>

@@ -46,6 +46,7 @@ type RequestStat struct {
 	ID                  int64     `json:"id"`
 	EndpointName        string    `json:"endpointName"`
 	ClientType          string    `json:"clientType"` // 客户端类型: claude, gemini, codex
+	ClientIP            string    `json:"clientIp"`   // 客户端 IP 地址
 	RequestID           string    `json:"requestId"`
 	Timestamp           time.Time `json:"timestamp"`
 	Date                string    `json:"date"`
@@ -58,6 +59,18 @@ type RequestStat struct {
 	Success             bool      `json:"success"`
 	DeviceID            string    `json:"deviceId"`
 	DurationMs          int64     `json:"durationMs"` // 请求时长（毫秒）
+}
+
+// ClientStats 连接客户端统计信息
+type ClientStats struct {
+	ClientIP            string    `json:"clientIp"`
+	LastSeen            time.Time `json:"lastSeen"`
+	RequestCount        int       `json:"requestCount"`
+	InputTokens         int       `json:"inputTokens"`
+	CacheCreationTokens int       `json:"cacheCreationTokens"`
+	CacheReadTokens     int       `json:"cacheReadTokens"`
+	OutputTokens        int       `json:"outputTokens"`
+	EndpointsUsed       []string  `json:"endpointsUsed"`
 }
 
 type Storage interface {
@@ -81,6 +94,7 @@ type Storage interface {
 	GetRequestStats(endpointName string, clientType string, startDate, endDate string, limit, offset int) ([]RequestStat, error)
 	GetRequestStatsCount(endpointName string, clientType string, startDate, endDate string) (int, error)
 	CleanupOldRequestStats(daysToKeep int) error
+	GetConnectedClients(hoursAgo int) ([]ClientStats, error)
 
 	// Config
 	GetConfig(key string) (string, error)

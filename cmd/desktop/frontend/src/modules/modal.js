@@ -599,3 +599,95 @@ export function openArticle() {
         window.go.main.App.OpenURL('https://mp.weixin.qq.com/s/ohtkyIMd5YC7So1q-gE0og');
     }
 }
+
+// Connected Clients Modal
+let currentClientsHours = 24;
+
+export async function showConnectedClientsModal() {
+    await loadConnectedClients(currentClientsHours);
+    document.getElementById('connectedClientsModal').classList.add('active');
+}
+
+export function closeConnectedClientsModal() {
+    document.getElementById('connectedClientsModal').classList.remove('active');
+}
+
+export async function refreshConnectedClients() {
+    await loadConnectedClients(currentClientsHours);
+}
+
+export async function changeClientsHoursFilter(hours) {
+    currentClientsHours = parseInt(hours);
+    await loadConnectedClients(currentClientsHours);
+}
+
+async function loadConnectedClients(hoursAgo) {
+    const tableBody = document.getElementById('clientsTableBody');
+    const emptyState = document.getElementById('clientsEmptyState');
+    const clientsCount = document.getElementById('clientsCount');
+
+    // Show loading state
+    tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 20px;">${t('clients.loading')}</td></tr>`;
+
+    try {
+        const result = await window.go.main.App.GetConnectedClients(hoursAgo);
+        const data = JSON.parse(result);
+
+        if (!data.success) {
+            tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #dc3545;">${data.message || t('clients.loadError')}</td></tr>`;
+            return;
+        }
+
+        const clients = data.clients || [];
+        clientsCount.textContent = clients.length;
+
+        if (clients.length === 0) {
+            tableBody.innerHTML = '';
+            emptyState.style.display = 'block';
+        } else {
+            emptyState.style.display = 'none';
+            tableBody.innerHTML = clients.map(client => {
+                const lastSeen = new Date(client.lastSeen);
+                const relativeTime = formatRelativeTime(lastSeen);
+                const totalInput = (client.inputTokens || 0) + (client.cacheCreationTokens || 0) + (client.cacheReadTokens || 0);
+                const endpointsList = (client.endpointsUsed || []).join(', ') || '-';
+
+                return `
+                    <tr>
+                        <td><code>${escapeHtml(client.clientIp)}</code></td>
+                        <td title="${lastSeen.toLocaleString()}">${relativeTime}</td>
+                        <td>${client.requestCount}</td>
+                        <td>${formatTokensShort(totalInput)}</td>
+                        <td>${formatTokensShort(client.outputTokens || 0)}</td>
+                        <td title="${escapeHtml(endpointsList)}">${endpointsList.length > 30 ? endpointsList.substring(0, 30) + '...' : endpointsList}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    } catch (error) {
+        console.error('Failed to load connected clients:', error);
+        tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #dc3545;">${t('clients.loadError')}: ${error.message}</td></tr>`;
+    }
+}
+
+function formatRelativeTime(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return t('clients.justNow');
+    if (diffMins < 60) return t('clients.minutesAgo', { count: diffMins });
+    if (diffHours < 24) return t('clients.hoursAgo', { count: diffHours });
+    return t('clients.daysAgo', { count: diffDays });
+}
+
+function formatTokensShort(tokens) {
+    if (tokens >= 1000000) {
+        return (tokens / 1000000).toFixed(1) + 'M';
+    } else if (tokens >= 1000) {
+        return (tokens / 1000).toFixed(1) + 'K';
+    }
+    return tokens.toString();
+}

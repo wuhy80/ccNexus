@@ -42,7 +42,11 @@ import {
     cancelConfirm,
     showCloseActionDialog,
     quitApplication,
-    minimizeToTray
+    minimizeToTray,
+    showConnectedClientsModal,
+    closeConnectedClientsModal,
+    refreshConnectedClients,
+    changeClientsHoursFilter
 } from './modules/modal.js'
 
 // Load data on startup
@@ -189,6 +193,10 @@ window.cancelConfirm = cancelConfirm;
 window.showCloseActionDialog = showCloseActionDialog;
 window.quitApplication = quitApplication;
 window.minimizeToTray = minimizeToTray;
+window.showConnectedClientsModal = showConnectedClientsModal;
+window.closeConnectedClientsModal = closeConnectedClientsModal;
+window.refreshConnectedClients = refreshConnectedClients;
+window.changeClientsHoursFilter = changeClientsHoursFilter;
 window.showDataSyncDialog = showDataSyncDialog;
 window.switchStatsPeriod = switchStatsPeriod;
 window.toggleEndpointPanel = toggleEndpointPanel;

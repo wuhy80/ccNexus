@@ -49,6 +49,7 @@ func (a *StatsStorageAdapter) RecordRequestStat(stat interface{}) error {
 	requestStat := &RequestStat{
 		EndpointName:        v.FieldByName("EndpointName").String(),
 		ClientType:          v.FieldByName("ClientType").String(),
+		ClientIP:            v.FieldByName("ClientIP").String(),
 		RequestID:           v.FieldByName("RequestID").String(),
 		Timestamp:           v.FieldByName("Timestamp").Interface().(time.Time),
 		Date:                v.FieldByName("Date").String(),

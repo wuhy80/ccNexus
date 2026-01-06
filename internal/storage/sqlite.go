@@ -119,6 +119,10 @@ func (s *SQLiteStorage) initSchema() error {
 		return err
 	}
 
+	if err := s.migrateClientIP(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -293,6 +297,35 @@ func (s *SQLiteStorage) migrateClientType() error {
 	// 6. Add duration_ms column to request_stats table
 	if err := s.migrateDurationTracking(); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// migrateClientIP adds client_ip column to request_stats table
+func (s *SQLiteStorage) migrateClientIP() error {
+	// Check if client_ip column exists in request_stats
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('request_stats') WHERE name='client_ip'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		// Add the column
+		if _, err := s.db.Exec(`ALTER TABLE request_stats ADD COLUMN client_ip TEXT DEFAULT ''`); err != nil {
+			return err
+		}
+
+		// Create index for client_ip queries
+		if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_request_stats_client_ip ON request_stats(client_ip)`); err != nil {
+			return err
+		}
+
+		// Create composite index for IP + timestamp queries
+		if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_request_stats_ip_time ON request_stats(client_ip, timestamp DESC)`); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1286,13 +1319,13 @@ func (s *SQLiteStorage) RecordRequestStat(stat *RequestStat) error {
 
 	_, err := s.db.Exec(`
 		INSERT INTO request_stats (
-			endpoint_name, client_type, request_id, timestamp, date,
+			endpoint_name, client_type, client_ip, request_id, timestamp, date,
 			input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
 			model, is_streaming, success, device_id, duration_ms
 		)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
-		stat.EndpointName, clientType, stat.RequestID, stat.Timestamp, stat.Date,
+		stat.EndpointName, clientType, stat.ClientIP, stat.RequestID, stat.Timestamp, stat.Date,
 		stat.InputTokens, stat.CacheCreationTokens, stat.CacheReadTokens, stat.OutputTokens,
 		stat.Model, stat.IsStreaming, stat.Success, stat.DeviceID, stat.DurationMs,
 	)
@@ -1316,7 +1349,8 @@ func (s *SQLiteStorage) GetRequestStats(endpointName string, clientType string, 
 	if endpointName == "" {
 		// Query all endpoints for this client type
 		query = `
-			SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type, request_id, timestamp, date,
+			SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type, COALESCE(client_ip, '') as client_ip,
+				request_id, timestamp, date,
 				input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
 				model, is_streaming, success, device_id, COALESCE(duration_ms, 0) as duration_ms
 			FROM request_stats
@@ -1328,7 +1362,8 @@ func (s *SQLiteStorage) GetRequestStats(endpointName string, clientType string, 
 	} else {
 		// Query specific endpoint
 		query = `
-			SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type, request_id, timestamp, date,
+			SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type, COALESCE(client_ip, '') as client_ip,
+				request_id, timestamp, date,
 				input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
 				model, is_streaming, success, device_id, COALESCE(duration_ms, 0) as duration_ms
 			FROM request_stats
@@ -1349,7 +1384,8 @@ func (s *SQLiteStorage) GetRequestStats(endpointName string, clientType string, 
 	for rows.Next() {
 		var stat RequestStat
 		if err := rows.Scan(
-			&stat.ID, &stat.EndpointName, &stat.ClientType, &stat.RequestID, &stat.Timestamp, &stat.Date,
+			&stat.ID, &stat.EndpointName, &stat.ClientType, &stat.ClientIP,
+			&stat.RequestID, &stat.Timestamp, &stat.Date,
 			&stat.InputTokens, &stat.CacheCreationTokens, &stat.CacheReadTokens, &stat.OutputTokens,
 			&stat.Model, &stat.IsStreaming, &stat.Success, &stat.DeviceID, &stat.DurationMs,
 		); err != nil {
@@ -1413,4 +1449,55 @@ func (s *SQLiteStorage) CleanupOldRequestStats(daysToKeep int) error {
 	}
 
 	return nil
+}
+
+// GetConnectedClients returns clients that have made requests in the past N hours
+func (s *SQLiteStorage) GetConnectedClients(hoursAgo int) ([]ClientStats, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	cutoffTime := time.Now().Add(-time.Duration(hoursAgo) * time.Hour)
+
+	query := `
+		SELECT
+			client_ip,
+			MAX(timestamp) as last_seen,
+			COUNT(*) as request_count,
+			SUM(input_tokens) as input_tokens,
+			SUM(cache_creation_tokens) as cache_creation_tokens,
+			SUM(cache_read_tokens) as cache_read_tokens,
+			SUM(output_tokens) as output_tokens,
+			GROUP_CONCAT(DISTINCT endpoint_name) as endpoints
+		FROM request_stats
+		WHERE client_ip != '' AND client_ip IS NOT NULL AND timestamp >= ?
+		GROUP BY client_ip
+		ORDER BY last_seen DESC
+	`
+
+	rows, err := s.db.Query(query, cutoffTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var clients []ClientStats
+	for rows.Next() {
+		var c ClientStats
+		var endpointsStr sql.NullString
+		if err := rows.Scan(
+			&c.ClientIP, &c.LastSeen, &c.RequestCount,
+			&c.InputTokens, &c.CacheCreationTokens, &c.CacheReadTokens, &c.OutputTokens,
+			&endpointsStr,
+		); err != nil {
+			return nil, err
+		}
+		if endpointsStr.Valid && endpointsStr.String != "" {
+			c.EndpointsUsed = strings.Split(endpointsStr.String, ",")
+		} else {
+			c.EndpointsUsed = []string{}
+		}
+		clients = append(clients, c)
+	}
+
+	return clients, rows.Err()
 }

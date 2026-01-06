@@ -474,6 +474,30 @@ export default {
     festival: {
         toggle: 'Toggle switch'
     },
+    clients: {
+        title: 'Connected Clients',
+        viewClients: 'View Clients',
+        timeRange: 'Time Range',
+        lastHour: 'Last 1 Hour',
+        last6Hours: 'Last 6 Hours',
+        last24Hours: 'Last 24 Hours',
+        count: 'Client Count',
+        refresh: 'Refresh',
+        ip: 'IP Address',
+        lastSeen: 'Last Request',
+        requests: 'Requests',
+        inputTokens: 'Input Tokens',
+        outputTokens: 'Output Tokens',
+        endpoints: 'Endpoints Used',
+        noClients: 'No client connection records',
+        loading: 'Loading...',
+        loadError: 'Failed to load',
+        close: 'Close',
+        justNow: 'Just now',
+        minutesAgo: '{count} min ago',
+        hoursAgo: '{count} hours ago',
+        daysAgo: '{count} days ago'
+    },
     common: {
         ok: 'OK',
         cancel: 'Cancel',

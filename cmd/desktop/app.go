@@ -53,6 +53,7 @@ type App struct {
 	webdav   *service.WebDAVService
 	backup   *service.BackupService
 	archive  *service.ArchiveService
+	client   *service.ClientService
 }
 
 // NewApp creates a new App application struct
@@ -150,6 +151,7 @@ func (a *App) startup(ctx context.Context) {
 	a.webdav = service.NewWebDAVService(a.config, a.storage, version)
 	a.backup = service.NewBackupService(a.config, a.storage, version, a.webdav)
 	a.archive = service.NewArchiveService(a.storage)
+	a.client = service.NewClientService(a.storage)
 
 	a.initTray()
 
@@ -507,4 +509,10 @@ func (a *App) GetArchiveTrend(month string) string { return a.archive.GetArchive
 func (a *App) DeleteArchive(month string) string   { return a.archive.DeleteArchive(month) }
 func (a *App) GenerateMockArchives(monthsCount int) string {
 	return a.archive.GenerateMockArchives(monthsCount)
+}
+
+// ========== Client Bindings ==========
+
+func (a *App) GetConnectedClients(hoursAgo int) string {
+	return a.client.GetConnectedClients(hoursAgo)
 }

@@ -474,6 +474,30 @@ export default {
     festival: {
         toggle: '切换开关'
     },
+    clients: {
+        title: '连接的客户端',
+        viewClients: '查看客户端',
+        timeRange: '时间范围',
+        lastHour: '最近1小时',
+        last6Hours: '最近6小时',
+        last24Hours: '最近24小时',
+        count: '客户端数',
+        refresh: '刷新',
+        ip: 'IP 地址',
+        lastSeen: '最后请求',
+        requests: '请求数',
+        inputTokens: '输入Token',
+        outputTokens: '输出Token',
+        endpoints: '使用的端点',
+        noClients: '暂无客户端连接记录',
+        loading: '加载中...',
+        loadError: '加载失败',
+        close: '关闭',
+        justNow: '刚刚',
+        minutesAgo: '{count}分钟前',
+        hoursAgo: '{count}小时前',
+        daysAgo: '{count}天前'
+    },
     common: {
         ok: '确定',
         cancel: '取消',

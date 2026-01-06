@@ -10,6 +10,7 @@ class Endpoints {
         this.currentEndpoint = null;
         this.currentClientType = localStorage.getItem('ccNexus_clientType') || 'claude';
         this.draggedIndex = null;
+        this.clientsHoursFilter = 24;
     }
 
     async render() {
@@ -24,9 +25,14 @@ class Endpoints {
                             <option value="codex" ${this.currentClientType === 'codex' ? 'selected' : ''}>Codex CLI</option>
                         </select>
                     </div>
-                    <button class="btn btn-primary" id="add-endpoint-btn">
-                        <span>+ Add Endpoint</span>
-                    </button>
+                    <div class="flex gap-2">
+                        <button class="btn btn-secondary" id="view-clients-btn">
+                            <span>👥 View Clients</span>
+                        </button>
+                        <button class="btn btn-primary" id="add-endpoint-btn">
+                            <span>+ Add Endpoint</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="card">
@@ -38,6 +44,7 @@ class Endpoints {
         `;
 
         document.getElementById('add-endpoint-btn').addEventListener('click', () => this.showAddModal());
+        document.getElementById('view-clients-btn').addEventListener('click', () => this.showConnectedClientsModal());
         document.getElementById('client-type-selector').addEventListener('change', (e) => this.onClientTypeChange(e.target.value));
 
         await this.loadEndpoints();
@@ -595,6 +602,147 @@ class Endpoints {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // Connected Clients Modal
+    async showConnectedClientsModal() {
+        const modalContainer = document.getElementById('modal-container');
+
+        modalContainer.innerHTML = `
+            <div class="modal-overlay">
+                <div class="modal" style="max-width: 900px; width: 90%;">
+                    <div class="modal-header">
+                        <h3 class="modal-title">👥 Connected Clients</h3>
+                        <button class="modal-close" id="close-clients-modal">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="flex-between mb-3">
+                            <div class="flex gap-2 align-center">
+                                <label>Time Range:</label>
+                                <select id="clients-hours-filter" class="form-select" style="width: auto;">
+                                    <option value="1" ${this.clientsHoursFilter === 1 ? 'selected' : ''}>Last 1 Hour</option>
+                                    <option value="6" ${this.clientsHoursFilter === 6 ? 'selected' : ''}>Last 6 Hours</option>
+                                    <option value="24" ${this.clientsHoursFilter === 24 ? 'selected' : ''}>Last 24 Hours</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-secondary" id="refresh-clients-btn">
+                                🔄 Refresh
+                            </button>
+                        </div>
+                        <div id="clients-table-container">
+                            <div class="text-center py-4">Loading...</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-primary" id="close-clients-btn">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('close-clients-modal').addEventListener('click', () => this.closeModal());
+        document.getElementById('close-clients-btn').addEventListener('click', () => this.closeModal());
+        document.getElementById('refresh-clients-btn').addEventListener('click', () => this.loadConnectedClients());
+        document.getElementById('clients-hours-filter').addEventListener('change', (e) => {
+            this.clientsHoursFilter = parseInt(e.target.value);
+            this.loadConnectedClients();
+        });
+
+        await this.loadConnectedClients();
+    }
+
+    async loadConnectedClients() {
+        const container = document.getElementById('clients-table-container');
+        if (!container) return;
+
+        container.innerHTML = '<div class="text-center py-4">Loading...</div>';
+
+        try {
+            const data = await api.getConnectedClients(this.clientsHoursFilter);
+            const clients = data.clients || [];
+
+            if (clients.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">👥</div>
+                        <div class="empty-state-title">No Clients</div>
+                        <div class="empty-state-message">No client connection records in the selected time range</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="mb-2 text-muted">Client Count: ${clients.length}</div>
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>IP Address</th>
+                                <th>Last Request</th>
+                                <th>Requests</th>
+                                <th>Input Tokens</th>
+                                <th>Output Tokens</th>
+                                <th>Endpoints Used</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${clients.map(client => this.renderClientRow(client)).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } catch (error) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">❌</div>
+                    <div class="empty-state-title">Failed to Load</div>
+                    <div class="empty-state-message">${this.escapeHtml(error.message)}</div>
+                </div>
+            `;
+        }
+    }
+
+    renderClientRow(client) {
+        const lastSeen = this.formatRelativeTime(client.lastSeen);
+        const endpointsUsed = (client.endpointsUsed || []).join(', ') || '-';
+
+        return `
+            <tr>
+                <td><code>${this.escapeHtml(client.clientIp)}</code></td>
+                <td>${lastSeen}</td>
+                <td>${client.requestCount || 0}</td>
+                <td>${this.formatNumber(client.inputTokens || 0)}</td>
+                <td>${this.formatNumber(client.outputTokens || 0)}</td>
+                <td><small>${this.escapeHtml(endpointsUsed)}</small></td>
+            </tr>
+        `;
+    }
+
+    formatRelativeTime(timestamp) {
+        if (!timestamp) return '-';
+
+        const now = new Date();
+        const time = new Date(timestamp);
+        const diffMs = now - time;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins} min ago`;
+        if (diffHours < 24) return `${diffHours} hours ago`;
+        return `${diffDays} days ago`;
+    }
+
+    formatNumber(num) {
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1) + 'M';
+        }
+        if (num >= 1000) {
+            return (num / 1000).toFixed(1) + 'K';
+        }
+        return num.toString();
     }
 }
 

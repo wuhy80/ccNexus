@@ -118,6 +118,11 @@ class APIClient {
     async updateLogLevel(logLevel) {
         return this.request('PUT', '/config/log-level', { logLevel });
     }
+
+    // Connected clients
+    async getConnectedClients(hours = 24) {
+        return this.request('GET', `/clients?hours=${hours}`);
+    }
 }
 
 export const api = new APIClient();

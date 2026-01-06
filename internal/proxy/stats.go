@@ -59,6 +59,7 @@ type StatRecord struct {
 type RequestStatRecord struct {
 	EndpointName        string
 	ClientType          string // 客户端类型: claude, gemini, codex
+	ClientIP            string // 客户端 IP 地址
 	RequestID           string
 	Timestamp           time.Time
 	Date                string

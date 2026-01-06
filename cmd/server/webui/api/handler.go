@@ -41,6 +41,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/stats/monthly", h.handleStatsMonthly)
 	mux.HandleFunc("/api/stats/trends", h.handleStatsTrends)
 
+	// Connected clients
+	mux.HandleFunc("/api/clients", h.handleConnectedClients)
+
 	// Configuration
 	mux.HandleFunc("/api/config", h.handleConfig)
 	mux.HandleFunc("/api/config/port", h.handleConfigPort)

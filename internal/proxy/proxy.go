@@ -436,6 +436,36 @@ func extractClientAndFormat(path string) (ClientType, ClientFormat, string) {
 	return ClientTypeClaude, format, path
 }
 
+// getClientIP extracts the real client IP from the request
+// It handles reverse proxy scenarios by checking X-Forwarded-For header
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header first (for reverse proxy scenarios)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// X-Forwarded-For can contain multiple IPs: client, proxy1, proxy2...
+		// The first IP is the original client
+		ips := strings.Split(xff, ",")
+		if len(ips) > 0 {
+			clientIP := strings.TrimSpace(ips[0])
+			if clientIP != "" {
+				return clientIP
+			}
+		}
+	}
+
+	// Check X-Real-IP header (common in nginx)
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+
+	// Fall back to RemoteAddr
+	// RemoteAddr is in the form "IP:port", need to extract IP
+	remoteAddr := r.RemoteAddr
+	if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
+		return remoteAddr[:idx]
+	}
+	return remoteAddr
+}
+
 // handleProxy handles the main proxy logic
 func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 	// Capture request start time for duration tracking
@@ -451,6 +481,9 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 	// Extract client type and format from path
 	clientType, clientFormat, _ := extractClientAndFormat(r.URL.Path)
+
+	// Extract client IP address
+	clientIP := getClientIP(r)
 
 	logger.DebugLog("=== Proxy Request ===")
 	logger.DebugLog("Method: %s, Path: %s, ClientType: %s, ClientFormat: %s", r.Method, r.URL.Path, clientType, clientFormat)
@@ -626,6 +659,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 				p.stats.RecordRequestStat(&RequestStatRecord{
 					EndpointName:        endpoint.Name,
 					ClientType:          string(clientType),
+					ClientIP:            clientIP,
 					Timestamp:           time.Now(),
 					InputTokens:         usage.InputTokens,
 					CacheCreationTokens: usage.CacheCreationInputTokens,
@@ -646,6 +680,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			p.stats.RecordRequestStat(&RequestStatRecord{
 				EndpointName:        endpoint.Name,
 				ClientType:          string(clientType),
+				ClientIP:            clientIP,
 				Timestamp:           time.Now(),
 				InputTokens:         usage.InputTokens,
 				CacheCreationTokens: usage.CacheCreationInputTokens,
@@ -686,6 +721,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 				p.stats.RecordRequestStat(&RequestStatRecord{
 					EndpointName:        endpoint.Name,
 					ClientType:          string(clientType),
+					ClientIP:            clientIP,
 					Timestamp:           time.Now(),
 					InputTokens:         usage.InputTokens,
 					CacheCreationTokens: usage.CacheCreationInputTokens,
