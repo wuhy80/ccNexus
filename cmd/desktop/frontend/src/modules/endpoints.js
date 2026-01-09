@@ -513,6 +513,14 @@ export function initEndpointSuccessListener() {
                 window.loadConfig();
             }
         });
+
+        // 监听端点轮换事件，更新"当前使用"状态
+        window.runtime.EventsOn('endpoint:rotated', (data) => {
+            // 端点轮换时刷新列表以更新"当前使用"状态
+            if (window.loadConfig) {
+                window.loadConfig();
+            }
+        });
     }
 }
 

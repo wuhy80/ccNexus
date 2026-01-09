@@ -147,6 +147,13 @@ func (a *App) startup(ctx context.Context) {
 		})
 	})
 
+	a.proxy.SetOnEndpointRotated(func(endpointName string, clientType string) {
+		runtime.EventsEmit(ctx, "endpoint:rotated", map[string]string{
+			"endpointName": endpointName,
+			"clientType":   clientType,
+		})
+	})
+
 	// Initialize services
 	version := a.GetVersion()
 	a.stats = service.NewStatsService(a.proxy, a.config)

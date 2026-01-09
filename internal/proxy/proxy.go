@@ -47,6 +47,7 @@ type Proxy struct {
 	endpointCancel   map[string]context.CancelFunc // cancel functions per endpoint
 	ctxMu            sync.RWMutex                 // protects context maps
 	onEndpointSuccess func(endpointName string, clientType string)   // callback when endpoint request succeeds
+	onEndpointRotated func(endpointName string, clientType string)   // callback when endpoint rotates
 	interactionStorage *interaction.Storage       // interaction recording storage
 }
 
@@ -68,6 +69,11 @@ func New(cfg *config.Config, statsStorage StatsStorage, deviceID string) *Proxy 
 // SetOnEndpointSuccess sets the callback for successful endpoint requests
 func (p *Proxy) SetOnEndpointSuccess(callback func(endpointName string, clientType string)) {
 	p.onEndpointSuccess = callback
+}
+
+// SetOnEndpointRotated sets the callback for endpoint rotation
+func (p *Proxy) SetOnEndpointRotated(callback func(endpointName string, clientType string)) {
+	p.onEndpointRotated = callback
 }
 
 // SetInteractionStorage sets the interaction storage for recording requests/responses
@@ -307,6 +313,11 @@ func (p *Proxy) rotateEndpointForClient(clientType ClientType) config.Endpoint {
 
 	newEndpoint := endpoints[p.currentIndexByClient[clientType]]
 	logger.Debug("[SWITCH:%s] %s → %s (#%d)", clientType, oldEndpoint.Name, newEndpoint.Name, p.currentIndexByClient[clientType]+1)
+
+	// Trigger rotation callback
+	if p.onEndpointRotated != nil {
+		go p.onEndpointRotated(newEndpoint.Name, string(clientType))
+	}
 
 	return newEndpoint
 }
