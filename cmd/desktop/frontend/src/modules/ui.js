@@ -898,6 +898,7 @@ export function initUI() {
                             <thead>
                                 <tr>
                                     <th>${t('interactions.time')}</th>
+                                    <th>${t('interactions.type')}</th>
                                     <th>${t('interactions.endpoint')}</th>
                                     <th>${t('interactions.client')}</th>
                                     <th>${t('interactions.model')}</th>
@@ -910,7 +911,7 @@ export function initUI() {
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td colspan="9" class="empty-message">${t('interactions.noData')}</td>
+                                    <td colspan="10" class="empty-message">${t('interactions.noData')}</td>
                                 </tr>
                             </tbody>
                         </table>

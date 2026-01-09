@@ -138,9 +138,12 @@ function renderInteractionsTable(interactions) {
         const time = new Date(item.timestamp).toLocaleTimeString()
         const statusIcon = item.success ? '✓' : '✗'
         const statusClass = item.success ? 'success' : 'error'
+        const typeLabel = item.requestType === 'test' ? t('interactions.typeTest') : t('interactions.typeNormal')
+        const typeClass = item.requestType === 'test' ? 'type-test' : 'type-normal'
 
         row.innerHTML = `
             <td>${escapeHtml(time)}</td>
+            <td><span class="request-type ${typeClass}">${typeLabel}</span></td>
             <td>${escapeHtml(item.endpointName || '-')}</td>
             <td>${escapeHtml(item.clientType || '-')}</td>
             <td>${escapeHtml(item.model || '-')}</td>
@@ -165,7 +168,7 @@ function renderEmptyTable() {
 
     tbody.innerHTML = `
         <tr>
-            <td colspan="9" class="empty-message">${t('interactions.noData')}</td>
+            <td colspan="10" class="empty-message">${t('interactions.noData')}</td>
         </tr>
     `
 }
@@ -209,11 +212,17 @@ function renderDetailModal(interaction) {
         const time = new Date(interaction.timestamp).toLocaleString()
         const statusText = interaction.stats.success ? t('interactions.statusSuccess') : t('interactions.statusFailed')
         const statusClass = interaction.stats.success ? 'success' : 'error'
+        const typeLabel = interaction.stats?.requestType === 'test' ? t('interactions.typeTest') : t('interactions.typeNormal')
+        const typeClass = interaction.stats?.requestType === 'test' ? 'type-test' : 'type-normal'
 
         metaContainer.innerHTML = `
             <div class="meta-item">
                 <span class="meta-label">${t('interactions.time')}:</span>
                 <span class="meta-value">${escapeHtml(time)}</span>
+            </div>
+            <div class="meta-item">
+                <span class="meta-label">${t('interactions.type')}:</span>
+                <span class="meta-value"><span class="request-type ${typeClass}">${typeLabel}</span></span>
             </div>
             <div class="meta-item">
                 <span class="meta-label">${t('interactions.endpoint')}:</span>

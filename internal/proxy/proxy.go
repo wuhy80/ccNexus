@@ -557,6 +557,10 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		// For test requests, use reduced retry count
 		maxRetries = 3
 		logger.Debug("[TEST:%s] Using fixed endpoint: %s (max retries: %d)", clientType, specifiedEndpoint, maxRetries)
+		// Mark as test request in interaction record
+		if interactionRecord != nil {
+			interactionRecord.Stats.RequestType = "test"
+		}
 	}
 
 	for retry := 0; retry < maxRetries; retry++ {
@@ -722,6 +726,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 						Raw:         rawEvents,
 						Transformed: transformedEvents,
 					}
+					requestType := interactionRecord.Stats.RequestType // preserve RequestType
 					interactionRecord.Stats = interaction.StatsData{
 						DurationMs:          time.Since(requestStartTime).Milliseconds(),
 						IsStreaming:         true,
@@ -731,6 +736,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 						OutputTokens:        usage.OutputTokens,
 						Success:             false,
 						ErrorMessage:        streamErr.Error(),
+						RequestType:         requestType,
 					}
 					go p.interactionStorage.Save(interactionRecord)
 				}
@@ -764,6 +770,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 					Raw:         rawEvents,
 					Transformed: transformedEvents,
 				}
+				requestType := interactionRecord.Stats.RequestType // preserve RequestType
 				interactionRecord.Stats = interaction.StatsData{
 					DurationMs:          time.Since(requestStartTime).Milliseconds(),
 					IsStreaming:         true,
@@ -772,6 +779,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 					CacheReadTokens:     usage.CacheReadInputTokens,
 					OutputTokens:        usage.OutputTokens,
 					Success:             true,
+					RequestType:         requestType,
 				}
 				go p.interactionStorage.Save(interactionRecord)
 			}
@@ -824,6 +832,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 						Raw:         rawResp,
 						Transformed: transformedResp,
 					}
+					requestType := interactionRecord.Stats.RequestType // preserve RequestType
 					interactionRecord.Stats = interaction.StatsData{
 						DurationMs:          time.Since(requestStartTime).Milliseconds(),
 						IsStreaming:         false,
@@ -832,6 +841,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 						CacheReadTokens:     usage.CacheReadInputTokens,
 						OutputTokens:        usage.OutputTokens,
 						Success:             true,
+						RequestType:         requestType,
 					}
 					go p.interactionStorage.Save(interactionRecord)
 				}
@@ -900,6 +910,14 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(resp.StatusCode)
 		w.Write(respBody)
 		return
+	}
+
+	// Save interaction record for failed requests
+	if interactionRecord != nil {
+		interactionRecord.Stats.Success = false
+		interactionRecord.Stats.ErrorMessage = "All endpoints failed"
+		interactionRecord.Stats.DurationMs = time.Since(requestStartTime).Milliseconds()
+		go p.interactionStorage.Save(interactionRecord)
 	}
 
 	http.Error(w, "All endpoints failed", http.StatusServiceUnavailable)

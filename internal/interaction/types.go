@@ -51,6 +51,7 @@ type StatsData struct {
 	OutputTokens        int    `json:"outputTokens"`
 	Success             bool   `json:"success"`
 	ErrorMessage        string `json:"errorMessage,omitempty"`
+	RequestType         string `json:"requestType,omitempty"` // "test" for test requests, empty for normal requests
 }
 
 // IndexEntry 索引条目，用于列表展示（不包含完整请求/响应内容）
@@ -64,6 +65,7 @@ type IndexEntry struct {
 	OutputTokens int       `json:"outputTokens"`
 	DurationMs   int64     `json:"durationMs"`
 	Success      bool      `json:"success"`
+	RequestType  string    `json:"requestType"`
 }
 
 // ToIndexEntry 将 Record 转换为 IndexEntry
@@ -78,5 +80,6 @@ func (r *Record) ToIndexEntry() IndexEntry {
 		OutputTokens: r.Stats.OutputTokens,
 		DurationMs:   r.Stats.DurationMs,
 		Success:      r.Stats.Success,
+		RequestType:  r.Stats.RequestType,
 	}
 }
