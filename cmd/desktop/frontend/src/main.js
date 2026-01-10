@@ -220,6 +220,7 @@ window.saveSettings = saveSettings;
 window.showAutoThemeConfigModal = showAutoThemeConfigModal;
 window.closeAutoThemeConfigModal = closeAutoThemeConfigModal;
 window.saveAutoThemeConfig = saveAutoThemeConfig;
+window.initTokenChart = initTokenChart;
 
 // History modal functions
 window.closeHistoryModal = async () => {

@@ -172,6 +172,10 @@ async function loadCurrentSettings() {
         const themeSelect = document.getElementById('settingsTheme');
         if (themeSelect) {
             themeSelect.value = theme;
+            // Apply theme immediately when changed
+            themeSelect.onchange = function() {
+                applyTheme(this.value);
+            };
         }
 
         // Set theme auto
