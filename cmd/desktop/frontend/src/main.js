@@ -57,6 +57,7 @@ import {
     refreshConnectedClients,
     changeClientsHoursFilter
 } from './modules/modal.js'
+import { initMonitor, toggleMetricsPanel } from './modules/monitor.js'
 
 // Load data on startup
 window.addEventListener('DOMContentLoaded', async () => {
@@ -145,6 +146,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize broadcast banner
     initBroadcast();
+
+    // Initialize monitor
+    initMonitor();
 
     // Listen for close dialog event from backend
     if (window.runtime) {
@@ -244,3 +248,4 @@ window.showInteractionDetail = showInteractionDetail;
 window.closeInteractionDetailModal = closeInteractionDetailModal;
 window.switchDetailTab = switchDetailTab;
 window.exportInteractions = exportInteractions;
+window.toggleMetricsPanel = toggleMetricsPanel;

@@ -1,0 +1,278 @@
+/* Monitor Panel Styles */
+
+/* Monitor Section Container */
+.monitor-section {
+    margin-top: 20px;
+}
+
+.monitor-section h3 {
+    font-size: 16px;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.monitor-section h3 .section-icon {
+    font-size: 18px;
+}
+
+/* Active Requests Panel */
+.active-requests-panel {
+    background: var(--card-bg);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border-color);
+}
+
+#activeRequestsList {
+    min-height: 60px;
+}
+
+/* Active Request Item */
+.active-request-item {
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    border-left: 3px solid var(--primary-color);
+    transition: all 0.2s ease;
+}
+
+.active-request-item:last-child {
+    margin-bottom: 0;
+}
+
+.active-request-item:hover {
+    background: var(--hover-bg);
+}
+
+.request-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.request-endpoint {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.request-duration {
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+/* Duration color classes */
+.duration-normal {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.duration-slow {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.duration-warning {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.duration-critical {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
+    animation: pulse-critical 1s ease-in-out infinite;
+}
+
+@keyframes pulse-critical {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.request-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.request-phase {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.request-model {
+    color: var(--text-tertiary);
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+}
+
+.request-client {
+    color: var(--text-tertiary);
+    padding: 1px 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+}
+
+.request-bytes {
+    color: var(--primary-color);
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+}
+
+/* Empty State */
+.monitor-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: var(--text-tertiary);
+}
+
+.monitor-empty-icon {
+    font-size: 24px;
+    color: #10b981;
+    margin-bottom: 8px;
+}
+
+.monitor-empty-text {
+    font-size: 13px;
+}
+
+/* Endpoint Metrics Panel */
+.endpoint-metrics-panel {
+    background: var(--card-bg);
+    border-radius: 8px;
+    padding: 16px;
+    border: 1px solid var(--border-color);
+}
+
+.endpoint-metrics-panel.collapsed #endpointMetricsList {
+    display: none;
+}
+
+.metrics-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.metrics-header h4 {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.metrics-toggle {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    transition: transform 0.2s;
+}
+
+.metrics-toggle.collapsed {
+    transform: rotate(-90deg);
+}
+
+#endpointMetricsList {
+    margin-top: 12px;
+}
+
+/* Endpoint Metric Item */
+.endpoint-metric-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.endpoint-metric-item:last-child {
+    border-bottom: none;
+}
+
+.metric-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.metric-endpoint {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.metric-active {
+    font-size: 11px;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
+.metric-details {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+}
+
+.metric-avg-time {
+    color: var(--text-secondary);
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+}
+
+.metric-success-rate {
+    color: #10b981;
+    font-weight: 500;
+}
+
+.metric-error {
+    color: #ef4444;
+    font-weight: bold;
+    cursor: help;
+}
+
+/* Dark theme adjustments */
+[data-theme="dark"] .active-request-item {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .duration-normal {
+    color: #34d399;
+    background: rgba(52, 211, 153, 0.15);
+}
+
+[data-theme="dark"] .duration-slow {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.15);
+}
+
+[data-theme="dark"] .duration-warning,
+[data-theme="dark"] .duration-critical {
+    color: #f87171;
+    background: rgba(248, 113, 113, 0.15);
+}
+
+[data-theme="dark"] .metric-active {
+    color: #34d399;
+    background: rgba(52, 211, 153, 0.15);
+}
+
+[data-theme="dark"] .metric-success-rate {
+    color: #34d399;
+}

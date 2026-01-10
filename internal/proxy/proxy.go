@@ -9,12 +9,22 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lich0821/ccNexus/internal/config"
 	"github.com/lich0821/ccNexus/internal/interaction"
 	"github.com/lich0821/ccNexus/internal/logger"
 )
+
+// requestCounter is used to generate unique request IDs for monitoring
+var requestCounter uint64
+
+// generateMonitorRequestID generates a unique request ID for monitoring
+func generateMonitorRequestID() string {
+	id := atomic.AddUint64(&requestCounter, 1)
+	return fmt.Sprintf("req-%d-%d", time.Now().UnixNano(), id)
+}
 
 // SSEEvent represents a Server-Sent Event
 type SSEEvent struct {
@@ -49,6 +59,7 @@ type Proxy struct {
 	onEndpointSuccess func(endpointName string, clientType string)   // callback when endpoint request succeeds
 	onEndpointRotated func(endpointName string, clientType string)   // callback when endpoint rotates
 	interactionStorage *interaction.Storage       // interaction recording storage
+	monitor          *Monitor                     // real-time request monitoring
 }
 
 // New creates a new Proxy instance
@@ -63,6 +74,7 @@ func New(cfg *config.Config, statsStorage StatsStorage, deviceID string) *Proxy 
 		activeRequests:      make(map[string]bool),
 		endpointCtx:         make(map[string]context.Context),
 		endpointCancel:      make(map[string]context.CancelFunc),
+		monitor:             NewMonitor(),
 	}
 }
 
@@ -79,6 +91,11 @@ func (p *Proxy) SetOnEndpointRotated(callback func(endpointName string, clientTy
 // SetInteractionStorage sets the interaction storage for recording requests/responses
 func (p *Proxy) SetInteractionStorage(storage *interaction.Storage) {
 	p.interactionStorage = storage
+}
+
+// GetMonitor returns the monitor instance for real-time request tracking
+func (p *Proxy) GetMonitor() *Monitor {
+	return p.monitor
 }
 
 // Start starts the proxy server
@@ -596,6 +613,10 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		p.markRequestActive(endpoint.Name)
 		p.stats.RecordRequest(endpoint.Name, string(clientType))
 
+		// Start monitoring this request attempt
+		monitorReqID := generateMonitorRequestID()
+		p.monitor.StartRequest(monitorReqID, endpoint.Name, string(clientType), streamReq.Model)
+
 		// Log request attempt with test indication if applicable
 		if fixedEndpoint != nil {
 			logger.Debug("[TEST:%s][%s] Testing endpoint (attempt %d/%d)", clientType, endpoint.Name, endpointAttempts, maxRetries)
@@ -605,6 +626,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			logger.Error("[%s:%s] %v", clientType, endpoint.Name, err)
 			p.stats.RecordError(endpoint.Name, string(clientType))
+			p.monitor.CompleteRequest(monitorReqID, false, err.Error())
 			p.markRequestInactive(endpoint.Name)
 			if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
 				endpointAttempts = 0
@@ -618,6 +640,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			logger.Error("[%s:%s] Failed to transform request: %v", clientType, endpoint.Name, err)
 			p.stats.RecordError(endpoint.Name, string(clientType))
+			p.monitor.CompleteRequest(monitorReqID, false, err.Error())
 			p.markRequestInactive(endpoint.Name)
 			if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
 				endpointAttempts = 0
@@ -660,6 +683,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			logger.Error("[%s:%s] Failed to create request: %v (URL: %s)", clientType, endpoint.Name, err, endpoint.APIUrl)
 			p.stats.RecordError(endpoint.Name, string(clientType))
+			p.monitor.CompleteRequest(monitorReqID, false, err.Error())
 			p.markRequestInactive(endpoint.Name)
 			if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
 				endpointAttempts = 0
@@ -667,11 +691,15 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// Update monitor phase to sending
+		p.monitor.UpdatePhase(monitorReqID, PhaseSending)
+
 		ctx := p.getEndpointContext(endpoint.Name)
 		resp, err := sendRequest(ctx, proxyReq, p.config)
 		if err != nil {
 			logger.Error("[%s:%s] Request failed: %v (URL: %s, Model: %s)", clientType, endpoint.Name, err, endpoint.APIUrl, streamReq.Model)
 			p.stats.RecordError(endpoint.Name, string(clientType))
+			p.monitor.CompleteRequest(monitorReqID, false, err.Error())
 			p.markRequestInactive(endpoint.Name)
 			if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
 				endpointAttempts = 0
@@ -683,12 +711,16 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		isStreaming := contentType == "text/event-stream" || (streamReq.Stream && strings.Contains(contentType, "text/event-stream"))
 
 		if resp.StatusCode == http.StatusOK && isStreaming {
+			// Update monitor phase to streaming
+			p.monitor.UpdatePhase(monitorReqID, PhaseStreaming)
+
 			usage, outputText, rawEvents, transformedEvents, streamErr := p.handleStreamingResponse(w, resp, endpoint, trans, transformerName, thinkingEnabled, streamReq.Model, bodyBytes, clientType)
 
 			// Handle retryable streaming errors (before response headers sent)
 			if errors.Is(streamErr, ErrStreamRetryable) {
 				logger.Warn("[%s:%s] Streaming failed before response sent, will retry: %v", clientType, endpoint.Name, streamErr)
 				p.stats.RecordError(endpoint.Name, string(clientType))
+				p.monitor.CompleteRequest(monitorReqID, false, streamErr.Error())
 				p.markRequestInactive(endpoint.Name)
 				// endpointAttempts already incremented at loop start (line 487)
 				if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
@@ -752,6 +784,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 					go p.interactionStorage.Save(interactionRecord)
 				}
 
+				p.monitor.CompleteRequest(monitorReqID, false, streamErr.Error())
 				p.markRequestInactive(endpoint.Name)
 				// Cannot retry: HTTP headers already sent to client
 				return
@@ -795,6 +828,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 				go p.interactionStorage.Save(interactionRecord)
 			}
 
+			p.monitor.CompleteRequest(monitorReqID, true, "")
 			p.markRequestInactive(endpoint.Name)
 			if p.onEndpointSuccess != nil {
 				p.onEndpointSuccess(endpoint.Name, string(clientType))
@@ -857,6 +891,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 					go p.interactionStorage.Save(interactionRecord)
 				}
 
+				p.monitor.CompleteRequest(monitorReqID, true, "")
 				p.markRequestInactive(endpoint.Name)
 				if p.onEndpointSuccess != nil {
 					p.onEndpointSuccess(endpoint.Name, string(clientType))
@@ -883,6 +918,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			logger.Warn("[%s:%s] Request failed %d: %s (URL: %s, Model: %s)", clientType, endpoint.Name, resp.StatusCode, errMsg, endpoint.APIUrl, streamReq.Model)
 			logger.DebugLog("[%s:%s] Request failed %d: %s (URL: %s, Model: %s)", clientType, endpoint.Name, resp.StatusCode, errMsg, endpoint.APIUrl, streamReq.Model)
 			p.stats.RecordError(endpoint.Name, string(clientType))
+			p.monitor.CompleteRequest(monitorReqID, false, fmt.Sprintf("HTTP %d: %s", resp.StatusCode, errMsg))
 			p.markRequestInactive(endpoint.Name)
 			if p.handleEndpointRotation(fixedEndpoint, clientType, endpoint, endpointAttempts) {
 				endpointAttempts = 0
@@ -897,6 +933,12 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			respBody, _ = io.ReadAll(resp.Body)
 		}
 		resp.Body.Close()
+		// Complete monitoring - this is a pass-through response (non-retryable)
+		if resp.StatusCode == http.StatusOK {
+			p.monitor.CompleteRequest(monitorReqID, true, "")
+		} else {
+			p.monitor.CompleteRequest(monitorReqID, false, fmt.Sprintf("HTTP %d", resp.StatusCode))
+		}
 		p.markRequestInactive(endpoint.Name)
 		// Log non-200 responses for debugging
 		if resp.StatusCode != http.StatusOK {

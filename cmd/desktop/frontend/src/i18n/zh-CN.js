@@ -573,5 +573,22 @@ export default {
         '小贴士：使用 WebDAV 功能可以跨设备同步您的数据和配置',
         '小贴士：保存端点前先点击"测试"可以确保它们能正常工作',
         '小贴士：您的 API 密钥和数据都存储在本地，安全可靠',
-    ]
+    ],
+    monitor: {
+        title: '实时监控',
+        idle: '空闲',
+        noMetrics: '暂无指标数据',
+        endpointMetrics: '端点性能',
+        active: '活跃',
+        avgResponseTime: '平均响应时间',
+        successRate: '成功率',
+        phase: {
+            waiting: '等待中',
+            connecting: '连接中',
+            sending: '发送中',
+            streaming: '接收中',
+            completed: '已完成',
+            failed: '失败'
+        }
+    }
 };

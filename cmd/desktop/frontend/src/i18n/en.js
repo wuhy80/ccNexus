@@ -573,5 +573,22 @@ export default {
         'Tip: Use WebDAV to sync your data and config across devices',
         'Tip: Test endpoints before saving to ensure they work correctly',
         'Tip: Your API keys and data are stored locally, safe and secure'
-    ]
+    ],
+    monitor: {
+        title: 'Live Monitor',
+        idle: 'Idle',
+        noMetrics: 'No metrics data',
+        endpointMetrics: 'Endpoint Performance',
+        active: 'active',
+        avgResponseTime: 'Avg Response Time',
+        successRate: 'Success Rate',
+        phase: {
+            waiting: 'Waiting',
+            connecting: 'Connecting',
+            sending: 'Sending',
+            streaming: 'Receiving',
+            completed: 'Completed',
+            failed: 'Failed'
+        }
+    }
 };

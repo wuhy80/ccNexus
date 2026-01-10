@@ -56,6 +56,7 @@ type App struct {
 	archive     *service.ArchiveService
 	client      *service.ClientService
 	interaction *service.InteractionService
+	monitor     *service.MonitorService
 
 	// Interaction storage
 	interactionStorage *interaction.Storage
@@ -154,6 +155,11 @@ func (a *App) startup(ctx context.Context) {
 		})
 	})
 
+	// Set up monitor event callback for real-time updates
+	a.proxy.GetMonitor().SetEventCallback(func(event proxy.MonitorEvent) {
+		runtime.EventsEmit(ctx, "monitor:event", event)
+	})
+
 	// Initialize services
 	version := a.GetVersion()
 	a.stats = service.NewStatsService(a.proxy, a.config)
@@ -164,6 +170,7 @@ func (a *App) startup(ctx context.Context) {
 	a.backup = service.NewBackupService(a.config, a.storage, version, a.webdav)
 	a.archive = service.NewArchiveService(a.storage)
 	a.client = service.NewClientService(a.storage)
+	a.monitor = service.NewMonitorService(a.proxy.GetMonitor())
 
 	// Initialize interaction storage and service
 	exePath, err := os.Executable()
@@ -582,4 +589,22 @@ func (a *App) CleanupInteractions(daysToKeep int) string {
 
 func (a *App) GetInteractionStoragePath() string {
 	return a.interaction.GetStoragePath()
+}
+
+// ========== Monitor Bindings ==========
+
+func (a *App) GetMonitorSnapshot() string {
+	return a.monitor.GetSnapshot()
+}
+
+func (a *App) GetActiveRequests() string {
+	return a.monitor.GetActiveRequests()
+}
+
+func (a *App) GetEndpointMetrics() string {
+	return a.monitor.GetEndpointMetrics()
+}
+
+func (a *App) ResetMonitorMetrics() {
+	a.monitor.ResetMetrics()
 }

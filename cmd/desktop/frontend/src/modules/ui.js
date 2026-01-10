@@ -236,6 +236,32 @@ export function initUI() {
                 </div>
             </div>
 
+            <!-- Active Requests Monitor -->
+            <div class="card monitor-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 style="margin: 0;">🔄 ${t('monitor.title')}</h2>
+                </div>
+                <div class="active-requests-panel">
+                    <div id="activeRequestsList">
+                        <div class="monitor-empty">
+                            <span class="monitor-empty-icon">✓</span>
+                            <span class="monitor-empty-text">${t('monitor.idle')}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="endpoint-metrics-panel" id="endpointMetricsPanel">
+                    <div class="metrics-header" onclick="window.toggleMetricsPanel()">
+                        <h4><span class="section-icon">📈</span> ${t('monitor.endpointMetrics')}</h4>
+                        <span class="metrics-toggle" id="metricsToggle">▼</span>
+                    </div>
+                    <div id="endpointMetricsList">
+                        <div class="monitor-empty">
+                            <span class="monitor-empty-text">${t('monitor.noMetrics')}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- History Modal (弹窗) -->
             <div id="historyModal" class="modal" style="display: none;">
                 <div class="modal-content">
