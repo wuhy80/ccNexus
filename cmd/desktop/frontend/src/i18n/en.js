@@ -234,7 +234,13 @@ export default {
         avgOutputSpeed: 'Output Speed',
         generationSpeed: 'Generation',
         duration: 'Duration',
-        outputTokensPerSec: 'tok/s'
+        outputTokensPerSec: 'tok/s',
+        min: 'Min',
+        max: 'Max',
+        inputSpeed: 'Input',
+        streamingRatio: 'Streaming',
+        streaming: 'Stream',
+        nonStreaming: 'Non-stream'
     },
     chart: {
         minutes: 'min',

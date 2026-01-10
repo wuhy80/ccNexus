@@ -155,7 +155,11 @@ export function initUI() {
                                 <div class="stat-info">
                                     <div class="stat-label">${t('statistics.avgDuration')}</div>
                                     <div class="stat-detail">
-                                        <span class="stat-text">${t('statistics.requestLatency')}</span>
+                                        <span id="minDurationMs">-</span>
+                                        <span class="stat-text"> ${t('statistics.min')}</span>
+                                        <span class="stat-divider">/</span>
+                                        <span id="maxDurationMs">-</span>
+                                        <span class="stat-text"> ${t('statistics.max')}</span>
                                     </div>
                                 </div>
                                 <div class="stat-value">
@@ -166,11 +170,27 @@ export function initUI() {
                                 <div class="stat-info">
                                     <div class="stat-label">${t('statistics.avgOutputSpeed')}</div>
                                     <div class="stat-detail">
-                                        <span class="stat-text">${t('statistics.generationSpeed')}</span>
+                                        <span id="avgInputTokensPerSec">-</span>
+                                        <span class="stat-text"> ${t('statistics.inputSpeed')}</span>
                                     </div>
                                 </div>
                                 <div class="stat-value">
                                     <span id="avgOutputTokensPerSec" class="stat-primary">-</span>
+                                </div>
+                            </div>
+                            <div class="stat-box-compact stat-box-condensed">
+                                <div class="stat-info">
+                                    <div class="stat-label">${t('statistics.streamingRatio')}</div>
+                                    <div class="stat-detail">
+                                        <span id="streamingCount">0</span>
+                                        <span class="stat-text"> ${t('statistics.streaming')}</span>
+                                        <span class="stat-divider">/</span>
+                                        <span id="nonStreamingCount">0</span>
+                                        <span class="stat-text"> ${t('statistics.nonStreaming')}</span>
+                                    </div>
+                                </div>
+                                <div class="stat-value">
+                                    <span id="streamingPercentage" class="stat-primary">-</span>
                                 </div>
                             </div>
                         </div>

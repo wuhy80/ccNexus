@@ -157,19 +157,58 @@ async function loadPerformanceMetrics(period = 'daily') {
 
         const overall = metrics.overallMetrics;
 
-        // Update UI elements
+        // Update UI elements - Average Duration
         const avgDurationEl = document.getElementById('avgDurationMs');
-        const outputTokensPerSecEl = document.getElementById('avgOutputTokensPerSec');
-
         if (avgDurationEl && overall) {
             avgDurationEl.textContent = overall.avgDurationMs > 0
                 ? `${(overall.avgDurationMs / 1000).toFixed(1)}s`
                 : '-';
         }
 
+        // Min/Max Duration
+        const minDurationEl = document.getElementById('minDurationMs');
+        const maxDurationEl = document.getElementById('maxDurationMs');
+        if (minDurationEl && overall) {
+            minDurationEl.textContent = overall.minDurationMs > 0
+                ? `${(overall.minDurationMs / 1000).toFixed(1)}s`
+                : '-';
+        }
+        if (maxDurationEl && overall) {
+            maxDurationEl.textContent = overall.maxDurationMs > 0
+                ? `${(overall.maxDurationMs / 1000).toFixed(1)}s`
+                : '-';
+        }
+
+        // Output tokens per second
+        const outputTokensPerSecEl = document.getElementById('avgOutputTokensPerSec');
         if (outputTokensPerSecEl && overall) {
             outputTokensPerSecEl.textContent = overall.outputTokensPerSec > 0
                 ? `${overall.outputTokensPerSec.toFixed(1)}`
+                : '-';
+        }
+
+        // Input tokens per second
+        const inputTokensPerSecEl = document.getElementById('avgInputTokensPerSec');
+        if (inputTokensPerSecEl && overall) {
+            inputTokensPerSecEl.textContent = overall.inputTokensPerSec > 0
+                ? `${overall.inputTokensPerSec.toFixed(1)}`
+                : '-';
+        }
+
+        // Streaming stats
+        const streamingCountEl = document.getElementById('streamingCount');
+        const nonStreamingCountEl = document.getElementById('nonStreamingCount');
+        const streamingPercentageEl = document.getElementById('streamingPercentage');
+
+        if (streamingCountEl && overall) {
+            streamingCountEl.textContent = overall.streamingCount || 0;
+        }
+        if (nonStreamingCountEl && overall) {
+            nonStreamingCountEl.textContent = overall.nonStreamingCount || 0;
+        }
+        if (streamingPercentageEl && overall) {
+            streamingPercentageEl.textContent = overall.validRequests > 0
+                ? `${overall.streamingPercentage.toFixed(0)}%`
                 : '-';
         }
 

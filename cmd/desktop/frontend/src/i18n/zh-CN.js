@@ -234,7 +234,13 @@ export default {
         avgOutputSpeed: '输出速度',
         generationSpeed: '生成',
         duration: '时长',
-        outputTokensPerSec: 'tok/s'
+        outputTokensPerSec: 'tok/s',
+        min: '最快',
+        max: '最慢',
+        inputSpeed: '输入',
+        streamingRatio: '流式占比',
+        streaming: '流式',
+        nonStreaming: '非流式'
     },
     chart: {
         minutes: '分钟',

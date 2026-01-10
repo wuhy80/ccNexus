@@ -175,8 +175,9 @@
     justify-content: space-between;
     gap: 12px;
     text-align: left;
-    flex: 1 1 calc(25% - 10px);
-    min-width: 240px;
+    flex: 1 1 calc(33.333% - 10px);
+    min-width: 220px;
+    max-width: calc(33.333% - 7px);
 }
 
 .stat-box-compact:hover {

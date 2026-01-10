@@ -615,37 +615,69 @@ func calculateTokensPerSecond(tokens int, durationMs int64) float64 {
 // calculatePerformanceMetrics calculates performance metrics from request stats
 // Includes all requests (both successful and failed) with non-zero duration
 func calculatePerformanceMetrics(requests []storage.RequestStat) map[string]interface{} {
-	var totalOutputTokens, totalTokens int
+	var totalOutputTokens, totalInputTokens, totalTokens int
 	var totalDurationMs int64
+	var minDurationMs, maxDurationMs int64
+	var streamingCount, nonStreamingCount int
 	validCount := 0
 
 	for _, req := range requests {
 		if req.DurationMs > 0 { // Only filter out zero duration (old records from before migration)
 			inputTotal := req.InputTokens + req.CacheCreationTokens + req.CacheReadTokens
+			totalInputTokens += inputTotal
 			totalOutputTokens += req.OutputTokens
 			totalTokens += inputTotal + req.OutputTokens
 			totalDurationMs += req.DurationMs
+
+			// Track min/max duration
+			if validCount == 0 || req.DurationMs < minDurationMs {
+				minDurationMs = req.DurationMs
+			}
+			if req.DurationMs > maxDurationMs {
+				maxDurationMs = req.DurationMs
+			}
+
+			// Track streaming vs non-streaming
+			if req.IsStreaming {
+				streamingCount++
+			} else {
+				nonStreamingCount++
+			}
+
 			validCount++
 		}
 	}
 
 	if validCount == 0 || totalDurationMs == 0 {
 		return map[string]interface{}{
-			"outputTokensPerSec": 0.0,
-			"totalTokensPerSec":  0.0,
-			"avgDurationMs":      0.0,
-			"validRequests":      0,
+			"outputTokensPerSec":  0.0,
+			"inputTokensPerSec":   0.0,
+			"totalTokensPerSec":   0.0,
+			"avgDurationMs":       0.0,
+			"minDurationMs":       0,
+			"maxDurationMs":       0,
+			"streamingCount":      0,
+			"nonStreamingCount":   0,
+			"streamingPercentage": 0.0,
+			"validRequests":       0,
 		}
 	}
 
 	durationSec := float64(totalDurationMs) / 1000.0
 	avgDurationMs := float64(totalDurationMs) / float64(validCount)
+	streamingPercentage := float64(streamingCount) / float64(validCount) * 100.0
 
 	return map[string]interface{}{
-		"outputTokensPerSec": float64(totalOutputTokens) / durationSec,
-		"totalTokensPerSec":  float64(totalTokens) / durationSec,
-		"avgDurationMs":      avgDurationMs,
-		"validRequests":      validCount,
+		"outputTokensPerSec":  float64(totalOutputTokens) / durationSec,
+		"inputTokensPerSec":   float64(totalInputTokens) / durationSec,
+		"totalTokensPerSec":   float64(totalTokens) / durationSec,
+		"avgDurationMs":       avgDurationMs,
+		"minDurationMs":       minDurationMs,
+		"maxDurationMs":       maxDurationMs,
+		"streamingCount":      streamingCount,
+		"nonStreamingCount":   nonStreamingCount,
+		"streamingPercentage": streamingPercentage,
+		"validRequests":       validCount,
 	}
 }
 
