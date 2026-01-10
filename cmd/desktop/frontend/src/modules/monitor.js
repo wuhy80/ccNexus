@@ -164,15 +164,17 @@ function renderActiveRequests() {
     container.innerHTML = html;
 }
 
-// Render endpoint metrics section
+// Render endpoint metrics section (as stat cards in the statistics area)
 function renderEndpointMetrics() {
-    const container = document.getElementById('endpointMetricsList');
+    const container = document.getElementById('endpointMetricsGrid');
     if (!container) return;
 
     if (endpointMetrics.size === 0) {
         container.innerHTML = `
-            <div class="monitor-empty">
-                <span class="monitor-empty-text">${t('monitor.noMetrics')}</span>
+            <div class="stat-box-compact stat-box-condensed" style="opacity: 0.5;">
+                <div class="stat-info">
+                    <div class="stat-label">${t('monitor.noMetrics')}</div>
+                </div>
             </div>
         `;
         return;
@@ -183,33 +185,26 @@ function renderEndpointMetrics() {
     endpointMetrics.forEach((metric, endpointName) => {
         const avgTime = metric.avgResponseTime > 0 ? formatDuration(metric.avgResponseTime) : '-';
         const successRate = metric.totalRequests > 0 ? metric.successRate.toFixed(1) + '%' : '-';
+        const hasError = metric.lastError ? true : false;
 
         html += `
-            <div class="endpoint-metric-item">
-                <div class="metric-header">
-                    <span class="metric-endpoint">${escapeHtml(endpointName)}</span>
-                    ${metric.activeCount > 0 ? `<span class="metric-active">${metric.activeCount} ${t('monitor.active')}</span>` : ''}
+            <div class="stat-box-compact stat-box-condensed${hasError ? ' has-error' : ''}">
+                <div class="stat-info">
+                    <div class="stat-label">${escapeHtml(endpointName)}</div>
+                    <div class="stat-detail">
+                        <span>${successRate}</span>
+                        <span class="stat-text"> ${t('monitor.successRate')}</span>
+                        ${metric.activeCount > 0 ? `<span class="stat-divider">/</span><span>${metric.activeCount}</span><span class="stat-text"> ${t('monitor.active')}</span>` : ''}
+                    </div>
                 </div>
-                <div class="metric-details">
-                    <span class="metric-avg-time" title="${t('monitor.avgResponseTime')}">${avgTime}</span>
-                    <span class="metric-success-rate" title="${t('monitor.successRate')}">${successRate}</span>
-                    ${metric.lastError ? `<span class="metric-error" title="${escapeHtml(metric.lastError)}">!</span>` : ''}
+                <div class="stat-value">
+                    <span class="stat-primary">${avgTime}</span>
                 </div>
             </div>
         `;
     });
 
     container.innerHTML = html;
-}
-
-// Toggle endpoint metrics panel visibility
-export function toggleMetricsPanel() {
-    const panel = document.getElementById('endpointMetricsPanel');
-    const toggle = document.getElementById('metricsToggle');
-    if (panel && toggle) {
-        panel.classList.toggle('collapsed');
-        toggle.classList.toggle('collapsed');
-    }
 }
 
 // Reset all metrics

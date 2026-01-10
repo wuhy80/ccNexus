@@ -193,6 +193,8 @@ export function initUI() {
                                     <span id="streamingPercentage" class="stat-primary">-</span>
                                 </div>
                             </div>
+                            <!-- Endpoint Metrics (merged into same grid) -->
+                            <div id="endpointMetricsGrid" style="display: contents;"></div>
                         </div>
 
                         <!-- Token Trend Chart -->
@@ -266,17 +268,6 @@ export function initUI() {
                         <div class="monitor-empty">
                             <span class="monitor-empty-icon">✓</span>
                             <span class="monitor-empty-text">${t('monitor.idle')}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="endpoint-metrics-panel" id="endpointMetricsPanel">
-                    <div class="metrics-header" onclick="window.toggleMetricsPanel()">
-                        <h4><span class="section-icon">📈</span> ${t('monitor.endpointMetrics')}</h4>
-                        <span class="metrics-toggle" id="metricsToggle">▼</span>
-                    </div>
-                    <div id="endpointMetricsList">
-                        <div class="monitor-empty">
-                            <span class="monitor-empty-text">${t('monitor.noMetrics')}</span>
                         </div>
                     </div>
                 </div>

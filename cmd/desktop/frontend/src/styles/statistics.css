@@ -166,18 +166,18 @@
 .stat-box-compact {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    padding: 12px 16px;
+    padding: 10px 12px;
     border-radius: 8px;
     transition: transform 0.2s;
     position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
     text-align: left;
-    flex: 1 1 calc(33.333% - 10px);
-    min-width: 220px;
-    max-width: calc(33.333% - 7px);
+    flex: 1 1 calc(20% - 10px);
+    min-width: 170px;
+    max-width: calc(20% - 8px);
 }
 
 .stat-box-compact:hover {
@@ -207,19 +207,19 @@
 }
 
 .stat-box-compact .stat-value {
-    font-size: 26px;
+    font-size: 22px;
     font-weight: bold;
     line-height: 1.1;
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 4px;
-    min-width: 90px;
+    min-width: 70px;
     text-align: right;
 }
 
 .stat-box-compact .stat-primary {
-    font-size: 28px;
+    font-size: 24px;
 }
 
 .stat-box-compact .stat-secondary {
@@ -581,5 +581,25 @@
     border: 1px solid #fcc;
     border-radius: 8px;
     color: #c33;
+    font-size: 14px;
+}
+
+/* Endpoint Metrics Header in Stats Section */
+.endpoint-metrics-header {
+    margin-top: 15px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.endpoint-metrics-header h4 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.endpoint-metrics-header .section-icon {
     font-size: 14px;
 }
