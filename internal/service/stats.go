@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/lich0821/ccNexus/internal/config"
@@ -29,11 +28,10 @@ func (s *StatsService) SetStorage(st storage.Storage) {
 // GetStats returns current statistics
 func (s *StatsService) GetStats() string {
 	totalRequests, endpointStats := s.proxy.GetStats().GetStats()
-	data, _ := json.Marshal(map[string]interface{}{
+	return toJSON(map[string]interface{}{
 		"totalRequests": totalRequests,
 		"endpoints":     endpointStats,
 	})
-	return string(data)
 }
 
 // GetStatsDaily returns statistics for today
@@ -106,8 +104,7 @@ func (s *StatsService) getPeriodStats(period, startDate, endDate string) string 
 		result["endDate"] = endDate
 	}
 
-	data, _ := json.Marshal(result)
-	return string(data)
+	return toJSON(result)
 }
 
 func (s *StatsService) countEndpoints() (active, total int) {
@@ -164,7 +161,7 @@ func (s *StatsService) GetStatsTrendByPeriod(period string) string {
 	current := s.sumStats(currentStart, currentEnd)
 	prev := s.sumStats(prevStart, prevEnd)
 
-	result := map[string]interface{}{
+	return toJSON(map[string]interface{}{
 		"current":        current.requests,
 		"previous":       prev.requests,
 		"trend":          calculateTrend(current.requests, prev.requests),
@@ -174,10 +171,7 @@ func (s *StatsService) GetStatsTrendByPeriod(period string) string {
 		"currentTokens":  current.tokens,
 		"previousTokens": prev.tokens,
 		"tokensTrend":    calculateTrend(current.tokens, prev.tokens),
-	}
-
-	data, _ := json.Marshal(result)
-	return string(data)
+	})
 }
 
 type statsSummary struct {
@@ -228,57 +222,47 @@ func (s *StatsService) GetDailyRequestDetails(limit, offset int) string {
 // getRequestDetailsByDate returns detailed request-level statistics for a specific date
 func (s *StatsService) getRequestDetailsByDate(date string, limit, offset int) string {
 	if s.storage == nil {
-		result := map[string]interface{}{
+		return toJSON(map[string]interface{}{
 			"success":  false,
 			"date":     date,
 			"requests": []interface{}{},
 			"total":    0,
 			"message":  "Storage not initialized",
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		})
 	}
 
 	// Get total count
 	total, err := s.storage.GetRequestStatsCount("", "", date, date)
 	if err != nil {
-		result := map[string]interface{}{
+		return toJSON(map[string]interface{}{
 			"success": false,
 			"date":    date,
 			"message": "Failed to get request count: " + err.Error(),
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		})
 	}
 
 	// Get request stats with pagination
 	requests, err := s.storage.GetRequestStats("", "", date, date, limit, offset)
 	if err != nil {
-		result := map[string]interface{}{
+		return toJSON(map[string]interface{}{
 			"success": false,
 			"date":    date,
 			"message": "Failed to get request details: " + err.Error(),
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		})
 	}
 
 	// Calculate performance metrics from all requests (not just paginated ones)
 	allRequests, _ := s.storage.GetRequestStats("", "", date, date, 10000, 0)
 	metrics := calculatePerformanceMetrics(allRequests)
 
-	result := map[string]interface{}{
-		"success":  true,
+	return successJSON(map[string]interface{}{
 		"date":     date,
 		"requests": requests,
 		"total":    total,
 		"limit":    limit,
 		"offset":   offset,
 		"metrics":  metrics,
-	}
-
-	data, _ := json.Marshal(result)
-	return string(data)
+	})
 }
 
 // GetTokenTrendData returns token usage trend data for charting
@@ -336,8 +320,7 @@ func (s *StatsService) GetTokenTrendData(granularity, period, startTime, endTime
 		return jsonError("Invalid granularity: " + granularity)
 	}
 
-	data, _ := json.Marshal(result)
-	return string(data)
+	return toJSON(result)
 }
 
 // aggregateByMinutes aggregates requests into time slots with smart time range compression
@@ -615,13 +598,9 @@ func getTimeSlotIndex(timestamp time.Time, intervalMinutes int) int {
 }
 
 // jsonError returns a JSON error response
+// Deprecated: use errorJSON from json_helper.go instead
 func jsonError(message string) string {
-	result := map[string]interface{}{
-		"success": false,
-		"message": message,
-	}
-	data, _ := json.Marshal(result)
-	return string(data)
+	return errorJSON(message)
 }
 
 // calculateTokensPerSecond calculates tokens per second from duration
@@ -721,14 +700,10 @@ func (s *StatsService) GetPerformanceStats(period string) string {
 		endpointMetrics[key] = calculatePerformanceMetrics(reqs)
 	}
 
-	result := map[string]interface{}{
-		"success":         true,
+	return successJSON(map[string]interface{}{
 		"period":          period,
 		"dateRange":       map[string]string{"start": startDate, "end": endDate},
 		"overallMetrics":  overallMetrics,
 		"endpointMetrics": endpointMetrics,
-	}
-
-	data, _ := json.Marshal(result)
-	return string(data)
+	})
 }

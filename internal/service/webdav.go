@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -57,17 +56,11 @@ func (w *WebDAVService) TestWebDAVConnection(url, username, password string) str
 
 	client, err := webdav.NewClient(webdavCfg)
 	if err != nil {
-		result := map[string]interface{}{
-			"success": false,
-			"message": fmt.Sprintf("创建WebDAV客户端失败: %v", err),
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		return errorJSON(fmt.Sprintf("创建WebDAV客户端失败: %v", err))
 	}
 
 	testResult := client.TestConnection()
-	data, _ := json.Marshal(testResult)
-	return string(data)
+	return toJSON(testResult)
 }
 
 // BackupToWebDAV backs up configuration and stats to WebDAV
@@ -201,48 +194,39 @@ func (w *WebDAVService) ListWebDAVBackups() string {
 
 	webdavCfg := w.config.GetWebDAV()
 	if webdavCfg == nil {
-		result := map[string]interface{}{
+		return toJSON(map[string]interface{}{
 			"success": false,
 			"message": "WebDAV未配置",
 			"backups": []interface{}{},
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		})
 	}
 
 	client, err := webdav.NewClient(webdavCfg)
 	if err != nil {
-		result := map[string]interface{}{
+		return toJSON(map[string]interface{}{
 			"success": false,
 			"message": fmt.Sprintf("创建WebDAV客户端失败: %v", err),
 			"backups": []interface{}{},
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		})
 	}
 
 	manager := webdav.NewManager(client)
 
 	backups, err := manager.ListConfigBackups()
 	if err != nil {
-		result := map[string]interface{}{
+		return toJSON(map[string]interface{}{
 			"success": false,
 			"message": fmt.Sprintf("获取备份列表失败: %v", err),
 			"backups": []interface{}{},
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		})
 	}
 
 	logger.Info("Found %d backup(s)", len(backups))
 
-	result := map[string]interface{}{
-		"success": true,
+	return successJSON(map[string]interface{}{
 		"message": "获取备份列表成功",
 		"backups": backups,
-	}
-	data, _ := json.Marshal(result)
-	return string(data)
+	})
 }
 
 // DeleteWebDAVBackups deletes backups from WebDAV server
@@ -271,80 +255,42 @@ func (w *WebDAVService) DeleteWebDAVBackups(filenames []string) error {
 func (w *WebDAVService) DetectWebDAVConflict(filename string) string {
 	webdavCfg := w.config.GetWebDAV()
 	if webdavCfg == nil {
-		result := map[string]interface{}{
-			"success": false,
-			"message": "WebDAV未配置",
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		return errorJSON("WebDAV未配置")
 	}
 
 	if w.storage == nil {
-		result := map[string]interface{}{
-			"success": false,
-			"message": "存储未初始化",
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		return errorJSON("存储未初始化")
 	}
 
 	client, err := webdav.NewClient(webdavCfg)
 	if err != nil {
-		result := map[string]interface{}{
-			"success": false,
-			"message": fmt.Sprintf("创建WebDAV客户端失败: %v", err),
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		return errorJSON(fmt.Sprintf("创建WebDAV客户端失败: %v", err))
 	}
 
 	manager := webdav.NewManager(client)
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		result := map[string]interface{}{
-			"success": false,
-			"message": fmt.Sprintf("获取用户目录失败: %v", err),
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		return errorJSON(fmt.Sprintf("获取用户目录失败: %v", err))
 	}
 	tempDir := filepath.Join(homeDir, ".ccNexus", "temp")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
-		result := map[string]interface{}{
-			"success": false,
-			"message": fmt.Sprintf("创建临时目录失败: %v", err),
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		return errorJSON(fmt.Sprintf("创建临时目录失败: %v", err))
 	}
 	tempRestorePath := filepath.Join(tempDir, "conflict_check_temp.db")
 	defer os.Remove(tempRestorePath)
 	defer os.RemoveAll(tempDir)
 
 	if err := manager.RestoreDatabase(filename, tempRestorePath); err != nil {
-		result := map[string]interface{}{
-			"success": false,
-			"message": fmt.Sprintf("下载备份失败: %v", err),
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		return errorJSON(fmt.Sprintf("下载备份失败: %v", err))
 	}
 
 	conflicts, err := w.storage.DetectEndpointConflicts(tempRestorePath)
 	if err != nil {
-		result := map[string]interface{}{
-			"success": false,
-			"message": fmt.Sprintf("检测冲突失败: %v", err),
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		return errorJSON(fmt.Sprintf("检测冲突失败: %v", err))
 	}
 
-	result := map[string]interface{}{
-		"success":   true,
+	return successJSON(map[string]interface{}{
 		"conflicts": conflicts,
-	}
-	data, _ := json.Marshal(result)
-	return string(data)
+	})
 }

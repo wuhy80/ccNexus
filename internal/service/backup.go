@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -194,8 +193,7 @@ func (b *BackupService) RestoreFromProvider(provider, filename, choice string, r
 
 func (b *BackupService) TestS3Connection(endpoint, region, bucket, prefix, accessKey, secretKey, sessionToken string, useSSL, forcePathStyle bool) string {
 	result := b.testS3Connection(endpoint, region, bucket, prefix, accessKey, secretKey, sessionToken, useSSL, forcePathStyle)
-	data, _ := json.Marshal(result)
-	return string(data)
+	return toJSON(result)
 }
 
 func (b *BackupService) saveConfig() error {

@@ -21,8 +21,7 @@ func marshalBackupListResult(success bool, message string, backups []BackupListI
 		Message: message,
 		Backups: backups,
 	}
-	data, _ := json.Marshal(result)
-	return string(data)
+	return toJSON(result)
 }
 
 func marshalConflictResult(success bool, message string, conflicts []storage.MergeConflict) string {
@@ -35,8 +34,7 @@ func marshalConflictResult(success bool, message string, conflicts []storage.Mer
 	if conflicts != nil {
 		result["conflicts"] = conflicts
 	}
-	data, _ := json.Marshal(result)
-	return string(data)
+	return toJSON(result)
 }
 
 func ensureDBFilename(filename string) string {

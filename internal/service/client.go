@@ -1,8 +1,6 @@
 package service
 
 import (
-	"encoding/json"
-
 	"github.com/lich0821/ccNexus/internal/storage"
 )
 
@@ -24,13 +22,11 @@ func (c *ClientService) GetConnectedClients(hoursAgo int) string {
 
 	clients, err := c.storage.GetConnectedClients(hoursAgo)
 	if err != nil {
-		result := map[string]interface{}{
+		return toJSON(map[string]interface{}{
 			"success": false,
 			"message": err.Error(),
 			"clients": []interface{}{},
-		}
-		data, _ := json.Marshal(result)
-		return string(data)
+		})
 	}
 
 	// Ensure empty slice instead of null in JSON
@@ -38,12 +34,9 @@ func (c *ClientService) GetConnectedClients(hoursAgo int) string {
 		clients = []storage.ClientStats{}
 	}
 
-	result := map[string]interface{}{
-		"success":  true,
+	return successJSON(map[string]interface{}{
 		"hoursAgo": hoursAgo,
 		"count":    len(clients),
 		"clients":  clients,
-	}
-	data, _ := json.Marshal(result)
-	return string(data)
+	})
 }

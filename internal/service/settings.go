@@ -25,8 +25,7 @@ func NewSettingsService(cfg *config.Config, s *storage.SQLiteStorage) *SettingsS
 
 // GetConfig returns the current configuration as JSON
 func (s *SettingsService) GetConfig() string {
-    data, _ := json.Marshal(s.config)
-    return string(data)
+    return toJSON(s.config)
 }
 
 // UpdateConfig updates the configuration
@@ -212,15 +211,13 @@ func (s *SettingsService) SetAutoDarkTheme(theme string) error {
 // GetLogs returns all log entries
 func (s *SettingsService) GetLogs() string {
     logs := logger.GetLogger().GetLogs()
-    data, _ := json.Marshal(logs)
-    return string(data)
+    return toJSON(logs)
 }
 
 // GetLogsByLevel returns logs filtered by level
 func (s *SettingsService) GetLogsByLevel(level int) string {
     logs := logger.GetLogger().GetLogsByLevel(logger.LogLevel(level))
-    data, _ := json.Marshal(logs)
-    return string(data)
+    return toJSON(logs)
 }
 
 // ClearLogs clears all log entries

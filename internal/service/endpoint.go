@@ -7,6 +7,7 @@ import (
     "io"
     "net/http"
     "strings"
+    "sync"
     "time"
 
     "github.com/lich0821/ccNexus/internal/config"
@@ -14,6 +15,49 @@ import (
     "github.com/lich0821/ccNexus/internal/proxy"
     "github.com/lich0821/ccNexus/internal/storage"
 )
+
+// getHTTPClient returns a cached HTTP client or creates a new one if needed
+func (e *EndpointService) getHTTPClient(timeout time.Duration) *http.Client {
+    // Get current proxy URL
+    var currentProxyURL string
+    if proxyCfg := e.config.GetProxy(); proxyCfg != nil {
+        currentProxyURL = proxyCfg.URL
+    }
+
+    e.clientCache.mu.RLock()
+    // Check if proxy config changed - if so, we need to invalidate cache
+    if e.clientCache.proxyURL != currentProxyURL {
+        e.clientCache.mu.RUnlock()
+        e.clientCache.mu.Lock()
+        // Double-check after acquiring write lock
+        if e.clientCache.proxyURL != currentProxyURL {
+            e.clientCache.clients = make(map[time.Duration]*http.Client)
+            e.clientCache.proxyURL = currentProxyURL
+        }
+        e.clientCache.mu.Unlock()
+        e.clientCache.mu.RLock()
+    }
+
+    // Check if we have a cached client
+    if client, ok := e.clientCache.clients[timeout]; ok {
+        e.clientCache.mu.RUnlock()
+        return client
+    }
+    e.clientCache.mu.RUnlock()
+
+    // Create new client
+    e.clientCache.mu.Lock()
+    defer e.clientCache.mu.Unlock()
+
+    // Double-check after acquiring write lock
+    if client, ok := e.clientCache.clients[timeout]; ok {
+        return client
+    }
+
+    client := e.createHTTPClient(timeout)
+    e.clientCache.clients[timeout] = client
+    return client
+}
 
 // createHTTPClient creates an HTTP client with optional proxy support
 func (e *EndpointService) createHTTPClient(timeout time.Duration) *http.Client {
@@ -32,11 +76,19 @@ const (
     testMaxTokens = 16
 )
 
+// httpClientCache holds cached HTTP clients by timeout duration
+type httpClientCache struct {
+    clients  map[time.Duration]*http.Client
+    proxyURL string // track proxy URL to invalidate cache when it changes
+    mu       sync.RWMutex
+}
+
 // EndpointService handles endpoint management operations
 type EndpointService struct {
-    config  *config.Config
-    proxy   *proxy.Proxy
-    storage *storage.SQLiteStorage
+    config      *config.Config
+    proxy       *proxy.Proxy
+    storage     *storage.SQLiteStorage
+    clientCache *httpClientCache
 }
 
 // NewEndpointService creates a new EndpointService
@@ -45,6 +97,9 @@ func NewEndpointService(cfg *config.Config, p *proxy.Proxy, s *storage.SQLiteSto
         config:  cfg,
         proxy:   p,
         storage: s,
+        clientCache: &httpClientCache{
+            clients: make(map[time.Duration]*http.Client),
+        },
     }
 }
 
@@ -55,9 +110,7 @@ func normalizeAPIUrl(apiUrl string) string {
 
 // AddEndpoint adds a new endpoint for a specific client type
 func (e *EndpointService) AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark string) error {
-    if clientType == "" {
-        clientType = "claude"
-    }
+    clientType = normalizeClientType(clientType)
 
     endpoints := e.config.GetEndpointsByClient(clientType)
     for _, ep := range endpoints {
@@ -66,9 +119,7 @@ func (e *EndpointService) AddEndpoint(clientType, name, apiUrl, apiKey, transfor
         }
     }
 
-    if transformer == "" {
-        transformer = "claude"
-    }
+    transformer = normalizeTransformer(transformer)
 
     apiUrl = normalizeAPIUrl(apiUrl)
 
@@ -114,9 +165,7 @@ func (e *EndpointService) AddEndpoint(clientType, name, apiUrl, apiKey, transfor
 
 // RemoveEndpoint removes an endpoint by index for a specific client type
 func (e *EndpointService) RemoveEndpoint(clientType string, index int) error {
-    if clientType == "" {
-        clientType = "claude"
-    }
+    clientType = normalizeClientType(clientType)
 
     endpoints := e.config.GetEndpointsByClient(clientType)
 
@@ -159,9 +208,7 @@ func (e *EndpointService) RemoveEndpoint(clientType string, index int) error {
 
 // UpdateEndpoint updates an endpoint by index for a specific client type
 func (e *EndpointService) UpdateEndpoint(clientType string, index int, name, apiUrl, apiKey, transformer, model, remark string) error {
-    if clientType == "" {
-        clientType = "claude"
-    }
+    clientType = normalizeClientType(clientType)
 
     endpoints := e.config.GetEndpointsByClient(clientType)
 
@@ -181,9 +228,7 @@ func (e *EndpointService) UpdateEndpoint(clientType string, index int, name, api
 
     enabled := endpoints[index].Enabled
 
-    if transformer == "" {
-        transformer = "claude"
-    }
+    transformer = normalizeTransformer(transformer)
 
     apiUrl = normalizeAPIUrl(apiUrl)
 
@@ -242,9 +287,7 @@ func (e *EndpointService) UpdateEndpoint(clientType string, index int, name, api
 
 // ToggleEndpoint toggles the enabled state of an endpoint for a specific client type
 func (e *EndpointService) ToggleEndpoint(clientType string, index int, enabled bool) error {
-    if clientType == "" {
-        clientType = "claude"
-    }
+    clientType = normalizeClientType(clientType)
 
     endpoints := e.config.GetEndpointsByClient(clientType)
 
@@ -286,9 +329,7 @@ func (e *EndpointService) ToggleEndpoint(clientType string, index int, enabled b
 
 // ReorderEndpoints reorders endpoints based on the provided name array for a specific client type
 func (e *EndpointService) ReorderEndpoints(clientType string, names []string) error {
-    if clientType == "" {
-        clientType = "claude"
-    }
+    clientType = normalizeClientType(clientType)
 
     endpoints := e.config.GetEndpointsByClient(clientType)
 
@@ -353,9 +394,7 @@ func (e *EndpointService) GetCurrentEndpoint(clientType string) string {
     if e.proxy == nil {
         return ""
     }
-    if clientType == "" {
-        clientType = "claude"
-    }
+    clientType = normalizeClientType(clientType)
     return e.proxy.GetCurrentEndpointNameForClient(clientType)
 }
 
@@ -364,27 +403,18 @@ func (e *EndpointService) SwitchToEndpoint(clientType, endpointName string) erro
     if e.proxy == nil {
         return fmt.Errorf("proxy not initialized")
     }
-    if clientType == "" {
-        clientType = "claude"
-    }
+    clientType = normalizeClientType(clientType)
     return e.proxy.SetCurrentEndpointForClient(clientType, endpointName)
 }
 
 // TestEndpoint tests an endpoint by sending a simple request for a specific client type
 func (e *EndpointService) TestEndpoint(clientType string, index int) string {
-    if clientType == "" {
-        clientType = "claude"
-    }
+    clientType = normalizeClientType(clientType)
 
     endpoints := e.config.GetEndpointsByClient(clientType)
 
     if index < 0 || index >= len(endpoints) {
-        result := map[string]interface{}{
-            "success": false,
-            "message": fmt.Sprintf("Invalid endpoint index: %d", index),
-        }
-        data, _ := json.Marshal(result)
-        return string(data)
+        return errorJSON(fmt.Sprintf("Invalid endpoint index: %d", index))
     }
 
     endpoint := endpoints[index]
@@ -395,9 +425,7 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
     var apiPath string
 
     transformer := endpoint.Transformer
-    if transformer == "" {
-        transformer = "claude"
-    }
+    transformer = normalizeTransformer(transformer)
 
     switch transformer {
     case "claude":
@@ -464,21 +492,11 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
         })
 
     default:
-        result := map[string]interface{}{
-            "success": false,
-            "message": fmt.Sprintf("Unsupported transformer: %s", transformer),
-        }
-        data, _ := json.Marshal(result)
-        return string(data)
+        return errorJSON(fmt.Sprintf("Unsupported transformer: %s", transformer))
     }
 
     if err != nil {
-        result := map[string]interface{}{
-            "success": false,
-            "message": fmt.Sprintf("Failed to build request: %v", err),
-        }
-        data, _ := json.Marshal(result)
-        return string(data)
+        return errorJSON(fmt.Sprintf("Failed to build request: %v", err))
     }
 
     // 通过ccNexus代理发送请求，而不是直接发送到目标API
@@ -488,12 +506,7 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
 
     req, err := http.NewRequest("POST", url, bytes.NewReader(requestBody))
     if err != nil {
-        result := map[string]interface{}{
-            "success": false,
-            "message": fmt.Sprintf("Failed to create request: %v", err),
-        }
-        data, _ := json.Marshal(result)
-        return string(data)
+        return errorJSON(fmt.Sprintf("Failed to create request: %v", err))
     }
 
     req.Header.Set("Content-Type", "application/json")
@@ -508,49 +521,34 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
         req.Header.Set("Authorization", "Bearer "+endpoint.APIKey)
     }
 
-    client := e.createHTTPClient(30 * time.Second)
+    client := e.getHTTPClient(30 * time.Second)
     resp, err := client.Do(req)
     if err != nil {
-        result := map[string]interface{}{
-            "success": false,
-            "message": fmt.Sprintf("Request failed: %v", err),
-        }
-        data, _ := json.Marshal(result)
         logger.Error("Test failed for %s: %v", endpoint.Name, err)
-        return string(data)
+        return errorJSON(fmt.Sprintf("Request failed: %v", err))
     }
     defer resp.Body.Close()
 
     respBody, err := io.ReadAll(resp.Body)
     if err != nil {
-        result := map[string]interface{}{
-            "success": false,
-            "message": fmt.Sprintf("Failed to read response: %v", err),
-        }
-        data, _ := json.Marshal(result)
-        return string(data)
+        return errorJSON(fmt.Sprintf("Failed to read response: %v", err))
     }
 
     if resp.StatusCode != http.StatusOK {
-        result := map[string]interface{}{
+        logger.Error("Test failed for %s: HTTP %d", endpoint.Name, resp.StatusCode)
+        return toJSON(map[string]interface{}{
             "success":    false,
             "statusCode": resp.StatusCode,
             "message":    fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(respBody)),
-        }
-        data, _ := json.Marshal(result)
-        logger.Error("Test failed for %s: HTTP %d", endpoint.Name, resp.StatusCode)
-        return string(data)
+        })
     }
 
     var responseData map[string]interface{}
     if err := json.Unmarshal(respBody, &responseData); err != nil {
-        result := map[string]interface{}{
-            "success": true,
-            "message": string(respBody),
-        }
-        data, _ := json.Marshal(result)
         logger.Info("Test successful for %s", endpoint.Name)
-        return string(data)
+        return successJSON(map[string]interface{}{
+            "message": string(respBody),
+        })
     }
 
     var message string
@@ -607,13 +605,10 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
         message = string(respBody)
     }
 
-    result := map[string]interface{}{
-        "success": true,
-        "message": message,
-    }
-    data, _ := json.Marshal(result)
     logger.Info("Test successful for %s", endpoint.Name)
-    return string(data)
+    return successJSON(map[string]interface{}{
+        "message": message,
+    })
 }
 
 // Remaining methods (TestEndpointLight, TestAllEndpointsZeroCost, FetchModels, etc.) 
@@ -621,9 +616,7 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
 
 // TestEndpointLight tests endpoint availability with minimal token consumption for a specific client type
 func (e *EndpointService) TestEndpointLight(clientType string, index int) string {
-    if clientType == "" {
-        clientType = "claude"
-    }
+    clientType = normalizeClientType(clientType)
 
     endpoints := e.config.GetEndpointsByClient(clientType)
 
@@ -635,14 +628,9 @@ func (e *EndpointService) TestEndpointLight(clientType string, index int) string
     logger.Info("Testing endpoint (light): %s (%s)", endpoint.Name, endpoint.APIUrl)
 
     transformer := endpoint.Transformer
-    if transformer == "" {
-        transformer = "claude"
-    }
+    transformer = normalizeTransformer(transformer)
 
-    normalizedURL := normalizeAPIUrl(endpoint.APIUrl)
-    if !strings.HasPrefix(normalizedURL, "http://") && !strings.HasPrefix(normalizedURL, "https://") {
-        normalizedURL = "https://" + normalizedURL
-    }
+    normalizedURL := normalizeAPIUrlWithScheme(endpoint.APIUrl)
 
     // Step 1: Try models API
     statusCode, err := e.testModelsAPI(normalizedURL, endpoint.APIKey, transformer)
@@ -688,35 +676,25 @@ func (e *EndpointService) TestEndpointLight(clientType string, index int) string
 }
 
 func (e *EndpointService) testResult(success bool, status, method, message string) string {
-    result := map[string]interface{}{
+    return toJSON(map[string]interface{}{
         "success": success,
         "status":  status,
         "method":  method,
         "message": message,
-    }
-    data, _ := json.Marshal(result)
-    return string(data)
+    })
 }
 
 // TestAllEndpointsZeroCost tests all endpoints using zero-cost methods only for a specific client type
 func (e *EndpointService) TestAllEndpointsZeroCost(clientType string) string {
-    if clientType == "" {
-        clientType = "claude"
-    }
+    clientType = normalizeClientType(clientType)
 
     endpoints := e.config.GetEndpointsByClient(clientType)
     results := make(map[string]string)
 
     for _, endpoint := range endpoints {
-        transformer := endpoint.Transformer
-        if transformer == "" {
-            transformer = "claude"
-        }
+        transformer := normalizeTransformer(endpoint.Transformer)
 
-        normalizedURL := normalizeAPIUrl(endpoint.APIUrl)
-        if !strings.HasPrefix(normalizedURL, "http://") && !strings.HasPrefix(normalizedURL, "https://") {
-            normalizedURL = "https://" + normalizedURL
-        }
+        normalizedURL := normalizeAPIUrlWithScheme(endpoint.APIUrl)
 
         status := "unknown"
 
@@ -746,8 +724,7 @@ func (e *EndpointService) TestAllEndpointsZeroCost(clientType string) string {
         results[endpoint.Name] = status
     }
 
-    data, _ := json.Marshal(results)
-    return string(data)
+    return toJSON(results)
 }
 
 func (e *EndpointService) testModelsAPI(apiUrl, apiKey, transformer string) (int, error) {
@@ -773,7 +750,7 @@ func (e *EndpointService) testModelsAPI(apiUrl, apiKey, transformer string) (int
     // gemini uses query parameter, already set in URL
     }
 
-    client := e.createHTTPClient(15 * time.Second)
+    client := e.getHTTPClient(15 * time.Second)
     resp, err := client.Do(req)
     if err != nil {
         return 0, err
@@ -831,7 +808,7 @@ func (e *EndpointService) testTokenCountAPI(apiUrl, apiKey string) (int, error) 
     req.Header.Set("anthropic-version", "2023-06-01")
     req.Header.Set("anthropic-beta", "token-counting-2024-11-01")
 
-    client := e.createHTTPClient(15 * time.Second)
+    client := e.getHTTPClient(15 * time.Second)
     resp, err := client.Do(req)
     if err != nil {
         return 0, err
@@ -869,7 +846,7 @@ func (e *EndpointService) testBillingAPI(apiUrl, apiKey string) (int, error) {
 
     req.Header.Set("Authorization", "Bearer "+apiKey)
 
-    client := e.createHTTPClient(15 * time.Second)
+    client := e.getHTTPClient(15 * time.Second)
     resp, err := client.Do(req)
     if err != nil {
         return 0, err
@@ -955,7 +932,7 @@ func (e *EndpointService) testMinimalRequest(apiUrl, apiKey, transformer, model 
         req.Header.Set("Authorization", "Bearer "+apiKey)
     }
 
-    client := e.createHTTPClient(30 * time.Second)
+    client := e.getHTTPClient(30 * time.Second)
     resp, err := client.Do(req)
     if err != nil {
         return 0, err
@@ -972,14 +949,9 @@ func (e *EndpointService) testMinimalRequest(apiUrl, apiKey, transformer, model 
 func (e *EndpointService) FetchModels(apiUrl, apiKey, transformer string) string {
     logger.Info("Fetching models for transformer: %s", transformer)
 
-    if transformer == "" {
-        transformer = "claude"
-    }
+    transformer = normalizeTransformer(transformer)
 
-    normalizedAPIUrl := normalizeAPIUrl(apiUrl)
-    if !strings.HasPrefix(normalizedAPIUrl, "http://") && !strings.HasPrefix(normalizedAPIUrl, "https://") {
-        normalizedAPIUrl = "https://" + normalizedAPIUrl
-    }
+    normalizedAPIUrl := normalizeAPIUrlWithScheme(apiUrl)
 
     var models []string
     var err error
@@ -992,33 +964,26 @@ func (e *EndpointService) FetchModels(apiUrl, apiKey, transformer string) string
     case "gemini":
         models, err = e.fetchGeminiModels(normalizedAPIUrl, apiKey)
     default:
-        result := map[string]interface{}{
+        return toJSON(map[string]interface{}{
             "success": false,
             "message": fmt.Sprintf("Unsupported transformer: %s", transformer),
             "models":  []string{},
-        }
-        data, _ := json.Marshal(result)
-        return string(data)
+        })
     }
 
     if err != nil {
-        result := map[string]interface{}{
+        return toJSON(map[string]interface{}{
             "success": false,
             "message": err.Error(),
             "models":  []string{},
-        }
-        data, _ := json.Marshal(result)
-        return string(data)
+        })
     }
 
-    result := map[string]interface{}{
-        "success": true,
+    logger.Info("Fetched %d models for %s", len(models), transformer)
+    return successJSON(map[string]interface{}{
         "message": fmt.Sprintf("Found %d models", len(models)),
         "models":  models,
-    }
-    data, _ := json.Marshal(result)
-    logger.Info("Fetched %d models for %s", len(models), transformer)
-    return string(data)
+    })
 }
 
 func (e *EndpointService) fetchOpenAIModels(apiUrl, apiKey string) ([]string, error) {
@@ -1031,7 +996,7 @@ func (e *EndpointService) fetchOpenAIModels(apiUrl, apiKey string) ([]string, er
 
     req.Header.Set("Authorization", "Bearer "+apiKey)
 
-    client := e.createHTTPClient(30 * time.Second)
+    client := e.getHTTPClient(30 * time.Second)
     resp, err := client.Do(req)
     if err != nil {
         return nil, fmt.Errorf("request failed: %v", err)
@@ -1073,7 +1038,7 @@ func (e *EndpointService) fetchGeminiModels(apiUrl, apiKey string) ([]string, er
         return nil, fmt.Errorf("failed to create request: %v", err)
     }
 
-    client := e.createHTTPClient(30 * time.Second)
+    client := e.getHTTPClient(30 * time.Second)
     resp, err := client.Do(req)
     if err != nil {
         return nil, fmt.Errorf("request failed: %v", err)
