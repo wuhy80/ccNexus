@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/lich0821/ccNexus/internal/singleinstance"
 	"github.com/lich0821/ccNexus/internal/storage"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -33,32 +32,13 @@ func main() {
 	isNoProxyMode := os.Getenv("CCNEXUS_NO_PROXY") != ""
 	isWailsDev := os.Getenv("WAILS_ENVIRONMENT") == "development"
 
-	// Use different mutex name for dev mode to allow running both dev and prod instances
-	mutexName := "Global\\ccNexus-SingleInstance-Mutex"
-	if isDevMode || isNoProxyMode || isWailsDev {
-		mutexName = "Global\\ccNexus-SingleInstance-Mutex-dev"
-		if isNoProxyMode {
-			log.Printf("Running in no-proxy mode (using production database)")
-		} else if isDevMode {
-			log.Printf("Running in development mode (using separate database)")
-		} else {
-			log.Printf("Running in Wails development mode")
-		}
+	if isNoProxyMode {
+		log.Printf("Running in no-proxy mode (using production database)")
+	} else if isDevMode {
+		log.Printf("Running in development mode (using separate database)")
+	} else if isWailsDev {
+		log.Printf("Running in Wails development mode")
 	}
-
-	// Check for single instance
-	mutex, err := singleinstance.CreateMutex(mutexName)
-	if err != nil {
-		// Another instance is already running, try to show it
-		log.Printf("Another instance is already running, attempting to show existing window...")
-		if singleinstance.FindAndShowExistingWindow("ccNexus") {
-			log.Printf("Successfully brought existing window to foreground")
-		} else {
-			log.Printf("Could not find existing window, but another instance is running")
-		}
-		os.Exit(0)
-	}
-	defer mutex.Release()
 
 	// Select appropriate tray icon based on OS
 	var trayIcon []byte

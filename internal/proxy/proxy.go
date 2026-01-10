@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -104,6 +105,7 @@ func (p *Proxy) Start() error {
 }
 
 // StartWithMux starts the proxy server with an optional custom mux
+// If the port is already in use, it will automatically try the next port (up to 10 attempts)
 func (p *Proxy) StartWithMux(customMux *http.ServeMux) error {
 	port := p.config.GetPort()
 
@@ -120,15 +122,32 @@ func (p *Proxy) StartWithMux(customMux *http.ServeMux) error {
 	mux.HandleFunc("/health", p.handleHealth)
 	mux.HandleFunc("/stats", p.handleStats)
 
-	p.server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: mux,
+	// Try to find an available port (up to 10 attempts)
+	maxAttempts := 10
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		currentPort := port + attempt
+		addr := fmt.Sprintf(":%d", currentPort)
+
+		// Try to listen on the port first to check availability
+		listener, err := net.Listen("tcp", addr)
+		if err != nil {
+			logger.Warn("Port %d is in use, trying port %d...", currentPort, currentPort+1)
+			continue
+		}
+
+		p.server = &http.Server{
+			Addr:    addr,
+			Handler: mux,
+		}
+
+		logger.Info("ccNexus starting on port %d", currentPort)
+		logger.Info("Configured %d endpoints", len(p.config.GetEndpoints()))
+
+		// Use the listener we already created
+		return p.server.Serve(listener)
 	}
 
-	logger.Info("ccNexus starting on port %d", port)
-	logger.Info("Configured %d endpoints", len(p.config.GetEndpoints()))
-
-	return p.server.ListenAndServe()
+	return fmt.Errorf("failed to find available port after %d attempts (tried ports %d-%d)", maxAttempts, port, port+maxAttempts-1)
 }
 
 // Stop stops the proxy server
