@@ -62,6 +62,10 @@ export function GenerateMockArchives(arg1) {
   return window['go']['main']['App']['GenerateMockArchives'](arg1);
 }
 
+export function GetActiveRequests() {
+  return window['go']['main']['App']['GetActiveRequests']();
+}
+
 export function GetArchiveData(arg1) {
   return window['go']['main']['App']['GetArchiveData'](arg1);
 }
@@ -98,6 +102,10 @@ export function GetDailyRequestDetails(arg1, arg2) {
   return window['go']['main']['App']['GetDailyRequestDetails'](arg1, arg2);
 }
 
+export function GetEndpointMetrics() {
+  return window['go']['main']['App']['GetEndpointMetrics']();
+}
+
 export function GetInteractionDates() {
   return window['go']['main']['App']['GetInteractionDates']();
 }
@@ -132,6 +140,10 @@ export function GetLogs() {
 
 export function GetLogsByLevel(arg1) {
   return window['go']['main']['App']['GetLogsByLevel'](arg1);
+}
+
+export function GetMonitorSnapshot() {
+  return window['go']['main']['App']['GetMonitorSnapshot']();
 }
 
 export function GetPerformanceStats(arg1) {
@@ -220,6 +232,10 @@ export function RemoveEndpoint(arg1, arg2) {
 
 export function ReorderEndpoints(arg1, arg2) {
   return window['go']['main']['App']['ReorderEndpoints'](arg1, arg2);
+}
+
+export function ResetMonitorMetrics() {
+  return window['go']['main']['App']['ResetMonitorMetrics']();
 }
 
 export function RestoreFromProvider(arg1, arg2, arg3) {

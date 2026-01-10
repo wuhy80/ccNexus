@@ -31,6 +31,8 @@ export function FetchModels(arg1:string,arg2:string,arg3:string):Promise<string>
 
 export function GenerateMockArchives(arg1:number):Promise<string>;
 
+export function GetActiveRequests():Promise<string>;
+
 export function GetArchiveData(arg1:string):Promise<string>;
 
 export function GetArchiveTrend(arg1:string):Promise<string>;
@@ -49,6 +51,8 @@ export function GetCurrentEndpoint(arg1:string):Promise<string>;
 
 export function GetDailyRequestDetails(arg1:number,arg2:number):Promise<string>;
 
+export function GetEndpointMetrics():Promise<string>;
+
 export function GetInteractionDates():Promise<string>;
 
 export function GetInteractionDetail(arg1:string,arg2:string):Promise<string>;
@@ -66,6 +70,8 @@ export function GetLogLevel():Promise<number>;
 export function GetLogs():Promise<string>;
 
 export function GetLogsByLevel(arg1:number):Promise<string>;
+
+export function GetMonitorSnapshot():Promise<string>;
 
 export function GetPerformanceStats(arg1:string):Promise<string>;
 
@@ -110,6 +116,8 @@ export function Quit():Promise<void>;
 export function RemoveEndpoint(arg1:string,arg2:number):Promise<void>;
 
 export function ReorderEndpoints(arg1:string,arg2:Array<string>):Promise<void>;
+
+export function ResetMonitorMetrics():Promise<void>;
 
 export function RestoreFromProvider(arg1:string,arg2:string,arg3:string):Promise<void>;
 
