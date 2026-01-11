@@ -619,6 +619,8 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var lastError string // Track the last error message for better error reporting
+
 	for retry := 0; retry < maxRetries; retry++ {
 		var endpoint config.Endpoint
 		if fixedEndpoint != nil {
@@ -653,6 +655,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 		trans, err := prepareTransformerForClient(clientFormat, endpoint)
 		if err != nil {
+			lastError = fmt.Sprintf("[%s] %v", endpoint.Name, err)
 			logger.Error("[%s:%s] %v", clientType, endpoint.Name, err)
 			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.monitor.CompleteRequest(monitorReqID, false, err.Error())
@@ -667,6 +670,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 		transformedBody, err := trans.TransformRequest(bodyBytes)
 		if err != nil {
+			lastError = fmt.Sprintf("[%s] Failed to transform request: %v", endpoint.Name, err)
 			logger.Error("[%s:%s] Failed to transform request: %v", clientType, endpoint.Name, err)
 			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.monitor.CompleteRequest(monitorReqID, false, err.Error())
@@ -710,6 +714,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 		proxyReq, err := buildProxyRequest(r, endpoint, transformedBody, transformerName)
 		if err != nil {
+			lastError = fmt.Sprintf("[%s] Failed to create request: %v", endpoint.Name, err)
 			logger.Error("[%s:%s] Failed to create request: %v (URL: %s)", clientType, endpoint.Name, err, endpoint.APIUrl)
 			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.monitor.CompleteRequest(monitorReqID, false, err.Error())
@@ -726,6 +731,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		ctx := p.getEndpointContext(endpoint.Name)
 		resp, err := sendRequest(ctx, proxyReq, p.config)
 		if err != nil {
+			lastError = fmt.Sprintf("[%s] Request failed: %v", endpoint.Name, err)
 			logger.Error("[%s:%s] Request failed: %v (URL: %s, Model: %s)", clientType, endpoint.Name, err, endpoint.APIUrl, streamReq.Model)
 			p.stats.RecordError(endpoint.Name, string(clientType))
 			p.monitor.CompleteRequest(monitorReqID, false, err.Error())
@@ -944,6 +950,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			} else if len(errMsg) > 200 {
 				errMsg = errMsg[:200] + "..."
 			}
+			lastError = fmt.Sprintf("[%s] HTTP %d: %s", endpoint.Name, resp.StatusCode, errMsg)
 			logger.Warn("[%s:%s] Request failed %d: %s (URL: %s, Model: %s)", clientType, endpoint.Name, resp.StatusCode, errMsg, endpoint.APIUrl, streamReq.Model)
 			logger.DebugLog("[%s:%s] Request failed %d: %s (URL: %s, Model: %s)", clientType, endpoint.Name, resp.StatusCode, errMsg, endpoint.APIUrl, streamReq.Model)
 			p.stats.RecordError(endpoint.Name, string(clientType))
@@ -997,12 +1004,21 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 	// Save interaction record for failed requests
 	if interactionRecord != nil {
 		interactionRecord.Stats.Success = false
-		interactionRecord.Stats.ErrorMessage = "All endpoints failed"
+		if lastError != "" {
+			interactionRecord.Stats.ErrorMessage = lastError
+		} else {
+			interactionRecord.Stats.ErrorMessage = "All endpoints failed"
+		}
 		interactionRecord.Stats.DurationMs = time.Since(requestStartTime).Milliseconds()
 		go p.interactionStorage.Save(interactionRecord)
 	}
 
-	http.Error(w, "All endpoints failed", http.StatusServiceUnavailable)
+	// Return detailed error message
+	errorMsg := "All endpoints failed"
+	if lastError != "" {
+		errorMsg = lastError
+	}
+	http.Error(w, errorMsg, http.StatusServiceUnavailable)
 }
 
 // handleEndpointRotation handles endpoint rotation logic for retry scenarios
