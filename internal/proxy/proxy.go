@@ -576,8 +576,30 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		interactionRecord.Request.Model = streamReq.Model
 	}
 
+	// Check if a specific endpoint is requested via header (used for testing)
+	// This must be checked BEFORE the enabled endpoints check, because test requests
+	// can target disabled endpoints
+	specifiedEndpoint := r.Header.Get("X-CCNexus-Endpoint")
+	var fixedEndpoint *config.Endpoint
+	if specifiedEndpoint != "" {
+		// For test requests, search in ALL endpoints (including disabled ones)
+		allEndpoints := p.config.GetEndpointsByClient(string(clientType))
+		for _, ep := range allEndpoints {
+			if ep.Name == specifiedEndpoint {
+				epCopy := ep
+				fixedEndpoint = &epCopy
+				break
+			}
+		}
+		if fixedEndpoint == nil {
+			http.Error(w, fmt.Sprintf("Specified endpoint '%s' not found for client type: %s", specifiedEndpoint, clientType), http.StatusBadRequest)
+			return
+		}
+	}
+
 	endpoints := p.getEnabledEndpointsForClient(clientType)
-	if len(endpoints) == 0 {
+	// Only check for enabled endpoints if this is NOT a test request
+	if fixedEndpoint == nil && len(endpoints) == 0 {
 		logger.Error("No enabled endpoints available for client type: %s", clientType)
 		http.Error(w, fmt.Sprintf("No enabled endpoints configured for client type: %s", clientType), http.StatusServiceUnavailable)
 		return
@@ -587,20 +609,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 	endpointAttempts := 0
 	lastEndpointName := ""
 
-	// Check if a specific endpoint is requested via header (used for testing)
-	specifiedEndpoint := r.Header.Get("X-CCNexus-Endpoint")
-	var fixedEndpoint *config.Endpoint
-	if specifiedEndpoint != "" {
-		for _, ep := range endpoints {
-			if ep.Name == specifiedEndpoint {
-				fixedEndpoint = &ep
-				break
-			}
-		}
-		if fixedEndpoint == nil {
-			http.Error(w, fmt.Sprintf("Specified endpoint '%s' not found or not enabled for client type: %s", specifiedEndpoint, clientType), http.StatusBadRequest)
-			return
-		}
+	if fixedEndpoint != nil {
 		// For test requests, use reduced retry count
 		maxRetries = 3
 		logger.Debug("[TEST:%s] Using fixed endpoint: %s (max retries: %d)", clientType, specifiedEndpoint, maxRetries)
