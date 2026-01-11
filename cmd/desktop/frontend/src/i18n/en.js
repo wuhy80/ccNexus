@@ -588,6 +588,14 @@ export default {
         active: 'active',
         avgResponseTime: 'Avg Response Time',
         successRate: 'Success Rate',
+        // New
+        reqPerMin: 'req/min',
+        tokensPerMin: 'tokens/min',
+        endpointHealth: 'Endpoint Health',
+        activeRequests: 'Active Requests',
+        recentRequests: 'Recent Requests',
+        noRecentRequests: 'No recent requests',
+        noEndpoints: 'No endpoints',
         phase: {
             waiting: 'Waiting',
             connecting: 'Connecting',

@@ -102,6 +102,10 @@ export function GetDailyRequestDetails(arg1, arg2) {
   return window['go']['main']['App']['GetDailyRequestDetails'](arg1, arg2);
 }
 
+export function GetEndpointHealth() {
+  return window['go']['main']['App']['GetEndpointHealth']();
+}
+
 export function GetEndpointMetrics() {
   return window['go']['main']['App']['GetEndpointMetrics']();
 }
@@ -152,6 +156,10 @@ export function GetPerformanceStats(arg1) {
 
 export function GetProxyURL() {
   return window['go']['main']['App']['GetProxyURL']();
+}
+
+export function GetRecentRequests(arg1) {
+  return window['go']['main']['App']['GetRecentRequests'](arg1);
 }
 
 export function GetStats() {

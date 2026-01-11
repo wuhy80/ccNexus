@@ -51,6 +51,8 @@ export function GetCurrentEndpoint(arg1:string):Promise<string>;
 
 export function GetDailyRequestDetails(arg1:number,arg2:number):Promise<string>;
 
+export function GetEndpointHealth():Promise<string>;
+
 export function GetEndpointMetrics():Promise<string>;
 
 export function GetInteractionDates():Promise<string>;
@@ -76,6 +78,8 @@ export function GetMonitorSnapshot():Promise<string>;
 export function GetPerformanceStats(arg1:string):Promise<string>;
 
 export function GetProxyURL():Promise<string>;
+
+export function GetRecentRequests(arg1:number):Promise<string>;
 
 export function GetStats():Promise<string>;
 

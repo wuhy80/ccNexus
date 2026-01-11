@@ -20,11 +20,12 @@
 
 /* Active Requests Panel */
 .active-requests-panel {
-    background: var(--card-bg);
+    background: transparent;
     border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 16px;
-    border: 1px solid var(--border-color);
+    padding: 0 0 12px 0;
+    margin-bottom: 8px;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
 }
 
 #activeRequestsList {
@@ -140,8 +141,8 @@
 
 .monitor-empty-icon {
     font-size: 24px;
-    color: #10b981;
     margin-bottom: 8px;
+    opacity: 0.6;
 }
 
 .monitor-empty-text {
@@ -275,4 +276,309 @@
 
 [data-theme="dark"] .metric-success-rate {
     color: #34d399;
+}
+
+/* ========== New Monitor Enhancements ========== */
+
+/* Monitor Header with Throughput */
+.monitor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.throughput-indicators {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+}
+
+.throughput-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.throughput-value {
+    font-weight: 600;
+    color: var(--primary-color);
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+}
+
+.throughput-unit {
+    color: var(--text-tertiary);
+    font-size: 11px;
+}
+
+.throughput-divider {
+    color: var(--border-color);
+}
+
+/* Panel Headers */
+.panel-header {
+    margin-bottom: 10px;
+}
+
+.panel-header h4 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.panel-header .section-icon {
+    font-size: 14px;
+}
+
+/* Endpoint Health Panel */
+.endpoint-health-panel {
+    background: transparent;
+    border-radius: 8px;
+    padding: 0 0 12px 0;
+    margin-bottom: 8px;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.endpoint-health-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.endpoint-health-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    flex: 1 1 calc(33.333% - 8px);
+    min-width: 200px;
+    max-width: calc(33.333% - 6px);
+    transition: all 0.2s ease;
+}
+
+.endpoint-health-item:hover {
+    background: var(--hover-bg);
+}
+
+.health-status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.status-healthy .health-status-indicator {
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.status-warning .health-status-indicator {
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+}
+
+.status-error .health-status-indicator {
+    background: #ef4444;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+    animation: pulse-critical 1.5s ease-in-out infinite;
+}
+
+.health-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.health-endpoint-name {
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.health-stats {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.health-active {
+    color: #10b981;
+}
+
+.health-divider {
+    color: var(--border-light);
+}
+
+/* Recent Requests Panel */
+.recent-requests-panel {
+    background: transparent;
+    border-radius: 8px;
+    padding: 0;
+    margin-top: 0;
+    border: none;
+}
+
+#recentRequestsList {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.recent-request-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    border-left: 3px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.recent-request-item:last-child {
+    margin-bottom: 0;
+}
+
+.recent-request-item:hover {
+    background: var(--hover-bg);
+}
+
+.recent-request-item.status-success {
+    border-left-color: #10b981;
+}
+
+.recent-request-item.status-failed {
+    border-left-color: #ef4444;
+}
+
+.recent-request-time {
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    min-width: 65px;
+}
+
+.recent-request-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.recent-endpoint {
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.recent-model {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.recent-request-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    min-width: 100px;
+}
+
+.recent-duration {
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.recent-tokens {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
+.recent-request-status {
+    min-width: 24px;
+    text-align: center;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 12px;
+}
+
+.status-badge.success {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+
+.status-badge.failed {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+/* Dark theme adjustments for new components */
+[data-theme="dark"] .endpoint-health-item,
+[data-theme="dark"] .recent-request-item {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .endpoint-health-item:hover,
+[data-theme="dark"] .recent-request-item:hover {
+    background: var(--hover-bg);
+}
+
+[data-theme="dark"] .status-healthy .health-status-indicator {
+    background: #34d399;
+    box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
+}
+
+[data-theme="dark"] .status-warning .health-status-indicator {
+    background: #fbbf24;
+    box-shadow: 0 0 6px rgba(251, 191, 36, 0.5);
+}
+
+[data-theme="dark"] .status-error .health-status-indicator {
+    background: #f87171;
+    box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
+}
+
+[data-theme="dark"] .health-active {
+    color: #34d399;
+}
+
+[data-theme="dark"] .status-badge.success {
+    background: rgba(52, 211, 153, 0.2);
+    color: #34d399;
+}
+
+[data-theme="dark"] .status-badge.failed {
+    background: rgba(248, 113, 113, 0.2);
+    color: #f87171;
 }

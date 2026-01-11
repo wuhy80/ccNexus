@@ -739,3 +739,20 @@ func (s *StatsService) GetPerformanceStats(period string) string {
 		"endpointMetrics": endpointMetrics,
 	})
 }
+
+// GetRecentRequestStats returns the most recent request records for monitoring display
+func (s *StatsService) GetRecentRequestStats(limit int) string {
+	if s.storage == nil {
+		return toJSON(map[string]interface{}{"requests": []interface{}{}})
+	}
+
+	// Get requests from the last 7 days to ensure we have data
+	endDate := time.Now().Format("2006-01-02")
+	startDate := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
+	requests, err := s.storage.GetRequestStats("", "", startDate, endDate, limit, 0)
+	if err != nil {
+		return toJSON(map[string]interface{}{"requests": []interface{}{}})
+	}
+
+	return toJSON(map[string]interface{}{"requests": requests})
+}

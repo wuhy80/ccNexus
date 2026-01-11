@@ -3,7 +3,15 @@ import { t } from '../i18n/index.js';
 // State
 let activeRequests = new Map(); // requestId -> request data
 let endpointMetrics = new Map(); // endpointName -> metrics
+let recentRequests = [];           // Recent completed requests
+let endpointHealth = new Map();    // endpointName -> health status
+let throughputStats = {            // Throughput statistics
+    requestsPerMin: 0,
+    tokensPerMin: 0,
+    recentCompletions: []          // Rolling window for last 1 minute
+};
 let durationUpdateInterval = null;
+let throughputUpdateInterval = null;
 let isMonitorVisible = true;
 
 // Phase icons and labels
@@ -26,8 +34,13 @@ export function initMonitor() {
     // Start duration update timer
     startDurationUpdates();
 
-    // Load initial snapshot
+    // Start throughput update timer
+    startThroughputUpdates();
+
+    // Load initial data
     loadMonitorSnapshot();
+    loadRecentRequests();
+    loadEndpointHealth();
 }
 
 // Handle monitor events from backend
@@ -53,6 +66,12 @@ function handleMonitorEvent(event) {
             if (event.request) {
                 activeRequests.delete(event.request.requestId);
                 renderActiveRequests();
+
+                // Add to recent requests history
+                addToRecentRequests(event.request);
+
+                // Update throughput statistics
+                updateThroughputOnCompletion(event.request);
             }
             break;
 
@@ -60,6 +79,9 @@ function handleMonitorEvent(event) {
             if (event.metrics) {
                 endpointMetrics.set(event.metrics.endpointName, event.metrics);
                 renderEndpointMetrics();
+
+                // Update endpoint health status
+                updateEndpointHealthFromMetrics(event.metrics);
             }
             break;
     }
@@ -268,4 +290,277 @@ export function getActiveRequestCount() {
 // Get endpoint metrics (for external use)
 export function getEndpointMetricsData() {
     return Object.fromEntries(endpointMetrics);
+}
+
+// ========== New Functions for Enhanced Monitoring ==========
+
+// Load recent requests from backend
+async function loadRecentRequests() {
+    try {
+        const resultStr = await window.go.main.App.GetRecentRequests(10);
+        const result = JSON.parse(resultStr);
+
+        if (result.requests && Array.isArray(result.requests)) {
+            recentRequests = result.requests.map(req => ({
+                requestId: req.requestId,
+                endpointName: req.endpointName,
+                model: req.model,
+                completedAt: new Date(req.timestamp),
+                duration: req.durationMs / 1000,
+                inputTokens: req.inputTokens + req.cacheCreationTokens + req.cacheReadTokens,
+                outputTokens: req.outputTokens,
+                success: req.success
+            }));
+            renderRecentRequests();
+        }
+    } catch (error) {
+        console.error('Failed to load recent requests:', error);
+    }
+}
+
+// Load endpoint health status from backend
+async function loadEndpointHealth() {
+    try {
+        const resultStr = await window.go.main.App.GetEndpointHealth();
+        const healthList = JSON.parse(resultStr);
+
+        endpointHealth.clear();
+        if (Array.isArray(healthList)) {
+            for (const h of healthList) {
+                endpointHealth.set(h.endpointName, h);
+            }
+        }
+        renderEndpointHealth();
+    } catch (error) {
+        console.error('Failed to load endpoint health:', error);
+    }
+}
+
+// Add completed request to recent history
+function addToRecentRequests(request) {
+    const completedRequest = {
+        requestId: request.requestId,
+        endpointName: request.endpointName,
+        model: request.model,
+        completedAt: new Date(),
+        duration: (Date.now() - new Date(request.startTime).getTime()) / 1000,
+        inputTokens: 0, // Will be updated from stats if available
+        outputTokens: 0,
+        success: request.phase === 'completed'
+    };
+
+    recentRequests.unshift(completedRequest);
+
+    // Keep max 10 items
+    if (recentRequests.length > 10) {
+        recentRequests = recentRequests.slice(0, 10);
+    }
+
+    renderRecentRequests();
+}
+
+// Update throughput statistics on request completion
+function updateThroughputOnCompletion(request) {
+    const now = Date.now();
+    const completion = {
+        timestamp: now,
+        tokens: request.bytesReceived || 0
+    };
+
+    throughputStats.recentCompletions.push(completion);
+
+    // Clean up entries older than 1 minute
+    const oneMinuteAgo = now - 60000;
+    throughputStats.recentCompletions = throughputStats.recentCompletions.filter(
+        c => c.timestamp > oneMinuteAgo
+    );
+}
+
+// Update endpoint health from metrics event
+function updateEndpointHealthFromMetrics(metrics) {
+    const health = {
+        endpointName: metrics.endpointName,
+        status: calculateHealthStatusFromMetrics(metrics),
+        activeCount: metrics.activeCount,
+        successRate: metrics.successRate,
+        avgResponseTime: metrics.avgResponseTime,
+        lastError: metrics.lastError,
+        lastErrorTime: metrics.lastErrorTime
+    };
+
+    endpointHealth.set(metrics.endpointName, health);
+    renderEndpointHealth();
+}
+
+// Calculate health status from metrics
+function calculateHealthStatusFromMetrics(metrics) {
+    // Check for recent errors (within 5 minutes)
+    if (metrics.lastErrorTime > 0) {
+        const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+        if (metrics.lastErrorTime > fiveMinutesAgo) {
+            return 'error';
+        }
+    }
+
+    // Check success rate
+    if (metrics.totalRequests > 0) {
+        if (metrics.successRate < 80) {
+            return 'error';
+        }
+        if (metrics.successRate < 95) {
+            return 'warning';
+        }
+    }
+
+    return 'healthy';
+}
+
+// Start periodic throughput updates
+function startThroughputUpdates() {
+    if (throughputUpdateInterval) {
+        clearInterval(throughputUpdateInterval);
+    }
+
+    throughputUpdateInterval = setInterval(() => {
+        if (isMonitorVisible) {
+            calculateAndDisplayThroughput();
+        }
+    }, 5000); // Update every 5 seconds
+}
+
+// Calculate and display throughput
+function calculateAndDisplayThroughput() {
+    const now = Date.now();
+    const oneMinuteAgo = now - 60000;
+
+    // Clean up expired entries
+    throughputStats.recentCompletions = throughputStats.recentCompletions.filter(
+        c => c.timestamp > oneMinuteAgo
+    );
+
+    // Calculate rates
+    throughputStats.requestsPerMin = throughputStats.recentCompletions.length;
+    throughputStats.tokensPerMin = throughputStats.recentCompletions.reduce(
+        (sum, c) => sum + c.tokens, 0
+    );
+
+    updateThroughputDisplay();
+}
+
+// Update throughput display in UI
+function updateThroughputDisplay() {
+    const reqEl = document.getElementById('requestsPerMin');
+    const tokenEl = document.getElementById('tokensPerMin');
+
+    if (reqEl) {
+        reqEl.textContent = throughputStats.requestsPerMin;
+    }
+    if (tokenEl) {
+        tokenEl.textContent = formatNumber(throughputStats.tokensPerMin);
+    }
+}
+
+// Render recent requests list
+function renderRecentRequests() {
+    const container = document.getElementById('recentRequestsList');
+    if (!container) return;
+
+    if (recentRequests.length === 0) {
+        container.innerHTML = `
+            <div class="monitor-empty">
+                <span class="monitor-empty-icon">📭</span>
+                <span class="monitor-empty-text">${t('monitor.noRecentRequests')}</span>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+    for (const req of recentRequests) {
+        const statusClass = req.success ? 'status-success' : 'status-failed';
+        const statusIcon = req.success ? '✓' : '✗';
+        const time = req.completedAt instanceof Date
+            ? req.completedAt.toLocaleTimeString('zh-CN', { hour12: false })
+            : new Date(req.completedAt).toLocaleTimeString('zh-CN', { hour12: false });
+
+        html += `
+            <div class="recent-request-item ${statusClass}">
+                <div class="recent-request-time">${time}</div>
+                <div class="recent-request-info">
+                    <span class="recent-endpoint">${escapeHtml(req.endpointName)}</span>
+                    <span class="recent-model">${escapeHtml(req.model || '-')}</span>
+                </div>
+                <div class="recent-request-stats">
+                    <span class="recent-duration">${formatDuration(req.duration)}</span>
+                    <span class="recent-tokens">${formatTokens(req.inputTokens)} / ${formatTokens(req.outputTokens)}</span>
+                </div>
+                <div class="recent-request-status">
+                    <span class="status-badge ${req.success ? 'success' : 'failed'}">${statusIcon}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
+}
+
+// Render endpoint health status
+function renderEndpointHealth() {
+    const container = document.getElementById('endpointHealthList');
+    if (!container) return;
+
+    if (endpointHealth.size === 0) {
+        container.innerHTML = `
+            <div class="monitor-empty">
+                <span class="monitor-empty-icon">📡</span>
+                <span class="monitor-empty-text">${t('monitor.noEndpoints')}</span>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+    endpointHealth.forEach((health, name) => {
+        const statusClass = `status-${health.status}`;
+        const avgTime = health.avgResponseTime > 0
+            ? formatDuration(health.avgResponseTime)
+            : '-';
+        const successRate = health.successRate > 0
+            ? health.successRate.toFixed(1) + '%'
+            : '-';
+
+        html += `
+            <div class="endpoint-health-item ${statusClass}">
+                <div class="health-status-indicator"></div>
+                <div class="health-info">
+                    <span class="health-endpoint-name">${escapeHtml(name)}</span>
+                    <span class="health-stats">
+                        ${health.activeCount > 0 ? `<span class="health-active">${health.activeCount} ${t('monitor.active')}</span><span class="health-divider">|</span>` : ''}
+                        <span>${successRate}</span>
+                        <span class="health-divider">|</span>
+                        <span>${avgTime}</span>
+                    </span>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+// Helper: Format tokens for display
+function formatTokens(tokens) {
+    return formatNumber(tokens);
+}
+
+// Helper: Format number for display
+function formatNumber(num) {
+    if (!num || num === 0) return '0';
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    }
+    if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
 }

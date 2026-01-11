@@ -588,6 +588,14 @@ export default {
         active: '活跃',
         avgResponseTime: '平均响应时间',
         successRate: '成功率',
+        // 新增
+        reqPerMin: '请求/分',
+        tokensPerMin: 'tokens/分',
+        endpointHealth: '端点健康状态',
+        activeRequests: '活跃请求',
+        recentRequests: '最近请求',
+        noRecentRequests: '暂无请求记录',
+        noEndpoints: '暂无端点',
         phase: {
             waiting: '等待中',
             connecting: '连接中',

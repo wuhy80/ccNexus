@@ -260,14 +260,56 @@ export function initUI() {
 
             <!-- Active Requests Monitor -->
             <div class="card monitor-section">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div class="monitor-header">
                     <h2 style="margin: 0;">🔄 ${t('monitor.title')}</h2>
+                    <div class="throughput-indicators">
+                        <span class="throughput-item">
+                            <span class="throughput-value" id="requestsPerMin">0</span>
+                            <span class="throughput-unit">${t('monitor.reqPerMin')}</span>
+                        </span>
+                        <span class="throughput-divider">|</span>
+                        <span class="throughput-item">
+                            <span class="throughput-value" id="tokensPerMin">0</span>
+                            <span class="throughput-unit">${t('monitor.tokensPerMin')}</span>
+                        </span>
+                    </div>
                 </div>
+
+                <!-- Endpoint Health Panel -->
+                <div class="endpoint-health-panel">
+                    <div class="panel-header">
+                        <h4><span class="section-icon">💚</span> ${t('monitor.endpointHealth')}</h4>
+                    </div>
+                    <div id="endpointHealthList" class="endpoint-health-grid">
+                        <div class="monitor-empty">
+                            <span class="monitor-empty-icon">📡</span>
+                            <span class="monitor-empty-text">${t('monitor.noEndpoints')}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Requests Panel -->
                 <div class="active-requests-panel">
+                    <div class="panel-header">
+                        <h4><span class="section-icon">⚡</span> ${t('monitor.activeRequests')}</h4>
+                    </div>
                     <div id="activeRequestsList">
                         <div class="monitor-empty">
                             <span class="monitor-empty-icon">✓</span>
                             <span class="monitor-empty-text">${t('monitor.idle')}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Requests Panel -->
+                <div class="recent-requests-panel">
+                    <div class="panel-header">
+                        <h4><span class="section-icon">📜</span> ${t('monitor.recentRequests')}</h4>
+                    </div>
+                    <div id="recentRequestsList">
+                        <div class="monitor-empty">
+                            <span class="monitor-empty-icon">📭</span>
+                            <span class="monitor-empty-text">${t('monitor.noRecentRequests')}</span>
                         </div>
                     </div>
                 </div>

@@ -170,7 +170,7 @@ func (a *App) startup(ctx context.Context) {
 	a.backup = service.NewBackupService(a.config, a.storage, version, a.webdav)
 	a.archive = service.NewArchiveService(a.storage)
 	a.client = service.NewClientService(a.storage)
-	a.monitor = service.NewMonitorService(a.proxy.GetMonitor())
+	a.monitor = service.NewMonitorService(a.proxy.GetMonitor(), a.config)
 
 	// Initialize interaction storage and service
 	exePath, err := os.Executable()
@@ -607,4 +607,12 @@ func (a *App) GetEndpointMetrics() string {
 
 func (a *App) ResetMonitorMetrics() {
 	a.monitor.ResetMetrics()
+}
+
+func (a *App) GetEndpointHealth() string {
+	return a.monitor.GetEndpointHealth()
+}
+
+func (a *App) GetRecentRequests(limit int) string {
+	return a.stats.GetRecentRequestStats(limit)
 }

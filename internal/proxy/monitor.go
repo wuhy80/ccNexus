@@ -350,3 +350,67 @@ func (m *EndpointMetric) clone() *EndpointMetric {
 		LastErrorTime:   m.LastErrorTime,
 	}
 }
+
+// EndpointHealth represents the health status of an endpoint
+type EndpointHealth struct {
+	EndpointName    string  `json:"endpointName"`
+	Status          string  `json:"status"` // "healthy", "warning", "error"
+	ActiveCount     int     `json:"activeCount"`
+	SuccessRate     float64 `json:"successRate"`
+	AvgResponseTime float64 `json:"avgResponseTime"`
+	LastError       string  `json:"lastError,omitempty"`
+	LastErrorTime   int64   `json:"lastErrorTime,omitempty"`
+}
+
+// GetEndpointHealth returns health status for all specified endpoints
+func (m *Monitor) GetEndpointHealth(enabledEndpoints []string) []EndpointHealth {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	health := make([]EndpointHealth, 0, len(enabledEndpoints))
+
+	for _, name := range enabledEndpoints {
+		h := EndpointHealth{
+			EndpointName: name,
+			Status:       "healthy", // Default status
+		}
+
+		if metric, exists := m.endpointMetrics[name]; exists {
+			h.ActiveCount = metric.ActiveCount
+			h.SuccessRate = metric.SuccessRate
+			h.AvgResponseTime = metric.AvgResponseTime
+			h.LastError = metric.LastError
+			h.LastErrorTime = metric.LastErrorTime
+
+			// Calculate health status
+			h.Status = calculateHealthStatus(metric)
+		}
+
+		health = append(health, h)
+	}
+
+	return health
+}
+
+// calculateHealthStatus determines the health status based on metrics
+func calculateHealthStatus(metric *EndpointMetric) string {
+	// Check for recent errors (within 5 minutes)
+	if metric.LastErrorTime > 0 {
+		fiveMinutesAgo := time.Now().Add(-5 * time.Minute).UnixMilli()
+		if metric.LastErrorTime > fiveMinutesAgo {
+			return "error"
+		}
+	}
+
+	// Check success rate (only if we have enough data)
+	if metric.TotalRequests > 0 {
+		if metric.SuccessRate < 80 {
+			return "error"
+		}
+		if metric.SuccessRate < 95 {
+			return "warning"
+		}
+	}
+
+	return "healthy"
+}
