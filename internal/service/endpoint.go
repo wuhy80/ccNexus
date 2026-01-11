@@ -535,7 +535,7 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
     }
 
     if resp.StatusCode != http.StatusOK {
-        logger.Error("Test failed for %s: HTTP %d", endpoint.Name, resp.StatusCode)
+        logger.Error("Test failed for %s: HTTP %d - %s", endpoint.Name, resp.StatusCode, string(respBody))
         return toJSON(map[string]interface{}{
             "success":    false,
             "statusCode": resp.StatusCode,
