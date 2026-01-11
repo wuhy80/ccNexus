@@ -548,6 +548,20 @@ export default {
         requestTransformed: '转换后请求',
         responseRaw: '原始响应',
         responseTransformed: '转换后响应',
+        messagePreview: '消息摘要',
+        toolCalls: '工具调用',
+        intentType: '意图',
+        intents: {
+            code_gen: '代码生成',
+            file_op: '文件操作',
+            tool_exec: '工具执行',
+            qa: '问答',
+            debug: '调试',
+            refactor: '重构',
+            explain: '解释',
+            search: '搜索',
+            unknown: '其他'
+        },
         tabs: {
             requestRaw: '原始请求',
             requestTransformed: '转换后请求',

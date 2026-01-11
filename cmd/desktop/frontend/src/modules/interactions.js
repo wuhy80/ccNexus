@@ -141,11 +141,27 @@ function renderInteractionsTable(interactions) {
         const typeLabel = item.requestType === 'test' ? t('interactions.typeTest') : t('interactions.typeNormal')
         const typeClass = item.requestType === 'test' ? 'type-test' : 'type-normal'
 
+        // 意图类型
+        const intentLabel = item.intentType
+            ? t(`interactions.intents.${item.intentType}`) || item.intentType
+            : '-'
+        const intentClass = `intent-${item.intentType || 'unknown'}`
+
+        // 工具调用（最多显示3个）
+        const toolCallsDisplay = item.toolCalls && item.toolCalls.length > 0
+            ? item.toolCalls.slice(0, 3).join(', ') + (item.toolCalls.length > 3 ? '...' : '')
+            : '-'
+
+        // 消息摘要
+        const messagePreview = item.messagePreview || '-'
+
         row.innerHTML = `
             <td>${escapeHtml(time)}</td>
             <td><span class="request-type ${typeClass}">${typeLabel}</span></td>
+            <td><span class="intent-badge ${intentClass}">${intentLabel}</span></td>
+            <td class="message-preview" title="${escapeHtml(messagePreview)}">${escapeHtml(messagePreview)}</td>
+            <td class="tool-calls" title="${escapeHtml(item.toolCalls?.join(', ') || '')}">${escapeHtml(toolCallsDisplay)}</td>
             <td>${escapeHtml(item.endpointName || '-')}</td>
-            <td>${escapeHtml(item.clientType || '-')}</td>
             <td>${escapeHtml(item.model || '-')}</td>
             <td>${formatTokens(item.inputTokens || 0)}</td>
             <td>${formatTokens(item.outputTokens || 0)}</td>
@@ -168,7 +184,7 @@ function renderEmptyTable() {
 
     tbody.innerHTML = `
         <tr>
-            <td colspan="10" class="empty-message">${t('interactions.noData')}</td>
+            <td colspan="12" class="empty-message">${t('interactions.noData')}</td>
         </tr>
     `
 }

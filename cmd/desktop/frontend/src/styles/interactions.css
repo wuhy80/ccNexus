@@ -373,3 +373,51 @@
 .json-viewer .json-null {
     color: #808080;
 }
+
+/* Intent Badge Styles */
+.intent-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.intent-code_gen { background: #e3f2fd; color: #1565c0; }
+.intent-file_op { background: #fff3e0; color: #ef6c00; }
+.intent-tool_exec { background: #f3e5f5; color: #7b1fa2; }
+.intent-qa { background: #e8f5e9; color: #2e7d32; }
+.intent-debug { background: #ffebee; color: #c62828; }
+.intent-refactor { background: #e0f7fa; color: #00838f; }
+.intent-explain { background: #fce4ec; color: #ad1457; }
+.intent-search { background: #f1f8e9; color: #558b2f; }
+.intent-unknown { background: var(--bg-secondary, #f5f5f5); color: var(--text-tertiary, #616161); }
+
+/* Message Preview Column */
+.message-preview {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left !important;
+    cursor: default;
+}
+
+/* Tool Calls Column */
+.tool-calls {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+    font-size: 11px;
+    color: var(--text-secondary, #666);
+    cursor: default;
+}
+
+/* Wider modal for more columns */
+#interactionsModal .modal-content {
+    width: 1200px;
+    max-width: 98vw;
+}

@@ -2,6 +2,19 @@ package interaction
 
 import "time"
 
+// Intent types for request classification
+const (
+	IntentCodeGen  = "code_gen"  // 代码生成
+	IntentFileOp   = "file_op"   // 文件操作
+	IntentToolExec = "tool_exec" // 工具执行
+	IntentQA       = "qa"        // 问答
+	IntentDebug    = "debug"     // 调试
+	IntentRefactor = "refactor"  // 重构
+	IntentExplain  = "explain"   // 解释
+	IntentSearch   = "search"    // 搜索
+	IntentUnknown  = "unknown"   // 未知
+)
+
 // Record 表示一次完整的请求/响应交互记录
 type Record struct {
 	RequestID string       `json:"requestId"`
@@ -56,30 +69,39 @@ type StatsData struct {
 
 // IndexEntry 索引条目，用于列表展示（不包含完整请求/响应内容）
 type IndexEntry struct {
-	RequestID    string    `json:"requestId"`
-	Timestamp    time.Time `json:"timestamp"`
-	EndpointName string    `json:"endpointName"`
-	ClientType   string    `json:"clientType"`
-	Model        string    `json:"model"`
-	InputTokens  int       `json:"inputTokens"`
-	OutputTokens int       `json:"outputTokens"`
-	DurationMs   int64     `json:"durationMs"`
-	Success      bool      `json:"success"`
-	RequestType  string    `json:"requestType"`
+	RequestID      string    `json:"requestId"`
+	Timestamp      time.Time `json:"timestamp"`
+	EndpointName   string    `json:"endpointName"`
+	ClientType     string    `json:"clientType"`
+	Model          string    `json:"model"`
+	InputTokens    int       `json:"inputTokens"`
+	OutputTokens   int       `json:"outputTokens"`
+	DurationMs     int64     `json:"durationMs"`
+	Success        bool      `json:"success"`
+	RequestType    string    `json:"requestType"`
+	MessagePreview string    `json:"messagePreview,omitempty"` // 消息摘要 (最多80字符)
+	ToolCalls      []string  `json:"toolCalls,omitempty"`      // 工具调用列表
+	IntentType     string    `json:"intentType,omitempty"`     // 意图分类
 }
 
 // ToIndexEntry 将 Record 转换为 IndexEntry
 func (r *Record) ToIndexEntry() IndexEntry {
+	// 分析请求意图
+	preview, toolCalls, intentType := AnalyzeIntent(r.Request.Raw)
+
 	return IndexEntry{
-		RequestID:    r.RequestID,
-		Timestamp:    r.Timestamp,
-		EndpointName: r.Endpoint.Name,
-		ClientType:   r.Client.Type,
-		Model:        r.Request.Model,
-		InputTokens:  r.Stats.InputTokens,
-		OutputTokens: r.Stats.OutputTokens,
-		DurationMs:   r.Stats.DurationMs,
-		Success:      r.Stats.Success,
-		RequestType:  r.Stats.RequestType,
+		RequestID:      r.RequestID,
+		Timestamp:      r.Timestamp,
+		EndpointName:   r.Endpoint.Name,
+		ClientType:     r.Client.Type,
+		Model:          r.Request.Model,
+		InputTokens:    r.Stats.InputTokens,
+		OutputTokens:   r.Stats.OutputTokens,
+		DurationMs:     r.Stats.DurationMs,
+		Success:        r.Stats.Success,
+		RequestType:    r.Stats.RequestType,
+		MessagePreview: preview,
+		ToolCalls:      toolCalls,
+		IntentType:     intentType,
 	}
 }

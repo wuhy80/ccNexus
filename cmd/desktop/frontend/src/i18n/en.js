@@ -548,6 +548,20 @@ export default {
         requestTransformed: 'Transformed Request',
         responseRaw: 'Raw Response',
         responseTransformed: 'Transformed Response',
+        messagePreview: 'Message',
+        toolCalls: 'Tools',
+        intentType: 'Intent',
+        intents: {
+            code_gen: 'Code Gen',
+            file_op: 'File Op',
+            tool_exec: 'Tool Exec',
+            qa: 'Q&A',
+            debug: 'Debug',
+            refactor: 'Refactor',
+            explain: 'Explain',
+            search: 'Search',
+            unknown: 'Other'
+        },
         tabs: {
             requestRaw: 'Raw Request',
             requestTransformed: 'Transformed Request',

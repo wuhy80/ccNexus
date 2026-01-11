@@ -986,8 +986,10 @@ export function initUI() {
                                 <tr>
                                     <th>${t('interactions.time')}</th>
                                     <th>${t('interactions.type')}</th>
+                                    <th>${t('interactions.intentType')}</th>
+                                    <th style="min-width: 200px;">${t('interactions.messagePreview')}</th>
+                                    <th>${t('interactions.toolCalls')}</th>
                                     <th>${t('interactions.endpoint')}</th>
-                                    <th>${t('interactions.client')}</th>
                                     <th>${t('interactions.model')}</th>
                                     <th>${t('interactions.inputTokens')}</th>
                                     <th>${t('interactions.outputTokens')}</th>
@@ -998,7 +1000,7 @@ export function initUI() {
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td colspan="10" class="empty-message">${t('interactions.noData')}</td>
+                                    <td colspan="12" class="empty-message">${t('interactions.noData')}</td>
                                 </tr>
                             </tbody>
                         </table>
