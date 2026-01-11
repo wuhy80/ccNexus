@@ -5,6 +5,24 @@
     margin-top: 20px;
 }
 
+/* Two-column layout for monitor panels */
+.monitor-columns {
+    display: flex;
+    gap: 20px;
+}
+
+.monitor-column-left {
+    flex: 1;
+    min-width: 0;
+    padding-right: 20px;
+    border-right: 1px solid var(--border-color);
+}
+
+.monitor-column-right {
+    flex: 1;
+    min-width: 0;
+}
+
 .monitor-section h3 {
     font-size: 16px;
     color: var(--text-primary);
@@ -25,7 +43,6 @@
     padding: 0 0 12px 0;
     margin-bottom: 8px;
     border: none;
-    border-bottom: 1px solid var(--border-color);
 }
 
 #activeRequestsList {
@@ -342,7 +359,6 @@
     padding: 0 0 12px 0;
     margin-bottom: 8px;
     border: none;
-    border-bottom: 1px solid var(--border-color);
 }
 
 .endpoint-health-grid {
@@ -434,7 +450,7 @@
 }
 
 #recentRequestsList {
-    max-height: 300px;
+    max-height: 450px;
     overflow-y: auto;
 }
 
