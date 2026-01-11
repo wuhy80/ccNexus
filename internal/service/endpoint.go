@@ -476,18 +476,22 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
         })
 
     case "gemini":
-        // Gemini endpoints use Claude format through proxy with /gemini/ prefix
-        // The proxy will convert Claude format to Gemini format
-        apiPath = "/gemini/v1/messages"
+        // Gemini uses its native API format directly
         model := endpoint.Model
         if model == "" {
             model = "gemini-2.0-flash"
         }
+        apiPath = fmt.Sprintf("/v1beta/models/%s:generateContent", model)
         requestBody, err = json.Marshal(map[string]interface{}{
-            "model":      model,
-            "max_tokens": testMaxTokens,
-            "messages": []map[string]string{
-                {"role": "user", "content": testMessage},
+            "contents": []map[string]interface{}{
+                {
+                    "parts": []map[string]string{
+                        {"text": testMessage},
+                    },
+                },
+            },
+            "generationConfig": map[string]int{
+                "maxOutputTokens": testMaxTokens,
             },
         })
 
@@ -499,10 +503,14 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
         return errorJSON(fmt.Sprintf("Failed to build request: %v", err))
     }
 
-    // 通过ccNexus代理发送请求，而不是直接发送到目标API
-    // 这样请求会被识别为Claude Code客户端
-    port := e.config.GetPort()
-    url := fmt.Sprintf("http://localhost:%d%s", port, apiPath)
+    // 直接发送请求到目标API
+    normalizedURL := normalizeAPIUrlWithScheme(endpoint.APIUrl)
+    var url string
+    if transformer == "gemini" {
+        url = fmt.Sprintf("%s%s?key=%s", normalizedURL, apiPath, endpoint.APIKey)
+    } else {
+        url = fmt.Sprintf("%s%s", normalizedURL, apiPath)
+    }
 
     req, err := http.NewRequest("POST", url, bytes.NewReader(requestBody))
     if err != nil {
@@ -510,15 +518,13 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
     }
 
     req.Header.Set("Content-Type", "application/json")
-    // Specify which endpoint to use for this test request
-    req.Header.Set("X-CCNexus-Endpoint", endpoint.Name)
     switch transformer {
-    case "claude", "gemini":
-        // Both use Claude format through proxy
+    case "claude":
         req.Header.Set("x-api-key", endpoint.APIKey)
         req.Header.Set("anthropic-version", "2023-06-01")
     case "openai", "openai2":
         req.Header.Set("Authorization", "Bearer "+endpoint.APIKey)
+    // gemini uses query parameter, already set in URL
     }
 
     client := e.getHTTPClient(30 * time.Second)
@@ -591,11 +597,17 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
             }
         }
     case "gemini":
-        // Gemini response comes back in Claude format through proxy
-        if content, ok := responseData["content"].([]interface{}); ok && len(content) > 0 {
-            if textBlock, ok := content[0].(map[string]interface{}); ok {
-                if text, ok := textBlock["text"].(string); ok {
-                    message = text
+        // Gemini native response format: candidates[].content.parts[].text
+        if candidates, ok := responseData["candidates"].([]interface{}); ok && len(candidates) > 0 {
+            if candidate, ok := candidates[0].(map[string]interface{}); ok {
+                if content, ok := candidate["content"].(map[string]interface{}); ok {
+                    if parts, ok := content["parts"].([]interface{}); ok && len(parts) > 0 {
+                        if part, ok := parts[0].(map[string]interface{}); ok {
+                            if text, ok := part["text"].(string); ok {
+                                message = text
+                            }
+                        }
+                    }
                 }
             }
         }
