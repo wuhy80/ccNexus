@@ -19,13 +19,14 @@ const (
 
 // ActiveRequest represents a request currently being processed
 type ActiveRequest struct {
-	RequestID     string       `json:"requestId"`
-	EndpointName  string       `json:"endpointName"`
-	ClientType    string       `json:"clientType"`
-	Model         string       `json:"model"`
-	StartTime     time.Time    `json:"startTime"`
-	Phase         RequestPhase `json:"phase"`
-	BytesReceived int64        `json:"bytesReceived"`
+	RequestID      string       `json:"requestId"`
+	EndpointName   string       `json:"endpointName"`
+	ClientType     string       `json:"clientType"`
+	Model          string       `json:"model"`
+	StartTime      time.Time    `json:"startTime"`
+	Phase          RequestPhase `json:"phase"`
+	BytesReceived  int64        `json:"bytesReceived"`
+	MessagePreview string       `json:"messagePreview,omitempty"`
 }
 
 // EndpointMetric holds performance metrics for an endpoint
@@ -96,18 +97,19 @@ func (m *Monitor) SetEventCallback(callback EventCallback) {
 }
 
 // StartRequest records the start of a new request
-func (m *Monitor) StartRequest(requestID, endpointName, clientType, model string) {
+func (m *Monitor) StartRequest(requestID, endpointName, clientType, model, messagePreview string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	req := &ActiveRequest{
-		RequestID:     requestID,
-		EndpointName:  endpointName,
-		ClientType:    clientType,
-		Model:         model,
-		StartTime:     time.Now(),
-		Phase:         PhaseConnecting,
-		BytesReceived: 0,
+		RequestID:      requestID,
+		EndpointName:   endpointName,
+		ClientType:     clientType,
+		Model:          model,
+		StartTime:      time.Now(),
+		Phase:          PhaseConnecting,
+		BytesReceived:  0,
+		MessagePreview: messagePreview,
 	}
 
 	m.activeRequests[requestID] = req
@@ -328,13 +330,14 @@ func (m *Monitor) calculateAvgResponseTime(endpointName string) float64 {
 
 func (r *ActiveRequest) clone() *ActiveRequest {
 	return &ActiveRequest{
-		RequestID:     r.RequestID,
-		EndpointName:  r.EndpointName,
-		ClientType:    r.ClientType,
-		Model:         r.Model,
-		StartTime:     r.StartTime,
-		Phase:         r.Phase,
-		BytesReceived: r.BytesReceived,
+		RequestID:      r.RequestID,
+		EndpointName:   r.EndpointName,
+		ClientType:     r.ClientType,
+		Model:          r.Model,
+		StartTime:      r.StartTime,
+		Phase:          r.Phase,
+		BytesReceived:  r.BytesReceived,
+		MessagePreview: r.MessagePreview,
 	}
 }
 

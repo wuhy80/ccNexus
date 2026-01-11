@@ -173,6 +173,7 @@ function renderActiveRequests() {
                     <span class="request-endpoint">${escapeHtml(req.endpointName)}</span>
                     <span class="request-duration ${durationClass}">${formatDuration(duration)}</span>
                 </div>
+                ${req.messagePreview ? `<div class="request-message">${escapeHtml(req.messagePreview)}</div>` : ''}
                 <div class="request-details">
                     <span class="request-phase">${phase.icon} ${t(phase.labelKey)}</span>
                     <span class="request-model">${escapeHtml(req.model || '-')}</span>
@@ -346,7 +347,8 @@ function addToRecentRequests(request) {
         duration: (Date.now() - new Date(request.startTime).getTime()) / 1000,
         inputTokens: 0, // Will be updated from stats if available
         outputTokens: 0,
-        success: request.phase === 'completed'
+        success: request.phase === 'completed',
+        messagePreview: request.messagePreview || ''
     };
 
     recentRequests.unshift(completedRequest);
@@ -488,7 +490,7 @@ function renderRecentRequests() {
                 <div class="recent-request-time">${time}</div>
                 <div class="recent-request-info">
                     <span class="recent-endpoint">${escapeHtml(req.endpointName)}</span>
-                    <span class="recent-model">${escapeHtml(req.model || '-')}</span>
+                    ${req.messagePreview ? `<span class="recent-message" title="${escapeHtml(req.messagePreview)}">${escapeHtml(req.messagePreview)}</span>` : `<span class="recent-model">${escapeHtml(req.model || '-')}</span>`}
                 </div>
                 <div class="recent-request-stats">
                     <span class="recent-duration">${formatDuration(req.duration)}</span>

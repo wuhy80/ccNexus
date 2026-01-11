@@ -106,3 +106,113 @@ func (p *Proxy) estimateOutputTokens(outputText string) int {
 	}
 	return 0
 }
+
+// ExtractMessagePreview extracts the first N characters of the last user message as a preview
+// It filters out system content like <system-reminder> tags
+func ExtractMessagePreview(bodyBytes []byte, maxLen int) string {
+	var req map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
+		return ""
+	}
+
+	messages, ok := req["messages"].([]interface{})
+	if !ok || len(messages) == 0 {
+		return ""
+	}
+
+	// Find the last user message
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg, ok := messages[i].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		role, _ := msg["role"].(string)
+		if role != "user" {
+			continue
+		}
+
+		content := extractTextContent(msg["content"])
+		if content == "" {
+			continue
+		}
+
+		// Filter out system content
+		content = filterSystemContent(content)
+		if content == "" {
+			continue
+		}
+
+		// Truncate to maxLen characters (using runes for proper Unicode handling)
+		runes := []rune(content)
+		if len(runes) > maxLen {
+			return string(runes[:maxLen]) + "..."
+		}
+		return content
+	}
+
+	return ""
+}
+
+// filterSystemContent removes system tags and extracts user's actual input
+func filterSystemContent(content string) string {
+	// Remove <system-reminder>...</system-reminder> blocks
+	result := removeTagBlocks(content, "system-reminder")
+
+	// Remove <env>...</env> blocks
+	result = removeTagBlocks(result, "env")
+
+	// Remove <claude_background_info>...</claude_background_info> blocks
+	result = removeTagBlocks(result, "claude_background_info")
+
+	// Remove <claudeMd>...</claudeMd> blocks
+	result = removeTagBlocks(result, "claudeMd")
+
+	// Trim whitespace and return
+	return strings.TrimSpace(result)
+}
+
+// removeTagBlocks removes all occurrences of <tag>...</tag> from content
+func removeTagBlocks(content, tagName string) string {
+	openTag := "<" + tagName + ">"
+	closeTag := "</" + tagName + ">"
+
+	for {
+		startIdx := strings.Index(content, openTag)
+		if startIdx == -1 {
+			break
+		}
+
+		endIdx := strings.Index(content[startIdx:], closeTag)
+		if endIdx == -1 {
+			// No closing tag, remove from openTag to end
+			content = content[:startIdx]
+			break
+		}
+
+		// Remove the entire tag block
+		content = content[:startIdx] + content[startIdx+endIdx+len(closeTag):]
+	}
+
+	return content
+}
+
+// extractTextContent extracts text from content field (supports string and array formats)
+func extractTextContent(content interface{}) string {
+	switch c := content.(type) {
+	case string:
+		return c
+	case []interface{}:
+		// Handle array format: [{type: "text", text: "..."}]
+		for _, block := range c {
+			if blockMap, ok := block.(map[string]interface{}); ok {
+				if blockMap["type"] == "text" {
+					if text, ok := blockMap["text"].(string); ok {
+						return text
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
