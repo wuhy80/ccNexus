@@ -643,7 +643,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 		// Start monitoring this request attempt
 		monitorReqID := generateMonitorRequestID()
-		messagePreview := ExtractMessagePreview(bodyBytes, 50)
+		messagePreview := ExtractMessagePreview(bodyBytes, 300)
 		p.monitor.StartRequest(monitorReqID, endpoint.Name, string(clientType), streamReq.Model, messagePreview)
 
 		// Log request attempt with test indication if applicable
