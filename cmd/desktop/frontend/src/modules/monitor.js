@@ -414,12 +414,18 @@ function updateThroughputOnCompletion(request) {
 
 // Update endpoint health from metrics event
 function updateEndpointHealthFromMetrics(metrics) {
+    // Get existing health check latency if available
+    const existingHealth = endpointHealth.get(metrics.endpointName);
+    const healthCheckLatency = healthCheckLatencies[metrics.endpointName] ||
+                               (existingHealth ? existingHealth.healthCheckLatency : 0);
+
     const health = {
         endpointName: metrics.endpointName,
-        status: calculateHealthStatusFromMetrics(metrics),
+        status: calculateHealthStatusFromMetrics(metrics, healthCheckLatency),
         activeCount: metrics.activeCount,
         successRate: metrics.successRate,
         avgResponseTime: metrics.avgResponseTime,
+        healthCheckLatency: healthCheckLatency,
         lastError: metrics.lastError,
         lastErrorTime: metrics.lastErrorTime
     };
@@ -429,7 +435,7 @@ function updateEndpointHealthFromMetrics(metrics) {
 }
 
 // Calculate health status from metrics
-function calculateHealthStatusFromMetrics(metrics) {
+function calculateHealthStatusFromMetrics(metrics, healthCheckLatency = 0) {
     // Check for recent errors (within 5 minutes)
     if (metrics.lastErrorTime > 0) {
         const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
@@ -448,7 +454,32 @@ function calculateHealthStatusFromMetrics(metrics) {
         }
     }
 
+    // If health check latency exists, endpoint is healthy
+    if (healthCheckLatency > 0) {
+        return 'healthy';
+    }
+
+    // If no metrics and no health check, status is unknown
+    if (!metrics.totalRequests && healthCheckLatency === 0) {
+        return 'unknown';
+    }
+
     return 'healthy';
+}
+
+// Update endpoint health status with latest health check latencies
+function updateEndpointHealthWithLatencies() {
+    endpointHealth.forEach((health, name) => {
+        const latency = healthCheckLatencies[name];
+        if (latency !== undefined && latency > 0) {
+            health.healthCheckLatency = latency;
+            // Update status if it was unknown
+            if (health.status === 'unknown') {
+                health.status = 'healthy';
+            }
+        }
+    });
+    renderEndpointHealth();
 }
 
 // Start periodic throughput updates
@@ -494,6 +525,8 @@ async function calculateAndDisplayThroughput() {
         if (snapshot.healthCheckLatencies) {
             healthCheckLatencies = snapshot.healthCheckLatencies;
             renderEndpointMetrics();
+            // Also update endpoint health status with new latencies
+            updateEndpointHealthWithLatencies();
         }
     } catch (error) {
         // Ignore errors, keep existing value
