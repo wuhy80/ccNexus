@@ -57,6 +57,7 @@ type App struct {
 	client      *service.ClientService
 	interaction *service.InteractionService
 	monitor     *service.MonitorService
+	healthCheck *service.HealthCheckService
 
 	// Interaction storage
 	interactionStorage *interaction.Storage
@@ -171,6 +172,7 @@ func (a *App) startup(ctx context.Context) {
 	a.archive = service.NewArchiveService(a.storage)
 	a.client = service.NewClientService(a.storage)
 	a.monitor = service.NewMonitorService(a.proxy.GetMonitor(), a.config)
+	a.healthCheck = service.NewHealthCheckService(a.config, a.proxy.GetMonitor())
 
 	// Initialize interaction storage and service
 	exePath, err := os.Executable()
@@ -202,6 +204,9 @@ func (a *App) startup(ctx context.Context) {
 				logger.Error("Proxy server error: %v", err)
 			}
 		}()
+
+		// Start health check service after proxy
+		a.healthCheck.Start()
 	} else {
 		logger.Info("Proxy server disabled (CCNEXUS_NO_PROXY is set)")
 	}
@@ -214,6 +219,9 @@ func (a *App) startup(ctx context.Context) {
 
 // shutdown is called when the app is closing
 func (a *App) shutdown(ctx context.Context) {
+	if a.healthCheck != nil {
+		a.healthCheck.Stop()
+	}
 	if a.proxy != nil {
 		a.proxy.Stop()
 	}
@@ -490,6 +498,20 @@ func (a *App) SetCloseWindowBehavior(behavior string) error {
 }
 func (a *App) GetProxyURL() string               { return a.settings.GetProxyURL() }
 func (a *App) SetProxyURL(proxyURL string) error { return a.settings.SetProxyURL(proxyURL) }
+func (a *App) GetHealthCheckInterval() int       { return a.config.GetHealthCheckInterval() }
+func (a *App) SetHealthCheckInterval(interval int) error {
+	a.config.UpdateHealthCheckInterval(interval)
+	// Save to storage
+	configAdapter := storage.NewConfigStorageAdapter(a.storage)
+	if err := a.config.SaveToStorage(configAdapter); err != nil {
+		return err
+	}
+	// Restart health check service with new interval
+	if a.healthCheck != nil {
+		a.healthCheck.Restart()
+	}
+	return nil
+}
 
 // ========== WebDAV Bindings ==========
 

@@ -43,8 +43,11 @@ type EndpointMetric struct {
 
 // MonitorSnapshot represents a point-in-time snapshot of monitoring data
 type MonitorSnapshot struct {
-	ActiveRequests  []ActiveRequest  `json:"activeRequests"`
-	EndpointMetrics []EndpointMetric `json:"endpointMetrics"`
+	ActiveRequests          []ActiveRequest    `json:"activeRequests"`
+	EndpointMetrics         []EndpointMetric   `json:"endpointMetrics"`
+	GlobalAvgLatencyMs      float64            `json:"globalAvgLatencyMs"`      // Global average latency from requests in milliseconds
+	HealthCheckAvgLatencyMs float64            `json:"healthCheckAvgLatencyMs"` // Global average latency from health checks in milliseconds
+	HealthCheckLatencies    map[string]float64 `json:"healthCheckLatencies"`    // Per-endpoint health check latencies
 }
 
 // MonitorEventType represents the type of monitor event
@@ -77,15 +80,19 @@ type Monitor struct {
 	// Rolling window for metrics (last 100 requests per endpoint)
 	responseTimes map[string][]float64
 	maxSamples    int
+
+	// Health check latency tracking (separate from request latency)
+	healthCheckLatencies map[string]float64 // endpointName -> latency in ms
 }
 
 // NewMonitor creates a new Monitor instance
 func NewMonitor() *Monitor {
 	return &Monitor{
-		activeRequests:  make(map[string]*ActiveRequest),
-		endpointMetrics: make(map[string]*EndpointMetric),
-		responseTimes:   make(map[string][]float64),
-		maxSamples:      100,
+		activeRequests:       make(map[string]*ActiveRequest),
+		endpointMetrics:      make(map[string]*EndpointMetric),
+		responseTimes:        make(map[string][]float64),
+		healthCheckLatencies: make(map[string]float64),
+		maxSamples:           100,
 	}
 }
 
@@ -238,8 +245,9 @@ func (m *Monitor) GetSnapshot() MonitorSnapshot {
 	defer m.mu.RUnlock()
 
 	snapshot := MonitorSnapshot{
-		ActiveRequests:  make([]ActiveRequest, 0, len(m.activeRequests)),
-		EndpointMetrics: make([]EndpointMetric, 0, len(m.endpointMetrics)),
+		ActiveRequests:       make([]ActiveRequest, 0, len(m.activeRequests)),
+		EndpointMetrics:      make([]EndpointMetric, 0, len(m.endpointMetrics)),
+		HealthCheckLatencies: make(map[string]float64, len(m.healthCheckLatencies)),
 	}
 
 	for _, req := range m.activeRequests {
@@ -249,6 +257,17 @@ func (m *Monitor) GetSnapshot() MonitorSnapshot {
 	for _, metric := range m.endpointMetrics {
 		snapshot.EndpointMetrics = append(snapshot.EndpointMetrics, *metric.clone())
 	}
+
+	// Copy health check latencies
+	for k, v := range m.healthCheckLatencies {
+		snapshot.HealthCheckLatencies[k] = v
+	}
+
+	// Calculate global average latency from requests
+	snapshot.GlobalAvgLatencyMs = m.calculateGlobalAvgLatency()
+
+	// Calculate global average latency from health checks
+	snapshot.HealthCheckAvgLatencyMs = m.calculateGlobalHealthCheckAvgLatency()
 
 	return snapshot
 }
@@ -326,6 +345,67 @@ func (m *Monitor) calculateAvgResponseTime(endpointName string) float64 {
 		sum += t
 	}
 	return sum / float64(len(times))
+}
+
+// calculateGlobalAvgLatency calculates the global average latency across all endpoints
+// Returns the average latency in milliseconds
+func (m *Monitor) calculateGlobalAvgLatency() float64 {
+	var totalSum float64
+	var totalCount int
+
+	for _, times := range m.responseTimes {
+		for _, t := range times {
+			totalSum += t
+			totalCount++
+		}
+	}
+
+	if totalCount == 0 {
+		return 0
+	}
+
+	// Convert from seconds to milliseconds
+	return (totalSum / float64(totalCount)) * 1000
+}
+
+// RecordHealthCheckLatency records the health check latency for an endpoint
+// latencyMs is the latency in milliseconds
+func (m *Monitor) RecordHealthCheckLatency(endpointName string, latencyMs float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.healthCheckLatencies[endpointName] = latencyMs
+}
+
+// ClearHealthCheckLatency clears the health check latency for an endpoint (e.g., when check fails)
+func (m *Monitor) ClearHealthCheckLatency(endpointName string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.healthCheckLatencies, endpointName)
+}
+
+// GetHealthCheckLatencies returns a copy of all health check latencies
+func (m *Monitor) GetHealthCheckLatencies() map[string]float64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make(map[string]float64, len(m.healthCheckLatencies))
+	for k, v := range m.healthCheckLatencies {
+		result[k] = v
+	}
+	return result
+}
+
+// calculateGlobalHealthCheckAvgLatency calculates the average health check latency across all endpoints
+// Returns the average latency in milliseconds
+func (m *Monitor) calculateGlobalHealthCheckAvgLatency() float64 {
+	if len(m.healthCheckLatencies) == 0 {
+		return 0
+	}
+
+	var sum float64
+	for _, latency := range m.healthCheckLatencies {
+		sum += latency
+	}
+	return sum / float64(len(m.healthCheckLatencies))
 }
 
 func (r *ActiveRequest) clone() *ActiveRequest {

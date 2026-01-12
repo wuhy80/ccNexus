@@ -5,10 +5,12 @@ let activeRequests = new Map(); // requestId -> request data
 let endpointMetrics = new Map(); // endpointName -> metrics
 let recentRequests = [];           // Recent completed requests
 let endpointHealth = new Map();    // endpointName -> health status
+let healthCheckLatencies = {};     // endpointName -> latency in ms (from health checks)
 let throughputStats = {            // Throughput statistics
     requestsPerMin: 0,
     tokensPerMin: 0,
-    recentCompletions: []          // Rolling window for last 1 minute
+    recentCompletions: [],          // Rolling window for last 1 minute
+    globalAvgLatencyMs: 0           // Global average latency in milliseconds
 };
 let durationUpdateInterval = null;
 let throughputUpdateInterval = null;
@@ -109,6 +111,20 @@ async function loadMonitorSnapshot() {
             }
         }
 
+        // Update global average latency (prefer health check latency)
+        if (snapshot.healthCheckAvgLatencyMs !== undefined && snapshot.healthCheckAvgLatencyMs > 0) {
+            throughputStats.globalAvgLatencyMs = snapshot.healthCheckAvgLatencyMs;
+            updateAvgLatencyDisplay();
+        } else if (snapshot.globalAvgLatencyMs !== undefined) {
+            throughputStats.globalAvgLatencyMs = snapshot.globalAvgLatencyMs;
+            updateAvgLatencyDisplay();
+        }
+
+        // Update health check latencies per endpoint
+        if (snapshot.healthCheckLatencies) {
+            healthCheckLatencies = snapshot.healthCheckLatencies;
+        }
+
         renderActiveRequests();
         renderEndpointMetrics();
     } catch (error) {
@@ -206,7 +222,13 @@ function renderEndpointMetrics() {
     let html = '';
 
     endpointMetrics.forEach((metric, endpointName) => {
-        const avgTime = metric.avgResponseTime > 0 ? formatDuration(metric.avgResponseTime) : '-';
+        // Prefer health check latency if available, otherwise use request avgResponseTime
+        let avgTime = '-';
+        if (healthCheckLatencies[endpointName] !== undefined && healthCheckLatencies[endpointName] > 0) {
+            avgTime = formatLatency(healthCheckLatencies[endpointName]);
+        } else if (metric.avgResponseTime > 0) {
+            avgTime = formatDuration(metric.avgResponseTime);
+        }
         const successRate = metric.totalRequests > 0 ? metric.successRate.toFixed(1) + '%' : '-';
         const hasError = metric.lastError ? true : false;
 
@@ -331,6 +353,18 @@ async function loadEndpointHealth() {
                 endpointHealth.set(h.endpointName, h);
             }
         }
+
+        // Also refresh health check latencies
+        try {
+            const snapshotStr = await window.go.main.App.GetMonitorSnapshot();
+            const snapshot = JSON.parse(snapshotStr);
+            if (snapshot.healthCheckLatencies) {
+            healthCheckLatencies = snapshot.healthCheckLatencies;
+            }
+        } catch (e) {
+            // Ignore
+        }
+
         renderEndpointHealth();
     } catch (error) {
         console.error('Failed to load endpoint health:', error);
@@ -431,7 +465,7 @@ function startThroughputUpdates() {
 }
 
 // Calculate and display throughput
-function calculateAndDisplayThroughput() {
+async function calculateAndDisplayThroughput() {
     const now = Date.now();
     const oneMinuteAgo = now - 60000;
 
@@ -446,7 +480,27 @@ function calculateAndDisplayThroughput() {
         (sum, c) => sum + c.tokens, 0
     );
 
+    // Refresh global average latency from backend
+    try {
+        const snapshotStr = await window.go.main.App.GetMonitorSnapshot();
+        const snapshot = JSON.parse(snapshotStr);
+        // Prefer health check latency if available, otherwise use request latency
+        if (snapshot.healthCheckAvgLatencyMs !== undefined && snapshot.healthCheckAvgLatencyMs > 0) {
+            throughputStats.globalAvgLatencyMs = snapshot.healthCheckAvgLatencyMs;
+        } else if (snapshot.globalAvgLatencyMs !== undefined) {
+            throughputStats.globalAvgLatencyMs = snapshot.globalAvgLatencyMs;
+        }
+        // Update health check latencies per endpoint
+        if (snapshot.healthCheckLatencies) {
+            healthCheckLatencies = snapshot.healthCheckLatencies;
+            renderEndpointMetrics();
+        }
+    } catch (error) {
+        // Ignore errors, keep existing value
+    }
+
     updateThroughputDisplay();
+    updateAvgLatencyDisplay();
 }
 
 // Update throughput display in UI
@@ -459,6 +513,31 @@ function updateThroughputDisplay() {
     }
     if (tokenEl) {
         tokenEl.textContent = formatNumber(throughputStats.tokensPerMin);
+    }
+}
+
+// Update average latency display in UI
+function updateAvgLatencyDisplay() {
+    const latencyEl = document.getElementById('avgLatency');
+    if (latencyEl) {
+        if (throughputStats.globalAvgLatencyMs > 0) {
+            latencyEl.textContent = formatLatency(throughputStats.globalAvgLatencyMs);
+        } else {
+            latencyEl.textContent = '-';
+        }
+    }
+}
+
+// Format latency for display
+function formatLatency(ms) {
+    if (ms < 1000) {
+        return Math.round(ms) + 'ms';
+    } else if (ms < 60000) {
+        return (ms / 1000).toFixed(1) + 's';
+    } else {
+        const mins = Math.floor(ms / 60000);
+        const secs = ((ms % 60000) / 1000).toFixed(0);
+        return `${mins}m ${secs}s`;
     }
 }
 
@@ -524,9 +603,13 @@ function renderEndpointHealth() {
     let html = '';
     endpointHealth.forEach((health, name) => {
         const statusClass = `status-${health.status}`;
-        const avgTime = health.avgResponseTime > 0
-            ? formatDuration(health.avgResponseTime)
-            : '-';
+        // Prefer health check latency if available
+        let avgTime = '-';
+        if (healthCheckLatencies[name] !== undefined && healthCheckLatencies[name] > 0) {
+            avgTime = formatLatency(healthCheckLatencies[name]);
+        } else if (health.avgResponseTime > 0) {
+            avgTime = formatDuration(health.avgResponseTime);
+        }
         const successRate = health.successRate > 0
             ? health.successRate.toFixed(1) + '%'
             : '-';

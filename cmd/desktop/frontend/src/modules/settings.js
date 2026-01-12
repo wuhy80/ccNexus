@@ -209,6 +209,13 @@ async function loadCurrentSettings() {
         if (proxyInput) {
             proxyInput.value = proxyUrl || '';
         }
+
+        // Load health check interval
+        const healthCheckInterval = await window.go.main.App.GetHealthCheckInterval();
+        const healthCheckSelect = document.getElementById('settingsHealthCheckInterval');
+        if (healthCheckSelect) {
+            healthCheckSelect.value = healthCheckInterval.toString();
+        }
     } catch (error) {
         console.error('Failed to load settings:', error);
     }
@@ -295,12 +302,16 @@ export async function saveSettings() {
         const theme = document.getElementById('settingsTheme').value;
         const themeAuto = document.getElementById('settingsThemeAuto').checked;
         const proxyUrl = document.getElementById('settingsProxyUrl').value.trim();
+        const healthCheckInterval = parseInt(document.getElementById('settingsHealthCheckInterval').value, 10);
 
         // Save close window behavior
         await window.go.main.App.SetCloseWindowBehavior(closeWindowBehavior);
 
         // Save proxy URL
         await window.go.main.App.SetProxyURL(proxyUrl);
+
+        // Save health check interval
+        await window.go.main.App.SetHealthCheckInterval(healthCheckInterval);
 
         // Get current config
         const configStr = await window.go.main.App.GetConfig();

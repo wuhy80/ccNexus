@@ -182,6 +182,15 @@ export default {
         proxyUrl: 'Proxy URL',
         proxyUrlPlaceholder: 'e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080',
         proxyHelp: 'Configure HTTP/SOCKS5 proxy, leave empty for direct connection',
+        healthCheck: 'Health Check',
+        healthCheckHelp: 'Periodically check availability and latency of all endpoints (consumes ~1-2 tokens per check)',
+        healthCheckOptions: {
+            disabled: 'Disabled',
+            sec30: '30 seconds',
+            min1: '1 minute',
+            min5: '5 minutes',
+            min10: '10 minutes'
+        },
         languageHelp: 'Select the interface display language',
         save: 'Save',
         cancel: 'Cancel',
@@ -605,6 +614,7 @@ export default {
         // New
         reqPerMin: 'req/min',
         tokensPerMin: 'tokens/min',
+        avgLatency: 'avg latency',
         endpointHealth: 'Endpoint Health',
         activeRequests: 'Active Requests',
         recentRequests: 'Recent Requests',

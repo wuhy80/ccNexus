@@ -182,6 +182,15 @@ export default {
         proxyUrl: '代理地址',
         proxyUrlPlaceholder: '例如：http://127.0.0.1:7890 或 socks5://127.0.0.1:1080',
         proxyHelp: '配置 HTTP/SOCKS5 代理，留空则直连',
+        healthCheck: '健康检测',
+        healthCheckHelp: '定期检测所有端点的可用性和延时（每次检测约消耗1-2个token）',
+        healthCheckOptions: {
+            disabled: '禁用',
+            sec30: '30秒',
+            min1: '1分钟',
+            min5: '5分钟',
+            min10: '10分钟'
+        },
         languageHelp: '选择界面显示语言',
         save: '保存',
         cancel: '取消',
@@ -605,6 +614,7 @@ export default {
         // 新增
         reqPerMin: '请求/分',
         tokensPerMin: 'tokens/分',
+        avgLatency: '平均延时',
         endpointHealth: '端点健康状态',
         activeRequests: '活跃请求',
         recentRequests: '最近请求',

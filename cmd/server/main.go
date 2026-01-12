@@ -12,6 +12,7 @@ import (
     "github.com/lich0821/ccNexus/internal/config"
     "github.com/lich0821/ccNexus/internal/logger"
     "github.com/lich0821/ccNexus/internal/proxy"
+    "github.com/lich0821/ccNexus/internal/service"
     "github.com/lich0821/ccNexus/internal/storage"
 )
 
@@ -57,6 +58,10 @@ func main() {
     statsAdapter := storage.NewStatsStorageAdapter(sqliteStorage)
     p := proxy.New(cfg, statsAdapter, deviceID)
 
+    // Initialize health check service
+    healthCheck := service.NewHealthCheckService(cfg, p.GetMonitor())
+    healthCheck.Start()
+
     // Create HTTP mux
     mux := http.NewServeMux()
 
@@ -81,12 +86,14 @@ func main() {
     select {
     case sig := <-sigCh:
         logger.Info("Received signal %s, shutting down", sig.String())
+        healthCheck.Stop()
         if err := p.Stop(); err != nil {
             logger.Warn("Graceful shutdown failed: %v", err)
         }
     case err := <-errCh:
         if err != nil && !errors.Is(err, http.ErrServerClosed) {
             logger.Error("Proxy server stopped with error: %v", err)
+            healthCheck.Stop()
             os.Exit(1)
         }
     }

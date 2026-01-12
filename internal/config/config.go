@@ -59,21 +59,22 @@ type ProxyConfig struct {
 
 // Config represents the application configuration
 type Config struct {
-	Port                int             `json:"port"`
-	Endpoints           []Endpoint      `json:"endpoints"`
-	LogLevel            int             `json:"logLevel"`                      // 0=DEBUG, 1=INFO, 2=WARN, 3=ERROR
-	Language            string          `json:"language"`                      // UI language: en, zh-CN
-	Theme               string          `json:"theme"`                         // UI theme: light, dark
-	ThemeAuto           bool            `json:"themeAuto"`                     // Auto switch theme based on time
-	AutoLightTheme      string          `json:"autoLightTheme,omitempty"`      // Theme to use in daytime when auto mode is on
-	AutoDarkTheme       string          `json:"autoDarkTheme,omitempty"`       // Theme to use in nighttime when auto mode is on
-	WindowWidth         int             `json:"windowWidth"`                   // Window width in pixels
-	WindowHeight        int             `json:"windowHeight"`                  // Window height in pixels
-	CloseWindowBehavior string          `json:"closeWindowBehavior,omitempty"` // "quit", "minimize", "ask"
-	WebDAV              *WebDAVConfig   `json:"webdav,omitempty"`              // WebDAV synchronization config
-	Backup              *BackupConfig   `json:"backup,omitempty"`              // Backup/sync configuration
-	Proxy               *ProxyConfig    `json:"proxy,omitempty"`               // HTTP proxy config
-	mu                  sync.RWMutex
+	Port                  int             `json:"port"`
+	Endpoints             []Endpoint      `json:"endpoints"`
+	LogLevel              int             `json:"logLevel"`                // 0=DEBUG, 1=INFO, 2=WARN, 3=ERROR
+	Language              string          `json:"language"`                      // UI language: en, zh-CN
+	Theme                 string          `json:"theme"`                         // UI theme: light, dark
+	ThemeAuto             bool            `json:"themeAuto"`                   // Auto switch theme based on time
+	AutoLightTheme        string          `json:"autoLightTheme,omitempty"`      // Theme to use in daytime when auto mode is on
+	AutoDarkTheme         string          `json:"autoDarkTheme,omitempty"`       // Theme to use in nighttime when auto mode is on
+	WindowWidth           int             `json:"windowWidth"`                   // Window width in pixels
+	WindowHeight          int             `json:"windowHeight"`                  // Window height in pixels
+	CloseWindowBehavior   string          `json:"closeWindowBehavior,omitempty"` // "quit", "minimize", "ask"
+	HealthCheckInterval   int             `json:"healthCheckInterval"`           // Health check interval in seconds, 0 to disable
+	WebDAV                *WebDAVConfig   `json:"webdav,omitempty"`              // WebDAV synchronization config
+	Backup                *BackupConfig   `json:"backup,omitempty"`              // Backup/sync configuration
+	Proxy                 *ProxyConfig    `json:"proxy,omitempty"`               // HTTP proxy config
+	mu                    sync.RWMutex
 }
 
 // DefaultConfig returns a default configuration
@@ -368,6 +369,22 @@ func (c *Config) UpdateProxy(proxy *ProxyConfig) {
 	c.Proxy = proxy
 }
 
+// GetHealthCheckInterval returns the health check interval in seconds (thread-safe)
+// Returns 0 if health check is disabled
+func (c *Config) GetHealthCheckInterval() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.HealthCheckInterval
+}
+
+// UpdateHealthCheckInterval updates the health check interval (thread-safe)
+// Set to 0 to disable health check
+func (c *Config) UpdateHealthCheckInterval(interval int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.HealthCheckInterval = interval
+}
+
 // StorageAdapter defines the interface needed for loading/saving config
 type StorageAdapter interface {
 	GetEndpoints() ([]StorageEndpoint, error)
@@ -558,6 +575,13 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 		config.Proxy = &ProxyConfig{URL: proxyURL}
 	}
 
+	// Load health check interval
+	if intervalStr, err := storage.GetConfig("healthCheckInterval"); err == nil && intervalStr != "" {
+		if interval, err := strconv.Atoi(intervalStr); err == nil {
+			config.HealthCheckInterval = interval
+		}
+	}
+
 	return config, nil
 }
 
@@ -669,6 +693,9 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 	} else {
 		storage.SetConfig("proxy_url", "")
 	}
+
+	// Save health check interval
+	storage.SetConfig("healthCheckInterval", strconv.Itoa(c.HealthCheckInterval))
 
 	return nil
 }

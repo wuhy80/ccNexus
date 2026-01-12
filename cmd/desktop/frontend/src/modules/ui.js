@@ -272,6 +272,11 @@ export function initUI() {
                             <span class="throughput-value" id="tokensPerMin">0</span>
                             <span class="throughput-unit">${t('monitor.tokensPerMin')}</span>
                         </span>
+                     <span class="throughput-divider">|</span>
+                 <span class="throughput-item">
+                            <span class="throughput-value" id="avgLatency">-</span>
+                            <span class="throughput-unit">${t('monitor.avgLatency')}</span>
+                        </span>
                     </div>
                 </div>
 
@@ -853,6 +858,19 @@ export function initUI() {
                             ${t('settings.proxyHelp')}
                         </p>
                     </div>
+                    <div class="form-group">
+                        <label>${t('settings.healthCheck')}</label>
+                        <select id="settingsHealthCheckInterval">
+                       <option value="0">${t('settings.healthCheckOptions.disabled')}</option>
+                            <option value="30">${t('settings.healthCheckOptions.sec30')}</option>
+                  <option value="60">${t('settings.healthCheckOptions.min1')}</option>
+                            <option value="300">${t('settings.healthCheckOptions.min5')}</option>
+                            <option value="600">${t('settings.healthCheckOptions.min10')}</option>
+                        </select>
+                        <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                       ${t('settings.healthCheckHelp')}
+                        </p>
+                 </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="window.closeSettingsModal()">${t('settings.cancel')}</button>
