@@ -110,6 +110,10 @@ export function GetEndpointMetrics() {
   return window['go']['main']['App']['GetEndpointMetrics']();
 }
 
+export function GetHealthCheckInterval() {
+  return window['go']['main']['App']['GetHealthCheckInterval']();
+}
+
 export function GetInteractionDates() {
   return window['go']['main']['App']['GetInteractionDates']();
 }
@@ -264,6 +268,10 @@ export function SetAutoLightTheme(arg1) {
 
 export function SetCloseWindowBehavior(arg1) {
   return window['go']['main']['App']['SetCloseWindowBehavior'](arg1);
+}
+
+export function SetHealthCheckInterval(arg1) {
+  return window['go']['main']['App']['SetHealthCheckInterval'](arg1);
 }
 
 export function SetInteractionEnabled(arg1) {

@@ -436,13 +436,14 @@ func (m *EndpointMetric) clone() *EndpointMetric {
 
 // EndpointHealth represents the health status of an endpoint
 type EndpointHealth struct {
-	EndpointName    string  `json:"endpointName"`
-	Status          string  `json:"status"` // "healthy", "warning", "error"
-	ActiveCount     int     `json:"activeCount"`
-	SuccessRate     float64 `json:"successRate"`
-	AvgResponseTime float64 `json:"avgResponseTime"`
-	LastError       string  `json:"lastError,omitempty"`
-	LastErrorTime   int64   `json:"lastErrorTime,omitempty"`
+	EndpointName       string  `json:"endpointName"`
+	Status             string  `json:"status"` // "healthy", "warning", "error", "unknown"
+	ActiveCount        int     `json:"activeCount"`
+	SuccessRate        float64 `json:"successRate"`
+	AvgResponseTime    float64 `json:"avgResponseTime"`
+	HealthCheckLatency float64 `json:"healthCheckLatency,omitempty"` // Health check latency in ms
+	LastError          string  `json:"lastError,omitempty"`
+	LastErrorTime      int64   `json:"lastErrorTime,omitempty"`
 }
 
 // GetEndpointHealth returns health status for all specified endpoints
@@ -455,18 +456,37 @@ func (m *Monitor) GetEndpointHealth(enabledEndpoints []string) []EndpointHealth 
 	for _, name := range enabledEndpoints {
 		h := EndpointHealth{
 			EndpointName: name,
-			Status:       "healthy", // Default status
+			Status:       "unknown", // Default status when no data
 		}
 
+		// Get health check latency if available
+		if latency, exists := m.healthCheckLatencies[name]; exists {
+			h.HealthCheckLatency = latency
+			h.AvgResponseTime = latency / 1000 // Convert ms to seconds for display
+			h.Status = "healthy"               // Health check succeeded
+		}
+
+		// Get metrics from actual requests if available
 		if metric, exists := m.endpointMetrics[name]; exists {
 			h.ActiveCount = metric.ActiveCount
 			h.SuccessRate = metric.SuccessRate
-			h.AvgResponseTime = metric.AvgResponseTime
 			h.LastError = metric.LastError
 			h.LastErrorTime = metric.LastErrorTime
 
-			// Calculate health status
-			h.Status = calculateHealthStatus(metric)
+			// If no health check latency, use request latency
+			if h.HealthCheckLatency == 0 && metric.AvgResponseTime > 0 {
+				h.AvgResponseTime = metric.AvgResponseTime
+			}
+
+			// Calculate health status based on metrics (may override health check status)
+			metricStatus := calculateHealthStatus(metric)
+			if metricStatus == "error" {
+				h.Status = "error"
+			} else if metricStatus == "warning" && h.Status != "error" {
+				h.Status = "warning"
+			} else if h.Status == "unknown" {
+				h.Status = metricStatus
+			}
 		}
 
 		health = append(health, h)

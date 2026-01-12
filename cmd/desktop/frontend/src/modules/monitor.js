@@ -603,9 +603,11 @@ function renderEndpointHealth() {
     let html = '';
     endpointHealth.forEach((health, name) => {
         const statusClass = `status-${health.status}`;
-        // Prefer health check latency if available
+        // Prefer healthCheckLatency from health object, then from healthCheckLatencies map, then avgResponseTime
         let avgTime = '-';
-        if (healthCheckLatencies[name] !== undefined && healthCheckLatencies[name] > 0) {
+        if (health.healthCheckLatency > 0) {
+            avgTime = formatLatency(health.healthCheckLatency);
+        } else if (healthCheckLatencies[name] !== undefined && healthCheckLatencies[name] > 0) {
             avgTime = formatLatency(healthCheckLatencies[name]);
         } else if (health.avgResponseTime > 0) {
             avgTime = formatDuration(health.avgResponseTime);

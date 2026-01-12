@@ -407,6 +407,11 @@
     animation: pulse-critical 1.5s ease-in-out infinite;
 }
 
+.status-unknown .health-status-indicator {
+    background: #9ca3af;
+    box-shadow: 0 0 6px rgba(156, 163, 175, 0.5);
+}
+
 .health-info {
     display: flex;
     flex-direction: column;
@@ -583,6 +588,11 @@
 [data-theme="dark"] .status-error .health-status-indicator {
     background: #f87171;
     box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
+}
+
+[data-theme="dark"] .status-unknown .health-status-indicator {
+    background: #6b7280;
+    box-shadow: 0 0 6px rgba(107, 114, 128, 0.5);
 }
 
 [data-theme="dark"] .health-active {

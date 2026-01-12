@@ -55,6 +55,8 @@ export function GetEndpointHealth():Promise<string>;
 
 export function GetEndpointMetrics():Promise<string>;
 
+export function GetHealthCheckInterval():Promise<number>;
+
 export function GetInteractionDates():Promise<string>;
 
 export function GetInteractionDetail(arg1:string,arg2:string):Promise<string>;
@@ -132,6 +134,8 @@ export function SetAutoDarkTheme(arg1:string):Promise<void>;
 export function SetAutoLightTheme(arg1:string):Promise<void>;
 
 export function SetCloseWindowBehavior(arg1:string):Promise<void>;
+
+export function SetHealthCheckInterval(arg1:number):Promise<void>;
 
 export function SetInteractionEnabled(arg1:boolean):Promise<string>;
 
