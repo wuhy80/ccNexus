@@ -79,6 +79,72 @@ type Config struct {
 	mu                    sync.RWMutex
 }
 
+// CopyFrom copies all configuration values from another Config (excluding mutex)
+// This is safe to use when you need to update config values without copying the mutex
+func (c *Config) CopyFrom(other *Config) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	other.mu.RLock()
+	defer other.mu.RUnlock()
+
+	c.Port = other.Port
+	c.Endpoints = make([]Endpoint, len(other.Endpoints))
+	copy(c.Endpoints, other.Endpoints)
+	c.LogLevel = other.LogLevel
+	c.Language = other.Language
+	c.Theme = other.Theme
+	c.ThemeAuto = other.ThemeAuto
+	c.AutoThemeMode = other.AutoThemeMode
+	c.AutoLightTheme = other.AutoLightTheme
+	c.AutoDarkTheme = other.AutoDarkTheme
+	c.WindowWidth = other.WindowWidth
+	c.WindowHeight = other.WindowHeight
+	c.CloseWindowBehavior = other.CloseWindowBehavior
+	c.HealthCheckInterval = other.HealthCheckInterval
+	c.RequestTimeout = other.RequestTimeout
+
+	if other.WebDAV != nil {
+		c.WebDAV = &WebDAVConfig{
+			URL:      other.WebDAV.URL,
+			Username: other.WebDAV.Username,
+			Password: other.WebDAV.Password,
+		}
+	} else {
+		c.WebDAV = nil
+	}
+
+	if other.Backup != nil {
+		c.Backup = &BackupConfig{}
+		if other.Backup.S3 != nil {
+			c.Backup.S3 = &S3BackupConfig{
+				Endpoint:       other.Backup.S3.Endpoint,
+				Region:         other.Backup.S3.Region,
+				Bucket:         other.Backup.S3.Bucket,
+				Prefix:         other.Backup.S3.Prefix,
+				AccessKey:      other.Backup.S3.AccessKey,
+				SecretKey:      other.Backup.S3.SecretKey,
+				SessionToken:   other.Backup.S3.SessionToken,
+				UseSSL:         other.Backup.S3.UseSSL,
+				ForcePathStyle: other.Backup.S3.ForcePathStyle,
+			}
+		}
+		if other.Backup.Local != nil {
+			c.Backup.Local = &LocalBackupConfig{
+				Dir: other.Backup.Local.Dir,
+			}
+		}
+		c.Backup.Provider = other.Backup.Provider
+	} else {
+		c.Backup = nil
+	}
+
+	if other.Proxy != nil {
+		c.Proxy = &ProxyConfig{URL: other.Proxy.URL}
+	} else {
+		c.Proxy = nil
+	}
+}
+
 // DefaultConfig returns a default configuration
 func DefaultConfig() *Config {
 	return &Config{
