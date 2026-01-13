@@ -173,6 +173,8 @@ func (a *App) startup(ctx context.Context) {
 	a.client = service.NewClientService(a.storage)
 	a.monitor = service.NewMonitorService(a.proxy.GetMonitor(), a.config)
 	a.healthCheck = service.NewHealthCheckService(a.config, a.proxy.GetMonitor())
+	a.healthCheck.SetStorage(sqliteStorage)
+	a.healthCheck.SetDeviceID(deviceID)
 
 	// Initialize interaction storage and service
 	exePath, err := os.Executable()
@@ -193,6 +195,11 @@ func (a *App) startup(ctx context.Context) {
 		} else if deleted > 0 {
 			logger.Info("Cleaned up %d old interaction folders", deleted)
 		}
+	}()
+
+	// Cleanup old health history records
+	go func() {
+		a.healthCheck.CleanupOldHistory()
 	}()
 
 	a.initTray()
@@ -436,14 +443,14 @@ func (a *App) GetTokenTrendData(granularity, period, startTime, endTime string) 
 
 // ========== Endpoint Bindings ==========
 
-func (a *App) AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark string) error {
-	return a.endpoint.AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark)
+func (a *App) AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark, tags string) error {
+	return a.endpoint.AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark, tags)
 }
 func (a *App) RemoveEndpoint(clientType string, index int) error {
 	return a.endpoint.RemoveEndpoint(clientType, index)
 }
-func (a *App) UpdateEndpoint(clientType string, index int, name, apiUrl, apiKey, transformer, model, remark string) error {
-	return a.endpoint.UpdateEndpoint(clientType, index, name, apiUrl, apiKey, transformer, model, remark)
+func (a *App) UpdateEndpoint(clientType string, index int, name, apiUrl, apiKey, transformer, model, remark, tags string) error {
+	return a.endpoint.UpdateEndpoint(clientType, index, name, apiUrl, apiKey, transformer, model, remark, tags)
 }
 func (a *App) ToggleEndpoint(clientType string, index int, enabled bool) error {
 	return a.endpoint.ToggleEndpoint(clientType, index, enabled)
@@ -477,6 +484,36 @@ func (a *App) ExportAllEndpoints(includeKeys bool) string {
 }
 func (a *App) ImportEndpoints(jsonData string, mode string) string {
 	return a.endpoint.ImportEndpoints(jsonData, mode)
+}
+func (a *App) GetAllEndpointTags() ([]string, error) {
+	return a.endpoint.GetAllEndpointTags()
+}
+func (a *App) GetHealthHistory(endpointName, clientType string, hours int) ([]map[string]interface{}, error) {
+	records, err := a.endpoint.GetHealthHistory(endpointName, clientType, hours)
+	if err != nil {
+		return nil, err
+	}
+	// Convert to map for JSON serialization
+	result := make([]map[string]interface{}, len(records))
+	for i, r := range records {
+		result[i] = map[string]interface{}{
+			"id":           r.ID,
+			"endpointName": r.EndpointName,
+			"clientType":   r.ClientType,
+			"status":       r.Status,
+			"latencyMs":    r.LatencyMs,
+			"errorMessage": r.ErrorMessage,
+			"timestamp":    r.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
+			"deviceId":     r.DeviceID,
+		}
+	}
+	return result, nil
+}
+func (a *App) GetHealthHistoryRetentionDays() int {
+	return a.endpoint.GetHealthHistoryRetentionDays()
+}
+func (a *App) SetHealthHistoryRetentionDays(days int) error {
+	return a.endpoint.SetHealthHistoryRetentionDays(days)
 }
 
 // ========== Settings Bindings ==========

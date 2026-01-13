@@ -17,9 +17,73 @@ export const CLIENT_TYPES = [
 // 当前选中的客户端类型
 let currentClientType = 'claude';
 
+// 当前选中的标签筛选
+let currentTagFilter = '';
+
 // 获取当前客户端类型
 export function getCurrentClientType() {
     return currentClientType;
+}
+
+// 获取当前标签筛选
+export function getCurrentTagFilter() {
+    return currentTagFilter;
+}
+
+// 设置当前标签筛选
+export function setCurrentTagFilter(tag) {
+    currentTagFilter = tag;
+}
+
+// 渲染标签筛选器
+export async function renderTagFilter(containerId = 'tagFilterContainer') {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    // 获取所有标签
+    let allTags = [];
+    try {
+        allTags = await window.go.main.App.GetAllEndpointTags();
+    } catch (error) {
+        console.error('Failed to get endpoint tags:', error);
+    }
+
+    if (!allTags || allTags.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="tag-filter">
+            <label>${t('endpoints.filterByTag')}:</label>
+            <select id="tagFilterSelect">
+                <option value="">${t('endpoints.allTags')}</option>
+                ${allTags.map(tag => `
+                    <option value="${tag}" ${tag === currentTagFilter ? 'selected' : ''}>
+                        ${tag}
+                    </option>
+                `).join('')}
+            </select>
+        </div>
+    `;
+
+    const select = document.getElementById('tagFilterSelect');
+    if (select) {
+        select.addEventListener('change', async (e) => {
+            setCurrentTagFilter(e.target.value);
+            // 刷新端点列表
+            if (window.loadConfig) {
+                window.loadConfig();
+            }
+        });
+    }
+}
+
+// 刷新端点列表
+export async function refreshEndpoints() {
+    if (window.loadConfig) {
+        await window.loadConfig();
+    }
 }
 
 // 设置当前客户端类型
@@ -192,9 +256,18 @@ export async function renderEndpoints(endpoints) {
     const container = document.getElementById('endpointList');
 
     // Filter endpoints by current client type
-    const filteredEndpoints = endpoints.filter(ep =>
+    let filteredEndpoints = endpoints.filter(ep =>
         (ep.clientType || 'claude') === currentClientType
     );
+
+    // Filter by tag if selected
+    if (currentTagFilter) {
+        filteredEndpoints = filteredEndpoints.filter(ep => {
+            if (!ep.tags) return false;
+            const tags = ep.tags.split(',').map(t => t.trim());
+            return tags.includes(currentTagFilter);
+        });
+    }
 
     // Get current endpoint from backend for this client type
     let currentEndpointName = '';
@@ -207,7 +280,7 @@ export async function renderEndpoints(endpoints) {
     if (filteredEndpoints.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
-                <p>${t('endpoints.noEndpoints')}</p>
+                <p>${currentTagFilter ? t('endpoints.noEndpointsWithTag') : t('endpoints.noEndpoints')}</p>
             </div>
         `;
         return;
@@ -274,6 +347,7 @@ export async function renderEndpoints(endpoints) {
                 <p style="color: #666; font-size: 14px; margin-top: 3px;">📊 ${t('endpoints.requests')}: ${stats.requests} | ${t('endpoints.errors')}: ${stats.errors}</p>
                 <p style="color: #666; font-size: 14px; margin-top: 3px;">🎯 ${t('endpoints.tokens')}: ${formatTokens(totalTokens)} (${t('statistics.in')}: ${formatTokens(totalInputWithCache)}, ${t('statistics.out')}: ${formatTokens(stats.outputTokens)})</p>
                 ${ep.remark ? `<p style="color: #888; font-size: 13px; margin-top: 5px; font-style: italic;" title="${ep.remark}">💬 ${ep.remark.length > 20 ? ep.remark.substring(0, 20) + '...' : ep.remark}</p>` : ''}
+                ${ep.tags ? `<div class="endpoint-tags">${ep.tags.split(',').map(tag => tag.trim()).filter(tag => tag).map(tag => `<span class="endpoint-tag">${tag}</span>`).join('')}</div>` : ''}
             </div>
             <div class="endpoint-actions">
                 <label class="toggle-switch">
@@ -596,6 +670,12 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
         if (ep.remark) {
             statsTooltip += `\n${t('modal.remark')}: ${ep.remark}`;
         }
+        if (ep.tags) {
+            statsTooltip += `\n${t('endpoints.tags')}: ${ep.tags}`;
+        }
+
+        // 生成标签 HTML
+        const tagsHtml = ep.tags ? ep.tags.split(',').map(tag => tag.trim()).filter(tag => tag).map(tag => `<span class="endpoint-tag-compact">${tag}</span>`).join('') : '';
 
         item.innerHTML = `
             <div class="drag-handle" title="${t('endpoints.dragToReorder')}">
@@ -605,6 +685,7 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
             </div>
             <span class="compact-status" title="${testStatusTip}" style="cursor: help">${testStatusIcon}</span>
             <span class="compact-name" title="${ep.name}">${ep.name}</span>
+            ${tagsHtml ? `<span class="compact-tags">${tagsHtml}</span>` : ''}
             ${isCurrentEndpoint ? '<span class="btn btn-primary compact-badge-btn">' + t('endpoints.current') + '</span>' : (enabled ? '<button class="btn btn-primary compact-badge-btn" data-action="switch" data-name="' + ep.name + '">' + t('endpoints.switchTo') + '</button>' : '<span class="btn btn-primary compact-badge-btn compact-badge-disabled">' + t('endpoints.disabled') + '</span>')}
             <span class="compact-url" title="${ep.apiUrl}"><span class="compact-url-icon">🌐</span>${displayUrl}</span>
             <span class="compact-transformer">🔄 ${transformer}</span>

@@ -16,6 +16,7 @@ type Endpoint struct {
 	Transformer string `json:"transformer,omitempty"` // Transformer type: claude, openai, gemini, deepseek
 	Model       string `json:"model,omitempty"`       // Target model name for non-Claude APIs
 	Remark      string `json:"remark,omitempty"`      // Optional remark for the endpoint
+	Tags        string `json:"tags,omitempty"`        // Comma-separated tags for grouping/filtering
 }
 
 // WebDAVConfig represents WebDAV synchronization configuration
@@ -59,24 +60,25 @@ type ProxyConfig struct {
 
 // Config represents the application configuration
 type Config struct {
-	Port                  int             `json:"port"`
-	Endpoints             []Endpoint      `json:"endpoints"`
-	LogLevel              int             `json:"logLevel"`                      // 0=DEBUG, 1=INFO, 2=WARN, 3=ERROR
-	Language              string          `json:"language"`                      // UI language: en, zh-CN
-	Theme                 string          `json:"theme"`                         // UI theme: light, dark
-	ThemeAuto             bool            `json:"themeAuto"`                     // Auto switch theme based on time
-	AutoThemeMode         string          `json:"autoThemeMode,omitempty"`       // Auto theme mode: time, system (default: time)
-	AutoLightTheme        string          `json:"autoLightTheme,omitempty"`      // Theme to use in daytime when auto mode is on
-	AutoDarkTheme         string          `json:"autoDarkTheme,omitempty"`       // Theme to use in nighttime when auto mode is on
-	WindowWidth           int             `json:"windowWidth"`                   // Window width in pixels
-	WindowHeight          int             `json:"windowHeight"`                  // Window height in pixels
-	CloseWindowBehavior   string          `json:"closeWindowBehavior,omitempty"` // "quit", "minimize", "ask"
-	HealthCheckInterval   int             `json:"healthCheckInterval"`           // Health check interval in seconds, 0 to disable
-	RequestTimeout        int             `json:"requestTimeout"`                // Request timeout in seconds, 0 for default (300s)
-	WebDAV                *WebDAVConfig   `json:"webdav,omitempty"`              // WebDAV synchronization config
-	Backup                *BackupConfig   `json:"backup,omitempty"`              // Backup/sync configuration
-	Proxy                 *ProxyConfig    `json:"proxy,omitempty"`               // HTTP proxy config
-	mu                    sync.RWMutex
+	Port                       int             `json:"port"`
+	Endpoints                  []Endpoint      `json:"endpoints"`
+	LogLevel                   int             `json:"logLevel"`                      // 0=DEBUG, 1=INFO, 2=WARN, 3=ERROR
+	Language                   string          `json:"language"`                      // UI language: en, zh-CN
+	Theme                      string          `json:"theme"`                         // UI theme: light, dark
+	ThemeAuto                  bool            `json:"themeAuto"`                     // Auto switch theme based on time
+	AutoThemeMode              string          `json:"autoThemeMode,omitempty"`       // Auto theme mode: time, system (default: time)
+	AutoLightTheme             string          `json:"autoLightTheme,omitempty"`      // Theme to use in daytime when auto mode is on
+	AutoDarkTheme              string          `json:"autoDarkTheme,omitempty"`       // Theme to use in nighttime when auto mode is on
+	WindowWidth                int             `json:"windowWidth"`                   // Window width in pixels
+	WindowHeight               int             `json:"windowHeight"`                  // Window height in pixels
+	CloseWindowBehavior        string          `json:"closeWindowBehavior,omitempty"` // "quit", "minimize", "ask"
+	HealthCheckInterval        int             `json:"healthCheckInterval"`           // Health check interval in seconds, 0 to disable
+	HealthHistoryRetentionDays int             `json:"healthHistoryRetentionDays"`    // Health history retention days, default 7
+	RequestTimeout             int             `json:"requestTimeout"`                // Request timeout in seconds, 0 for default (300s)
+	WebDAV                     *WebDAVConfig   `json:"webdav,omitempty"`              // WebDAV synchronization config
+	Backup                     *BackupConfig   `json:"backup,omitempty"`              // Backup/sync configuration
+	Proxy                      *ProxyConfig    `json:"proxy,omitempty"`               // HTTP proxy config
+	mu                         sync.RWMutex
 }
 
 // CopyFrom copies all configuration values from another Config (excluding mutex)
@@ -101,6 +103,7 @@ func (c *Config) CopyFrom(other *Config) {
 	c.WindowHeight = other.WindowHeight
 	c.CloseWindowBehavior = other.CloseWindowBehavior
 	c.HealthCheckInterval = other.HealthCheckInterval
+	c.HealthHistoryRetentionDays = other.HealthHistoryRetentionDays
 	c.RequestTimeout = other.RequestTimeout
 
 	if other.WebDAV != nil {
@@ -488,6 +491,24 @@ func (c *Config) UpdateRequestTimeout(timeout int) {
 	c.RequestTimeout = timeout
 }
 
+// GetHealthHistoryRetentionDays returns the health history retention days (thread-safe)
+// Returns default 7 if not set
+func (c *Config) GetHealthHistoryRetentionDays() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.HealthHistoryRetentionDays == 0 {
+		return 7
+	}
+	return c.HealthHistoryRetentionDays
+}
+
+// UpdateHealthHistoryRetentionDays updates the health history retention days (thread-safe)
+func (c *Config) UpdateHealthHistoryRetentionDays(days int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.HealthHistoryRetentionDays = days
+}
+
 // StorageAdapter defines the interface needed for loading/saving config
 type StorageAdapter interface {
 	GetEndpoints() ([]StorageEndpoint, error)
@@ -509,6 +530,7 @@ type StorageEndpoint struct {
 	Transformer string
 	Model       string
 	Remark      string
+	Tags        string
 	SortOrder   int
 }
 
@@ -538,6 +560,7 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 			Transformer: ep.Transformer,
 			Model:       ep.Model,
 			Remark:      ep.Remark,
+			Tags:        ep.Tags,
 		}
 		if endpoint.Transformer == "" {
 			endpoint.Transformer = "claude"
@@ -694,6 +717,17 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 		}
 	}
 
+	// Load health history retention days
+	if retentionStr, err := storage.GetConfig("healthHistoryRetentionDays"); err == nil && retentionStr != "" {
+		if retention, err := strconv.Atoi(retentionStr); err == nil {
+			config.HealthHistoryRetentionDays = retention
+		}
+	}
+	// Default to 7 days if not set
+	if config.HealthHistoryRetentionDays == 0 {
+		config.HealthHistoryRetentionDays = 7
+	}
+
 	// Load request timeout
 	if timeoutStr, err := storage.GetConfig("requestTimeout"); err == nil && timeoutStr != "" {
 		if timeout, err := strconv.Atoi(timeoutStr); err == nil {
@@ -741,6 +775,7 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 			Transformer: ep.Transformer,
 			Model:       ep.Model,
 			Remark:      ep.Remark,
+			Tags:        ep.Tags,
 			SortOrder:   i, // Use array index as sort order
 		}
 
@@ -816,6 +851,9 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 
 	// Save health check interval
 	storage.SetConfig("healthCheckInterval", strconv.Itoa(c.HealthCheckInterval))
+
+	// Save health history retention days
+	storage.SetConfig("healthHistoryRetentionDays", strconv.Itoa(c.HealthHistoryRetentionDays))
 
 	// Save request timeout
 	storage.SetConfig("requestTimeout", strconv.Itoa(c.RequestTimeout))

@@ -1,4 +1,5 @@
 import { t } from '../i18n/index.js';
+import { getCurrentClientType } from './endpoints.js';
 
 // State
 let activeRequests = new Map(); // requestId -> request data
@@ -684,3 +685,318 @@ function formatNumber(num) {
     }
     return num.toString();
 }
+
+// ========== Health History Chart Functions ==========
+
+// State for health history
+let healthHistoryData = [];
+let selectedHistoryEndpoint = '';
+let selectedHistoryHours = 24;
+
+// Initialize health history panel
+export function initHealthHistoryPanel() {
+    renderHealthHistoryPanel();
+}
+
+// Render the health history panel HTML
+function renderHealthHistoryPanel() {
+    const container = document.getElementById('healthHistoryPanel');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="health-history-panel">
+            <div class="health-history-header">
+                <h4><span class="section-icon">📈</span> ${t('monitor.healthHistory')}</h4>
+                <div class="health-history-controls">
+                    <select id="healthHistoryEndpoint">
+                        <option value="">${t('monitor.selectEndpoint')}</option>
+                    </select>
+                    <select id="healthHistoryHours">
+                        <option value="6">6 ${t('monitor.hours')}</option>
+                        <option value="12">12 ${t('monitor.hours')}</option>
+                        <option value="24" selected>24 ${t('monitor.hours')}</option>
+                        <option value="48">48 ${t('monitor.hours')}</option>
+                        <option value="168">7 ${t('monitor.days')}</option>
+                    </select>
+                </div>
+            </div>
+            <div id="healthHistoryChart" class="health-history-chart">
+                <div class="health-history-empty">
+                    <span class="health-history-empty-icon">📊</span>
+                    <span>${t('monitor.selectEndpointToView')}</span>
+                </div>
+            </div>
+            <div class="health-history-legend">
+                <div class="legend-item"><span class="legend-dot healthy"></span> ${t('monitor.statusHealthy')}</div>
+                <div class="legend-item"><span class="legend-dot warning"></span> ${t('monitor.statusWarning')}</div>
+                <div class="legend-item"><span class="legend-dot error"></span> ${t('monitor.statusError')}</div>
+                <div class="legend-item"><span class="legend-dot unknown"></span> ${t('monitor.statusUnknown')}</div>
+            </div>
+        </div>
+    `;
+
+    // Populate endpoint dropdown
+    populateHealthHistoryEndpoints();
+
+    // Add event listeners
+    const endpointSelect = document.getElementById('healthHistoryEndpoint');
+    const hoursSelect = document.getElementById('healthHistoryHours');
+
+    if (endpointSelect) {
+        endpointSelect.addEventListener('change', (e) => {
+            selectedHistoryEndpoint = e.target.value;
+            loadHealthHistory();
+        });
+    }
+
+    if (hoursSelect) {
+        hoursSelect.addEventListener('change', (e) => {
+            selectedHistoryHours = parseInt(e.target.value);
+            loadHealthHistory();
+        });
+    }
+}
+
+// Populate endpoint dropdown with available endpoints
+async function populateHealthHistoryEndpoints() {
+    const select = document.getElementById('healthHistoryEndpoint');
+    if (!select) return;
+
+    // Get endpoints from health status
+    const endpoints = Array.from(endpointHealth.keys());
+
+    // If no endpoints from health, try to get from config
+    if (endpoints.length === 0) {
+        try {
+            const configStr = await window.go.main.App.GetConfig();
+            const config = JSON.parse(configStr);
+            if (config.endpoints) {
+                for (const ep of config.endpoints) {
+                    if (!endpoints.includes(ep.name)) {
+                        endpoints.push(ep.name);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Failed to get endpoints for health history:', error);
+        }
+    }
+
+    // Build options
+    let html = `<option value="">${t('monitor.selectEndpoint')}</option>`;
+    for (const name of endpoints) {
+        html += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+    }
+
+    select.innerHTML = html;
+}
+
+// Load health history data from backend
+async function loadHealthHistory() {
+    if (!selectedHistoryEndpoint) {
+        renderHealthHistoryEmpty();
+        return;
+    }
+
+    try {
+        // Get current client type
+        const clientType = getCurrentClientType() || 'claude';
+
+        const historyData = await window.go.main.App.GetHealthHistory(
+            selectedHistoryEndpoint,
+            clientType,
+            selectedHistoryHours
+        );
+
+        if (!historyData || historyData.length === 0) {
+            renderHealthHistoryEmpty(true);
+            return;
+        }
+
+        healthHistoryData = historyData;
+        renderHealthHistoryChart();
+    } catch (error) {
+        console.error('Failed to load health history:', error);
+        renderHealthHistoryEmpty(true);
+    }
+}
+
+// Render empty state for health history
+function renderHealthHistoryEmpty(noData = false) {
+    const container = document.getElementById('healthHistoryChart');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="health-history-empty">
+            <span class="health-history-empty-icon">${noData ? '📭' : '📊'}</span>
+            <span>${noData ? t('monitor.noHealthHistory') : t('monitor.selectEndpointToView')}</span>
+        </div>
+    `;
+}
+
+// Render health history timeline chart
+function renderHealthHistoryChart() {
+    const container = document.getElementById('healthHistoryChart');
+    if (!container || !healthHistoryData || healthHistoryData.length === 0) {
+        renderHealthHistoryEmpty(true);
+        return;
+    }
+
+    // Group data by time segments
+    const segments = processHealthHistoryData(healthHistoryData, selectedHistoryHours);
+
+    if (segments.length === 0) {
+        renderHealthHistoryEmpty(true);
+        return;
+    }
+
+    // Calculate segment widths
+    const totalDuration = selectedHistoryHours * 60 * 60 * 1000; // in ms
+
+    let html = '<div class="health-timeline">';
+    html += '<div class="timeline-row">';
+    html += `<span class="timeline-label">${selectedHistoryEndpoint.length > 10 ? selectedHistoryEndpoint.substring(0, 10) + '...' : selectedHistoryEndpoint}</span>`;
+    html += '<div class="timeline-bar">';
+
+    for (const segment of segments) {
+        const widthPercent = (segment.duration / totalDuration) * 100;
+        const statusClass = `status-${segment.status}`;
+        const tooltipTime = new Date(segment.startTime).toLocaleString();
+        const tooltipLatency = segment.latencyMs > 0 ? ` | ${Math.round(segment.latencyMs)}ms` : '';
+        const tooltipError = segment.errorMessage ? ` | ${segment.errorMessage}` : '';
+
+        html += `
+            <div class="timeline-segment ${statusClass}"
+                 style="width: ${Math.max(widthPercent, 0.5)}%"
+                 title="${tooltipTime}${tooltipLatency}${tooltipError}">
+            </div>
+        `;
+    }
+
+    html += '</div></div>';
+
+    // Add latency chart if we have latency data
+    const latencyData = healthHistoryData.filter(d => d.latencyMs > 0);
+    if (latencyData.length > 1) {
+        html += renderLatencyChart(latencyData);
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// Process health history data into timeline segments
+function processHealthHistoryData(data, hours) {
+    if (!data || data.length === 0) return [];
+
+    // Sort by timestamp
+    const sorted = [...data].sort((a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    const segments = [];
+    const now = Date.now();
+    const startTime = now - (hours * 60 * 60 * 1000);
+
+    for (let i = 0; i < sorted.length; i++) {
+        const record = sorted[i];
+        const recordTime = new Date(record.timestamp).getTime();
+
+        // Skip records outside our time window
+        if (recordTime < startTime) continue;
+
+        const segmentStart = recordTime;
+        let segmentEnd;
+
+        if (i < sorted.length - 1) {
+            segmentEnd = new Date(sorted[i + 1].timestamp).getTime();
+        } else {
+            segmentEnd = now;
+        }
+
+        segments.push({
+            startTime: segmentStart,
+            endTime: segmentEnd,
+            duration: segmentEnd - segmentStart,
+            status: record.status || 'unknown',
+            latencyMs: record.latencyMs || 0,
+            errorMessage: record.errorMessage || ''
+        });
+    }
+
+    // If first segment doesn't start at our window start, add unknown segment
+    if (segments.length > 0 && segments[0].startTime > startTime) {
+        segments.unshift({
+            startTime: startTime,
+            endTime: segments[0].startTime,
+            duration: segments[0].startTime - startTime,
+            status: 'unknown',
+            latencyMs: 0,
+            errorMessage: ''
+        });
+    }
+
+    return segments;
+}
+
+// Render latency trend chart (simple SVG line chart)
+function renderLatencyChart(latencyData) {
+    if (!latencyData || latencyData.length < 2) return '';
+
+    const width = 100; // percentage
+    const height = 60;
+    const padding = 5;
+
+    // Get min/max values
+    const latencies = latencyData.map(d => d.latencyMs);
+    const maxLatency = Math.max(...latencies);
+    const minLatency = Math.min(...latencies);
+    const range = maxLatency - minLatency || 1;
+
+    // Calculate points
+    const points = latencyData.map((d, i) => {
+        const x = (i / (latencyData.length - 1)) * (100 - padding * 2) + padding;
+        const y = height - padding - ((d.latencyMs - minLatency) / range) * (height - padding * 2);
+        return { x, y, latency: d.latencyMs, time: d.timestamp };
+    });
+
+    // Create SVG path
+    const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+    // Create area path (for gradient fill)
+    const areaD = pathD + ` L ${points[points.length - 1].x} ${height - padding} L ${points[0].x} ${height - padding} Z`;
+
+    return `
+        <div class="latency-chart">
+            <svg class="latency-chart-svg" viewBox="0 0 100 ${height}" preserveAspectRatio="none">
+                <defs>
+                    <linearGradient id="latencyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" style="stop-color:var(--primary-color);stop-opacity:0.3" />
+                        <stop offset="100%" style="stop-color:var(--primary-color);stop-opacity:0.05" />
+                    </linearGradient>
+                </defs>
+                <path class="latency-area" d="${areaD}" />
+                <path class="latency-line" d="${pathD}" />
+                ${points.map(p => `
+                    <circle class="latency-point" cx="${p.x}" cy="${p.y}" r="2">
+                        <title>${new Date(p.time).toLocaleTimeString()} - ${Math.round(p.latency)}ms</title>
+                    </circle>
+                `).join('')}
+            </svg>
+            <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-tertiary); margin-top: 4px;">
+                <span>${Math.round(minLatency)}ms</span>
+                <span>${t('monitor.latencyTrend')}</span>
+                <span>${Math.round(maxLatency)}ms</span>
+            </div>
+        </div>
+    `;
+}
+
+// Refresh health history (called when endpoint health is updated)
+export function refreshHealthHistory() {
+    if (selectedHistoryEndpoint) {
+        loadHealthHistory();
+    }
+    populateHealthHistoryEndpoints();
+}
+

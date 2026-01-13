@@ -12,6 +12,7 @@ type Endpoint struct {
 	Transformer string    `json:"transformer"`
 	Model       string    `json:"model"`
 	Remark      string    `json:"remark"`
+	Tags        string    `json:"tags"` // 逗号分隔的标签
 	SortOrder   int       `json:"sortOrder"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
@@ -73,6 +74,18 @@ type ClientStats struct {
 	EndpointsUsed       []string  `json:"endpointsUsed"`
 }
 
+// HealthHistoryRecord 端点健康历史记录
+type HealthHistoryRecord struct {
+	ID           int64     `json:"id"`
+	EndpointName string    `json:"endpointName"`
+	ClientType   string    `json:"clientType"`
+	Status       string    `json:"status"` // healthy, warning, error, unknown
+	LatencyMs    float64   `json:"latencyMs"`
+	ErrorMessage string    `json:"errorMessage,omitempty"`
+	Timestamp    time.Time `json:"timestamp"`
+	DeviceID     string    `json:"deviceId"`
+}
+
 type Storage interface {
 	// Endpoints
 	GetEndpoints() ([]Endpoint, error)
@@ -95,6 +108,12 @@ type Storage interface {
 	GetRequestStatsCount(endpointName string, clientType string, startDate, endDate string) (int, error)
 	CleanupOldRequestStats(daysToKeep int) error
 	GetConnectedClients(hoursAgo int) ([]ClientStats, error)
+
+	// Health History（健康历史）
+	RecordHealthHistory(record *HealthHistoryRecord) error
+	GetHealthHistory(endpointName, clientType string, startTime, endTime time.Time, limit int) ([]HealthHistoryRecord, error)
+	CleanupOldHealthHistory(daysToKeep int) error
+	GetAllEndpointTags() ([]string, error)
 
 	// Config
 	GetConfig(key string) (string, error)

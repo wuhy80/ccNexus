@@ -6,7 +6,7 @@ import { initUI, changeLanguage } from './modules/ui.js'
 import { loadConfig } from './modules/config.js'
 import { loadStats, switchStatsPeriod, loadStatsByPeriod, getCurrentPeriod } from './modules/stats.js'
 import { initTokenChart } from './modules/chart.js'
-import { renderEndpoints, toggleEndpointPanel, initEndpointSuccessListener, checkAllEndpointsOnStartup, switchEndpointViewMode, initEndpointViewMode, isDropdownOpen, initCurrentClientType, renderClientTypeSelector } from './modules/endpoints.js'
+import { renderEndpoints, toggleEndpointPanel, initEndpointSuccessListener, checkAllEndpointsOnStartup, switchEndpointViewMode, initEndpointViewMode, isDropdownOpen, initCurrentClientType, renderClientTypeSelector, renderTagFilter } from './modules/endpoints.js'
 import { loadLogs, toggleLogPanel, changeLogLevel, copyLogs, clearLogs } from './modules/logs.js'
 import { showDataSyncDialog } from './modules/webdav.js'
 import { initTips } from './modules/tips.js'
@@ -57,7 +57,7 @@ import {
     refreshConnectedClients,
     changeClientsHoursFilter
 } from './modules/modal.js'
-import { initMonitor } from './modules/monitor.js'
+import { initMonitor, initHealthHistoryPanel } from './modules/monitor.js'
 import './modules/importexport.js'
 
 // Load data on startup
@@ -151,6 +151,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Initialize monitor
     initMonitor();
 
+    // Initialize health history panel
+    initHealthHistoryPanel();
+
     // Listen for close dialog event from backend
     if (window.runtime) {
         window.runtime.EventsOn('show-close-dialog', () => {
@@ -220,6 +223,7 @@ async function loadConfigAndRender() {
     const config = await loadConfig();
     if (config) {
         renderEndpoints(config.endpoints);
+        renderTagFilter();
     }
 }
 

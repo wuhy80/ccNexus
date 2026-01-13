@@ -109,7 +109,7 @@ func normalizeAPIUrl(apiUrl string) string {
 }
 
 // AddEndpoint adds a new endpoint for a specific client type
-func (e *EndpointService) AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark string) error {
+func (e *EndpointService) AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark, tags string) error {
     clientType = normalizeClientType(clientType)
 
     endpoints := e.config.GetEndpointsByClient(clientType)
@@ -132,6 +132,7 @@ func (e *EndpointService) AddEndpoint(clientType, name, apiUrl, apiKey, transfor
         Transformer: transformer,
         Model:       model,
         Remark:      remark,
+        Tags:        tags,
     }
 
     // Get all endpoints and add the new one
@@ -207,7 +208,7 @@ func (e *EndpointService) RemoveEndpoint(clientType string, index int) error {
 }
 
 // UpdateEndpoint updates an endpoint by index for a specific client type
-func (e *EndpointService) UpdateEndpoint(clientType string, index int, name, apiUrl, apiKey, transformer, model, remark string) error {
+func (e *EndpointService) UpdateEndpoint(clientType string, index int, name, apiUrl, apiKey, transformer, model, remark, tags string) error {
     clientType = normalizeClientType(clientType)
 
     endpoints := e.config.GetEndpointsByClient(clientType)
@@ -241,6 +242,7 @@ func (e *EndpointService) UpdateEndpoint(clientType string, index int, name, api
         Transformer: transformer,
         Model:       model,
         Remark:      remark,
+        Tags:        tags,
     }
 
     // Update in all endpoints
@@ -1091,6 +1093,7 @@ type ExportEndpoint struct {
 	Transformer string `json:"transformer,omitempty"`
 	Model       string `json:"model,omitempty"`
 	Remark      string `json:"remark,omitempty"`
+	Tags        string `json:"tags,omitempty"`
 }
 
 // ExportData represents the exported data structure
@@ -1118,6 +1121,7 @@ func (e *EndpointService) ExportEndpoints(clientType string, includeKeys bool) s
 			Transformer: ep.Transformer,
 			Model:       ep.Model,
 			Remark:      ep.Remark,
+			Tags:        ep.Tags,
 		}
 
 		if includeKeys {
@@ -1164,6 +1168,7 @@ func (e *EndpointService) ExportAllEndpoints(includeKeys bool) string {
 			Transformer: ep.Transformer,
 			Model:       ep.Model,
 			Remark:      ep.Remark,
+			Tags:        ep.Tags,
 		}
 
 		if includeKeys {
@@ -1267,7 +1272,7 @@ func (e *EndpointService) ImportEndpoints(jsonData string, mode string) string {
 				skipped++
 				continue
 			case "overwrite":
-				err := e.UpdateEndpoint(clientType, existingIndex, importEp.Name, importEp.APIUrl, importEp.APIKey, transformer, importEp.Model, importEp.Remark)
+				err := e.UpdateEndpoint(clientType, existingIndex, importEp.Name, importEp.APIUrl, importEp.APIKey, transformer, importEp.Model, importEp.Remark, importEp.Tags)
 				if err != nil {
 					errors = append(errors, fmt.Sprintf("Failed to update '%s': %v", importEp.Name, err))
 					skipped++
@@ -1301,7 +1306,7 @@ func (e *EndpointService) ImportEndpoints(jsonData string, mode string) string {
 			}
 		}
 
-		err := e.AddEndpoint(clientType, importEp.Name, importEp.APIUrl, importEp.APIKey, transformer, importEp.Model, importEp.Remark)
+		err := e.AddEndpoint(clientType, importEp.Name, importEp.APIUrl, importEp.APIKey, transformer, importEp.Model, importEp.Remark, importEp.Tags)
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("Failed to add '%s': %v", importEp.Name, err))
 			skipped++
@@ -1325,4 +1330,61 @@ func (e *EndpointService) ImportEndpoints(jsonData string, mode string) string {
 
 	logger.Info("Import completed: %d imported, %d skipped, %d errors", imported, skipped, len(errors))
 	return toJSON(result)
+}
+
+// GetAllEndpointTags returns all unique tags used across all endpoints
+func (e *EndpointService) GetAllEndpointTags() ([]string, error) {
+	if e.storage == nil {
+		return []string{}, nil
+	}
+	return e.storage.GetAllEndpointTags()
+}
+
+// GetHealthHistory returns health history for an endpoint
+func (e *EndpointService) GetHealthHistory(endpointName, clientType string, hours int) ([]storage.HealthHistoryRecord, error) {
+	if e.storage == nil {
+		return []storage.HealthHistoryRecord{}, nil
+	}
+
+	endTime := time.Now()
+	startTime := endTime.Add(-time.Duration(hours) * time.Hour)
+
+	return e.storage.GetHealthHistory(endpointName, clientType, startTime, endTime, 1000)
+}
+
+// GetHealthHistoryRetentionDays returns the health history retention days
+func (e *EndpointService) GetHealthHistoryRetentionDays() int {
+	return e.config.GetHealthHistoryRetentionDays()
+}
+
+// SetHealthHistoryRetentionDays sets the health history retention days
+func (e *EndpointService) SetHealthHistoryRetentionDays(days int) error {
+	if days < 1 {
+		return fmt.Errorf("retention days must be at least 1")
+	}
+	if days > 365 {
+		return fmt.Errorf("retention days cannot exceed 365")
+	}
+
+	e.config.UpdateHealthHistoryRetentionDays(days)
+
+	if e.storage != nil {
+		configAdapter := storage.NewConfigStorageAdapter(e.storage)
+		if err := e.config.SaveToStorage(configAdapter); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
+	}
+
+	logger.Info("Health history retention days updated to %d", days)
+	return nil
+}
+
+// CleanupOldHealthHistory removes old health history records
+func (e *EndpointService) CleanupOldHealthHistory() error {
+	if e.storage == nil {
+		return nil
+	}
+
+	days := e.config.GetHealthHistoryRetentionDays()
+	return e.storage.CleanupOldHealthHistory(days)
 }

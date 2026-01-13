@@ -123,6 +123,14 @@ func (s *SQLiteStorage) initSchema() error {
 		return err
 	}
 
+	if err := s.migrateEndpointTags(); err != nil {
+		return err
+	}
+
+	if err := s.migrateHealthHistory(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -537,7 +545,7 @@ func (s *SQLiteStorage) GetEndpoints() ([]Endpoint, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, sort_order, created_at, updated_at FROM endpoints ORDER BY client_type, sort_order ASC`)
+	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, COALESCE(tags, '') as tags, sort_order, created_at, updated_at FROM endpoints ORDER BY client_type, sort_order ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -546,7 +554,7 @@ func (s *SQLiteStorage) GetEndpoints() ([]Endpoint, error) {
 	var endpoints []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.Tags, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
 			return nil, err
 		}
 		endpoints = append(endpoints, ep)
@@ -560,7 +568,7 @@ func (s *SQLiteStorage) GetEndpointsByClient(clientType string) ([]Endpoint, err
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, sort_order, created_at, updated_at FROM endpoints WHERE COALESCE(client_type, 'claude') = ? ORDER BY sort_order ASC`, clientType)
+	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, COALESCE(tags, '') as tags, sort_order, created_at, updated_at FROM endpoints WHERE COALESCE(client_type, 'claude') = ? ORDER BY sort_order ASC`, clientType)
 	if err != nil {
 		return nil, err
 	}
@@ -569,7 +577,7 @@ func (s *SQLiteStorage) GetEndpointsByClient(clientType string) ([]Endpoint, err
 	var endpoints []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.Tags, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
 			return nil, err
 		}
 		endpoints = append(endpoints, ep)
@@ -588,8 +596,8 @@ func (s *SQLiteStorage) SaveEndpoint(ep *Endpoint) error {
 		clientType = "claude"
 	}
 
-	result, err := s.db.Exec(`INSERT INTO endpoints (name, client_type, api_url, api_key, enabled, transformer, model, remark, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		ep.Name, clientType, ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder)
+	result, err := s.db.Exec(`INSERT INTO endpoints (name, client_type, api_url, api_key, enabled, transformer, model, remark, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ep.Name, clientType, ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.Tags, ep.SortOrder)
 	if err != nil {
 		return err
 	}
@@ -613,8 +621,8 @@ func (s *SQLiteStorage) UpdateEndpoint(ep *Endpoint) error {
 		clientType = "claude"
 	}
 
-	_, err := s.db.Exec(`UPDATE endpoints SET api_url=?, api_key=?, enabled=?, transformer=?, model=?, remark=?, sort_order=?, updated_at=CURRENT_TIMESTAMP WHERE name=? AND COALESCE(client_type, 'claude')=?`,
-		ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder, ep.Name, clientType)
+	_, err := s.db.Exec(`UPDATE endpoints SET api_url=?, api_key=?, enabled=?, transformer=?, model=?, remark=?, tags=?, sort_order=?, updated_at=CURRENT_TIMESTAMP WHERE name=? AND COALESCE(client_type, 'claude')=?`,
+		ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.Tags, ep.SortOrder, ep.Name, clientType)
 	return err
 }
 
@@ -1097,7 +1105,7 @@ func (s *SQLiteStorage) DetectEndpointConflicts(remoteDBPath string) ([]MergeCon
 
 // getEndpointsFromDB gets endpoints from a specific database (main or attached)
 func (s *SQLiteStorage) getEndpointsFromDB(db *sql.DB, dbName string) ([]Endpoint, error) {
-	query := fmt.Sprintf(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0) as sort_order, created_at, updated_at FROM %s.endpoints`, dbName)
+	query := fmt.Sprintf(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, COALESCE(tags, '') as tags, COALESCE(sort_order, 0) as sort_order, created_at, updated_at FROM %s.endpoints`, dbName)
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
@@ -1107,7 +1115,7 @@ func (s *SQLiteStorage) getEndpointsFromDB(db *sql.DB, dbName string) ([]Endpoin
 	var endpoints []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.Tags, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
 			return nil, err
 		}
 		endpoints = append(endpoints, ep)
@@ -1137,6 +1145,9 @@ func compareEndpoints(local, remote Endpoint) []string {
 	}
 	if local.Remark != remote.Remark {
 		conflicts = append(conflicts, "remark")
+	}
+	if local.Tags != remote.Tags {
+		conflicts = append(conflicts, "tags")
 	}
 
 	return conflicts
@@ -1199,8 +1210,8 @@ func (s *SQLiteStorage) mergeEndpoints(tx *sql.Tx, strategy MergeStrategy) error
 		// 只插入新端点（忽略冲突）
 		_, err := tx.Exec(`
 			INSERT OR IGNORE INTO endpoints
-			(name, client_type, api_url, api_key, enabled, transformer, model, remark, sort_order)
-			SELECT name, COALESCE(client_type, 'claude'), api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0)
+			(name, client_type, api_url, api_key, enabled, transformer, model, remark, tags, sort_order)
+			SELECT name, COALESCE(client_type, 'claude'), api_url, api_key, enabled, transformer, model, remark, COALESCE(tags, ''), COALESCE(sort_order, 0)
 			FROM backup.endpoints
 		`)
 		return err
@@ -1208,8 +1219,8 @@ func (s *SQLiteStorage) mergeEndpoints(tx *sql.Tx, strategy MergeStrategy) error
 		// 替换已存在的端点
 		_, err := tx.Exec(`
 			INSERT OR REPLACE INTO endpoints
-			(name, client_type, api_url, api_key, enabled, transformer, model, remark, sort_order)
-			SELECT name, COALESCE(client_type, 'claude'), api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0)
+			(name, client_type, api_url, api_key, enabled, transformer, model, remark, tags, sort_order)
+			SELECT name, COALESCE(client_type, 'claude'), api_url, api_key, enabled, transformer, model, remark, COALESCE(tags, ''), COALESCE(sort_order, 0)
 			FROM backup.endpoints
 		`)
 		return err
@@ -1539,4 +1550,185 @@ func (s *SQLiteStorage) GetConnectedClients(hoursAgo int) ([]ClientStats, error)
 	}
 
 	return clients, rows.Err()
+}
+
+// migrateEndpointTags adds the tags column to endpoints table
+func (s *SQLiteStorage) migrateEndpointTags() error {
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('endpoints') WHERE name='tags'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		if _, err := s.db.Exec(`ALTER TABLE endpoints ADD COLUMN tags TEXT DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// migrateHealthHistory creates the endpoint_health_history table
+func (s *SQLiteStorage) migrateHealthHistory() error {
+	// Check if table exists
+	var tableName string
+	err := s.db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='endpoint_health_history'`).Scan(&tableName)
+
+	if err == sql.ErrNoRows {
+		schema := `
+		CREATE TABLE IF NOT EXISTS endpoint_health_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			endpoint_name TEXT NOT NULL,
+			client_type TEXT DEFAULT 'claude',
+			status TEXT NOT NULL,
+			latency_ms REAL,
+			error_message TEXT,
+			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+			device_id TEXT DEFAULT 'default'
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_health_history_endpoint ON endpoint_health_history(endpoint_name, client_type);
+		CREATE INDEX IF NOT EXISTS idx_health_history_timestamp ON endpoint_health_history(timestamp DESC);
+		`
+
+		if _, err := s.db.Exec(schema); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// RecordHealthHistory records a health check result to history
+func (s *SQLiteStorage) RecordHealthHistory(record *HealthHistoryRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	clientType := record.ClientType
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	_, err := s.db.Exec(`
+		INSERT INTO endpoint_health_history (endpoint_name, client_type, status, latency_ms, error_message, timestamp, device_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, record.EndpointName, clientType, record.Status, record.LatencyMs, record.ErrorMessage, record.Timestamp, record.DeviceID)
+
+	return err
+}
+
+// GetHealthHistory retrieves health history for an endpoint within a time range
+func (s *SQLiteStorage) GetHealthHistory(endpointName, clientType string, startTime, endTime time.Time, limit int) ([]HealthHistoryRecord, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	var query string
+	var args []interface{}
+
+	if endpointName == "" {
+		// Get all endpoints
+		query = `
+			SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type, status, latency_ms, COALESCE(error_message, '') as error_message, timestamp, device_id
+			FROM endpoint_health_history
+			WHERE COALESCE(client_type, 'claude') = ? AND timestamp >= ? AND timestamp <= ?
+			ORDER BY timestamp DESC
+			LIMIT ?
+		`
+		args = []interface{}{clientType, startTime, endTime, limit}
+	} else {
+		query = `
+			SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type, status, latency_ms, COALESCE(error_message, '') as error_message, timestamp, device_id
+			FROM endpoint_health_history
+			WHERE endpoint_name = ? AND COALESCE(client_type, 'claude') = ? AND timestamp >= ? AND timestamp <= ?
+			ORDER BY timestamp DESC
+			LIMIT ?
+		`
+		args = []interface{}{endpointName, clientType, startTime, endTime, limit}
+	}
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []HealthHistoryRecord
+	for rows.Next() {
+		var r HealthHistoryRecord
+		var timestampStr string
+		if err := rows.Scan(&r.ID, &r.EndpointName, &r.ClientType, &r.Status, &r.LatencyMs, &r.ErrorMessage, &timestampStr, &r.DeviceID); err != nil {
+			return nil, err
+		}
+
+		// Parse timestamp
+		formats := []string{
+			"2006-01-02 15:04:05",
+			"2006-01-02T15:04:05Z",
+			"2006-01-02T15:04:05.999999999",
+			time.RFC3339,
+		}
+		for _, format := range formats {
+			if t, err := time.Parse(format, timestampStr); err == nil {
+				r.Timestamp = t
+				break
+			}
+		}
+
+		records = append(records, r)
+	}
+
+	return records, rows.Err()
+}
+
+// CleanupOldHealthHistory removes health history records older than specified days
+func (s *SQLiteStorage) CleanupOldHealthHistory(daysToKeep int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cutoffTime := time.Now().AddDate(0, 0, -daysToKeep)
+
+	_, err := s.db.Exec(`DELETE FROM endpoint_health_history WHERE timestamp < ?`, cutoffTime)
+	return err
+}
+
+// GetAllEndpointTags returns all unique tags used across all endpoints
+func (s *SQLiteStorage) GetAllEndpointTags() ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.Query(`SELECT DISTINCT tags FROM endpoints WHERE tags != '' AND tags IS NOT NULL`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tagSet := make(map[string]bool)
+	for rows.Next() {
+		var tags string
+		if err := rows.Scan(&tags); err != nil {
+			return nil, err
+		}
+		// Split comma-separated tags
+		for _, tag := range strings.Split(tags, ",") {
+			tag = strings.TrimSpace(tag)
+			if tag != "" {
+				tagSet[tag] = true
+			}
+		}
+	}
+
+	// Convert to slice
+	var result []string
+	for tag := range tagSet {
+		result = append(result, tag)
+	}
+
+	return result, rows.Err()
 }

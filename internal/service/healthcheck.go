@@ -11,12 +11,14 @@ import (
 	"github.com/lich0821/ccNexus/internal/config"
 	"github.com/lich0821/ccNexus/internal/logger"
 	"github.com/lich0821/ccNexus/internal/proxy"
+	"github.com/lich0821/ccNexus/internal/storage"
 )
 
 // HealthCheckService handles periodic health checks for all enabled endpoints
 type HealthCheckService struct {
 	config  *config.Config
 	monitor *proxy.Monitor
+	storage storage.Storage
 
 	mu       sync.Mutex
 	ticker   *time.Ticker
@@ -25,6 +27,9 @@ type HealthCheckService struct {
 
 	// HTTP client cache
 	clientCache *httpClientCache
+
+	// Device ID for health history records
+	deviceID string
 }
 
 // NewHealthCheckService creates a new HealthCheckService
@@ -35,7 +40,18 @@ func NewHealthCheckService(cfg *config.Config, monitor *proxy.Monitor) *HealthCh
 		clientCache: &httpClientCache{
 			clients: make(map[time.Duration]*http.Client),
 		},
+		deviceID: "default",
 	}
+}
+
+// SetStorage sets the storage for recording health history
+func (h *HealthCheckService) SetStorage(s storage.Storage) {
+	h.storage = s
+}
+
+// SetDeviceID sets the device ID for health history records
+func (h *HealthCheckService) SetDeviceID(deviceID string) {
+	h.deviceID = deviceID
 }
 
 // Start starts the health check service with the configured interval
@@ -135,25 +151,43 @@ func (h *HealthCheckService) checkEndpoint(endpoint config.Endpoint) {
 		transformer = "claude"
 	}
 
+	clientType := endpoint.ClientType
+	if clientType == "" {
+		clientType = "claude"
+	}
+
 	normalizedURL := normalizeAPIUrlWithScheme(endpoint.APIUrl)
 
 	start := time.Now()
 	statusCode, err := h.testMinimalRequest(normalizedURL, endpoint.APIKey, transformer, endpoint.Model)
 	latencyMs := float64(time.Since(start).Milliseconds())
 
+	var status string
+	var errorMsg string
+
 	if err == nil {
 		// Success - record latency
 		h.monitor.RecordHealthCheckLatency(endpoint.Name, latencyMs)
 		logger.Debug("Health check OK for %s: %.0fms", endpoint.Name, latencyMs)
+		status = "healthy"
 	} else if statusCode == 401 || statusCode == 403 {
 		// Auth error - still record latency but log warning
 		h.monitor.RecordHealthCheckLatency(endpoint.Name, latencyMs)
 		logger.Warn("Health check auth error for %s: HTTP %d (%.0fms)", endpoint.Name, statusCode, latencyMs)
+		status = "warning"
+		errorMsg = fmt.Sprintf("HTTP %d", statusCode)
 	} else {
 		// Other error - clear latency
 		h.monitor.ClearHealthCheckLatency(endpoint.Name)
 		logger.Warn("Health check failed for %s: %v", endpoint.Name, err)
+		status = "error"
+		if err != nil {
+			errorMsg = err.Error()
+		}
 	}
+
+	// Record to health history
+	h.recordHealthHistory(endpoint.Name, clientType, status, latencyMs, errorMsg)
 }
 
 // testMinimalRequest sends a minimal request to test if the LLM service is available
@@ -273,4 +307,39 @@ func (h *HealthCheckService) createHTTPClient(timeout time.Duration) *http.Clien
 		}
 	}
 	return client
+}
+
+// recordHealthHistory records a health check result to the history table
+func (h *HealthCheckService) recordHealthHistory(endpointName, clientType, status string, latencyMs float64, errorMsg string) {
+	if h.storage == nil {
+		return
+	}
+
+	record := &storage.HealthHistoryRecord{
+		EndpointName: endpointName,
+		ClientType:   clientType,
+		Status:       status,
+		LatencyMs:    latencyMs,
+		ErrorMessage: errorMsg,
+		Timestamp:    time.Now(),
+		DeviceID:     h.deviceID,
+	}
+
+	if err := h.storage.RecordHealthHistory(record); err != nil {
+		logger.Warn("Failed to record health history for %s: %v", endpointName, err)
+	}
+}
+
+// CleanupOldHistory removes old health history records based on retention days
+func (h *HealthCheckService) CleanupOldHistory() {
+	if h.storage == nil {
+		return
+	}
+
+	days := h.config.GetHealthHistoryRetentionDays()
+	if err := h.storage.CleanupOldHealthHistory(days); err != nil {
+		logger.Warn("Failed to cleanup old health history: %v", err)
+	} else {
+		logger.Debug("Cleaned up health history older than %d days", days)
+	}
 }

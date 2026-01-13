@@ -281,6 +281,13 @@ async function loadCurrentSettings() {
         if (requestTimeoutSelect) {
             requestTimeoutSelect.value = requestTimeout.toString();
         }
+
+        // Load health history retention days
+        const healthHistoryRetention = await window.go.main.App.GetHealthHistoryRetentionDays();
+        const healthHistoryRetentionSelect = document.getElementById('settingsHealthHistoryRetention');
+        if (healthHistoryRetentionSelect) {
+            healthHistoryRetentionSelect.value = healthHistoryRetention.toString();
+        }
     } catch (error) {
         console.error('Failed to load settings:', error);
     }
@@ -390,6 +397,7 @@ export async function saveSettings() {
         const proxyUrl = document.getElementById('settingsProxyUrl').value.trim();
         const healthCheckInterval = parseInt(document.getElementById('settingsHealthCheckInterval').value, 10);
         const requestTimeout = parseInt(document.getElementById('settingsRequestTimeout').value, 10);
+        const healthHistoryRetention = parseInt(document.getElementById('settingsHealthHistoryRetention').value, 10);
 
         // Save close window behavior
         await window.go.main.App.SetCloseWindowBehavior(closeWindowBehavior);
@@ -402,6 +410,9 @@ export async function saveSettings() {
 
         // Save request timeout
         await window.go.main.App.SetRequestTimeout(requestTimeout);
+
+        // Save health history retention days
+        await window.go.main.App.SetHealthHistoryRetentionDays(healthHistoryRetention);
 
         // Get current config
         const configStr = await window.go.main.App.GetConfig();

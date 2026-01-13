@@ -326,6 +326,9 @@ export function initUI() {
                         </div>
                     </div>
                 </div>
+
+                <!-- Health History Panel -->
+                <div id="healthHistoryPanel"></div>
             </div>
 
             <!-- History Modal (弹窗) -->
@@ -474,6 +477,7 @@ export function initUI() {
                             <span id="endpointToggleIcon">🔼</span> <span id="endpointToggleText">${t('endpoints.collapse')}</span>
                         </button>
                         <div id="clientTypeSelector"></div>
+                        <div id="tagFilterContainer"></div>
                         <div class="view-mode-tabs">
                             <button class="view-mode-btn active" data-view="detail" onclick="window.switchEndpointViewMode('detail')" title="${t('endpoints.viewDetail')}">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -628,6 +632,11 @@ export function initUI() {
                     <div class="form-group">
                         <label>${t('modal.remark')}</label>
                         <input type="text" id="endpointRemark" placeholder="${t('modal.remarkHelp')}">
+                    </div>
+                    <div class="form-group">
+                        <label>${t('modal.tags')}</label>
+                        <input type="text" id="endpointTags" placeholder="${t('modal.tagsPlaceholder')}">
+                        <p class="form-help">${t('modal.tagsHelp')}</p>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -888,6 +897,19 @@ export function initUI() {
                         </select>
                         <p style="color: #666; font-size: 12px; margin-top: 5px;">
                             ${t('settings.requestTimeoutHelp')}
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label>${t('settings.healthHistoryRetention')}</label>
+                        <select id="settingsHealthHistoryRetention">
+                            <option value="1">1 ${t('settings.healthHistoryRetentionDays')}</option>
+                            <option value="3">3 ${t('settings.healthHistoryRetentionDays')}</option>
+                            <option value="7">7 ${t('settings.healthHistoryRetentionDays')}</option>
+                            <option value="14">14 ${t('settings.healthHistoryRetentionDays')}</option>
+                            <option value="30">30 ${t('settings.healthHistoryRetentionDays')}</option>
+                        </select>
+                        <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                            ${t('settings.healthHistoryRetentionHelp')}
                         </p>
                     </div>
                 </div>
