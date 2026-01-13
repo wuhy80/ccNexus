@@ -61,16 +61,18 @@ type ProxyConfig struct {
 type Config struct {
 	Port                  int             `json:"port"`
 	Endpoints             []Endpoint      `json:"endpoints"`
-	LogLevel              int             `json:"logLevel"`                // 0=DEBUG, 1=INFO, 2=WARN, 3=ERROR
+	LogLevel              int             `json:"logLevel"`                      // 0=DEBUG, 1=INFO, 2=WARN, 3=ERROR
 	Language              string          `json:"language"`                      // UI language: en, zh-CN
 	Theme                 string          `json:"theme"`                         // UI theme: light, dark
-	ThemeAuto             bool            `json:"themeAuto"`                   // Auto switch theme based on time
+	ThemeAuto             bool            `json:"themeAuto"`                     // Auto switch theme based on time
+	AutoThemeMode         string          `json:"autoThemeMode,omitempty"`       // Auto theme mode: time, system (default: time)
 	AutoLightTheme        string          `json:"autoLightTheme,omitempty"`      // Theme to use in daytime when auto mode is on
 	AutoDarkTheme         string          `json:"autoDarkTheme,omitempty"`       // Theme to use in nighttime when auto mode is on
 	WindowWidth           int             `json:"windowWidth"`                   // Window width in pixels
 	WindowHeight          int             `json:"windowHeight"`                  // Window height in pixels
 	CloseWindowBehavior   string          `json:"closeWindowBehavior,omitempty"` // "quit", "minimize", "ask"
 	HealthCheckInterval   int             `json:"healthCheckInterval"`           // Health check interval in seconds, 0 to disable
+	RequestTimeout        int             `json:"requestTimeout"`                // Request timeout in seconds, 0 for default (300s)
 	WebDAV                *WebDAVConfig   `json:"webdav,omitempty"`              // WebDAV synchronization config
 	Backup                *BackupConfig   `json:"backup,omitempty"`              // Backup/sync configuration
 	Proxy                 *ProxyConfig    `json:"proxy,omitempty"`               // HTTP proxy config
@@ -327,6 +329,25 @@ func (c *Config) UpdateAutoDarkTheme(theme string) {
 	c.AutoDarkTheme = theme
 }
 
+// GetAutoThemeMode returns the auto theme mode (thread-safe)
+// Returns: "time" (default), "system"
+func (c *Config) GetAutoThemeMode() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.AutoThemeMode == "" {
+		return "time"
+	}
+	return c.AutoThemeMode
+}
+
+// UpdateAutoThemeMode updates the auto theme mode (thread-safe)
+// Accepts: "time", "system"
+func (c *Config) UpdateAutoThemeMode(mode string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.AutoThemeMode = mode
+}
+
 // GetWebDAV returns the WebDAV configuration (thread-safe)
 func (c *Config) GetWebDAV() *WebDAVConfig {
 	c.mu.RLock()
@@ -383,6 +404,22 @@ func (c *Config) UpdateHealthCheckInterval(interval int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.HealthCheckInterval = interval
+}
+
+// GetRequestTimeout returns the request timeout in seconds (thread-safe)
+// Returns 0 if using default (300 seconds)
+func (c *Config) GetRequestTimeout() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.RequestTimeout
+}
+
+// UpdateRequestTimeout updates the request timeout (thread-safe)
+// Set to 0 to use default (300 seconds)
+func (c *Config) UpdateRequestTimeout(timeout int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.RequestTimeout = timeout
 }
 
 // StorageAdapter defines the interface needed for loading/saving config
@@ -521,6 +558,15 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 		config.AutoDarkTheme = "dark"
 	}
 
+	// Load autoThemeMode
+	if autoThemeMode, err := storage.GetConfig("autoThemeMode"); err == nil && autoThemeMode != "" {
+		config.AutoThemeMode = autoThemeMode
+	}
+	// Default to "time" if not set
+	if config.AutoThemeMode == "" {
+		config.AutoThemeMode = "time"
+	}
+
 	// Load WebDAV config if exists
 	if url, err := storage.GetConfig("webdav_url"); err == nil && url != "" {
 		username, _ := storage.GetConfig("webdav_username")
@@ -579,6 +625,13 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 	if intervalStr, err := storage.GetConfig("healthCheckInterval"); err == nil && intervalStr != "" {
 		if interval, err := strconv.Atoi(intervalStr); err == nil {
 			config.HealthCheckInterval = interval
+		}
+	}
+
+	// Load request timeout
+	if timeoutStr, err := storage.GetConfig("requestTimeout"); err == nil && timeoutStr != "" {
+		if timeout, err := strconv.Atoi(timeoutStr); err == nil {
+			config.RequestTimeout = timeout
 		}
 	}
 
@@ -653,6 +706,7 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 	storage.SetConfig("language", c.Language)
 	storage.SetConfig("theme", c.Theme)
 	storage.SetConfig("themeAuto", strconv.FormatBool(c.ThemeAuto))
+	storage.SetConfig("autoThemeMode", c.AutoThemeMode)
 	storage.SetConfig("autoLightTheme", c.AutoLightTheme)
 	storage.SetConfig("autoDarkTheme", c.AutoDarkTheme)
 	storage.SetConfig("windowWidth", strconv.Itoa(c.WindowWidth))
@@ -696,6 +750,9 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 
 	// Save health check interval
 	storage.SetConfig("healthCheckInterval", strconv.Itoa(c.HealthCheckInterval))
+
+	// Save request timeout
+	storage.SetConfig("requestTimeout", strconv.Itoa(c.RequestTimeout))
 
 	return nil
 }

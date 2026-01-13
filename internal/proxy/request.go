@@ -204,8 +204,15 @@ func buildProxyRequest(r *http.Request, endpoint config.Endpoint, transformedBod
 // sendRequest sends the HTTP request and returns the response
 func sendRequest(ctx context.Context, proxyReq *http.Request, cfg *config.Config) (*http.Response, error) {
 	proxyReq = proxyReq.WithContext(ctx)
+
+	// Get timeout from config, default to 300 seconds
+	timeout := cfg.GetRequestTimeout()
+	if timeout <= 0 {
+		timeout = 300
+	}
+
 	client := &http.Client{
-		Timeout: 300 * time.Second,
+		Timeout: time.Duration(timeout) * time.Second,
 	}
 
 	// Apply proxy if configured

@@ -208,6 +208,26 @@ func (s *SettingsService) SetAutoDarkTheme(theme string) error {
     return nil
 }
 
+// GetAutoThemeMode returns the auto theme mode (time or system)
+func (s *SettingsService) GetAutoThemeMode() string {
+    return s.config.GetAutoThemeMode()
+}
+
+// SetAutoThemeMode sets the auto theme mode (time or system)
+func (s *SettingsService) SetAutoThemeMode(mode string) error {
+    s.config.UpdateAutoThemeMode(mode)
+
+    if s.storage != nil {
+        configAdapter := storage.NewConfigStorageAdapter(s.storage)
+        if err := s.config.SaveToStorage(configAdapter); err != nil {
+            return fmt.Errorf("failed to save auto theme mode: %w", err)
+        }
+    }
+
+    logger.Info("Auto theme mode changed to: %s", mode)
+    return nil
+}
+
 // GetLogs returns all log entries
 func (s *SettingsService) GetLogs() string {
     logs := logger.GetLogger().GetLogs()

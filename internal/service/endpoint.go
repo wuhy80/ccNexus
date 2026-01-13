@@ -623,9 +623,6 @@ func (e *EndpointService) TestEndpoint(clientType string, index int) string {
     })
 }
 
-// Remaining methods (TestEndpointLight, TestAllEndpointsZeroCost, FetchModels, etc.) 
-// will be added in the next part due to size constraints
-
 // TestEndpointLight tests endpoint availability with minimal token consumption for a specific client type
 func (e *EndpointService) TestEndpointLight(clientType string, index int) string {
     clientType = normalizeClientType(clientType)
@@ -1082,4 +1079,250 @@ func (e *EndpointService) fetchGeminiModels(apiUrl, apiKey string) ([]string, er
     }
 
     return models, nil
+}
+
+// ExportEndpoint represents an endpoint for export (without sensitive data option)
+type ExportEndpoint struct {
+	Name        string `json:"name"`
+	ClientType  string `json:"clientType,omitempty"`
+	APIUrl      string `json:"apiUrl"`
+	APIKey      string `json:"apiKey,omitempty"`
+	Enabled     bool   `json:"enabled"`
+	Transformer string `json:"transformer,omitempty"`
+	Model       string `json:"model,omitempty"`
+	Remark      string `json:"remark,omitempty"`
+}
+
+// ExportData represents the exported data structure
+type ExportData struct {
+	Version     string           `json:"version"`
+	ExportTime  string           `json:"exportTime"`
+	ClientType  string           `json:"clientType,omitempty"`
+	Endpoints   []ExportEndpoint `json:"endpoints"`
+	IncludeKeys bool             `json:"includeKeys"`
+}
+
+// ExportEndpoints exports endpoints for a specific client type
+func (e *EndpointService) ExportEndpoints(clientType string, includeKeys bool) string {
+	clientType = normalizeClientType(clientType)
+
+	endpoints := e.config.GetEndpointsByClient(clientType)
+
+	exportEndpoints := make([]ExportEndpoint, 0, len(endpoints))
+	for _, ep := range endpoints {
+		exportEp := ExportEndpoint{
+			Name:        ep.Name,
+			ClientType:  ep.ClientType,
+			APIUrl:      ep.APIUrl,
+			Enabled:     ep.Enabled,
+			Transformer: ep.Transformer,
+			Model:       ep.Model,
+			Remark:      ep.Remark,
+		}
+
+		if includeKeys {
+			exportEp.APIKey = ep.APIKey
+		} else {
+			if len(ep.APIKey) > 8 {
+				exportEp.APIKey = ep.APIKey[:4] + "****" + ep.APIKey[len(ep.APIKey)-4:]
+			} else {
+				exportEp.APIKey = "****"
+			}
+		}
+
+		exportEndpoints = append(exportEndpoints, exportEp)
+	}
+
+	exportData := ExportData{
+		Version:     "1.0",
+		ExportTime:  time.Now().Format(time.RFC3339),
+		ClientType:  clientType,
+		Endpoints:   exportEndpoints,
+		IncludeKeys: includeKeys,
+	}
+
+	jsonData, err := json.MarshalIndent(exportData, "", "  ")
+	if err != nil {
+		return errorJSON(fmt.Sprintf("Failed to export: %v", err))
+	}
+
+	logger.Info("Exported %d endpoints for client %s (includeKeys=%v)", len(exportEndpoints), clientType, includeKeys)
+	return string(jsonData)
+}
+
+// ExportAllEndpoints exports all endpoints across all client types
+func (e *EndpointService) ExportAllEndpoints(includeKeys bool) string {
+	endpoints := e.config.GetEndpoints()
+
+	exportEndpoints := make([]ExportEndpoint, 0, len(endpoints))
+	for _, ep := range endpoints {
+		exportEp := ExportEndpoint{
+			Name:        ep.Name,
+			ClientType:  ep.ClientType,
+			APIUrl:      ep.APIUrl,
+			Enabled:     ep.Enabled,
+			Transformer: ep.Transformer,
+			Model:       ep.Model,
+			Remark:      ep.Remark,
+		}
+
+		if includeKeys {
+			exportEp.APIKey = ep.APIKey
+		} else {
+			if len(ep.APIKey) > 8 {
+				exportEp.APIKey = ep.APIKey[:4] + "****" + ep.APIKey[len(ep.APIKey)-4:]
+			} else {
+				exportEp.APIKey = "****"
+			}
+		}
+
+		exportEndpoints = append(exportEndpoints, exportEp)
+	}
+
+	exportData := ExportData{
+		Version:     "1.0",
+		ExportTime:  time.Now().Format(time.RFC3339),
+		Endpoints:   exportEndpoints,
+		IncludeKeys: includeKeys,
+	}
+
+	jsonData, err := json.MarshalIndent(exportData, "", "  ")
+	if err != nil {
+		return errorJSON(fmt.Sprintf("Failed to export: %v", err))
+	}
+
+	logger.Info("Exported %d endpoints (all clients, includeKeys=%v)", len(exportEndpoints), includeKeys)
+	return string(jsonData)
+}
+
+// ImportResult represents the result of an import operation
+type ImportResult struct {
+	Success  bool     `json:"success"`
+	Message  string   `json:"message"`
+	Imported int      `json:"imported"`
+	Skipped  int      `json:"skipped"`
+	Errors   []string `json:"errors,omitempty"`
+}
+
+// ImportEndpoints imports endpoints from JSON data
+// mode: "skip" (skip existing), "overwrite" (overwrite existing), "rename" (add suffix to duplicates)
+func (e *EndpointService) ImportEndpoints(jsonData string, mode string) string {
+	var exportData ExportData
+	if err := json.Unmarshal([]byte(jsonData), &exportData); err != nil {
+		return toJSON(ImportResult{
+			Success: false,
+			Message: fmt.Sprintf("Invalid JSON format: %v", err),
+		})
+	}
+
+	if len(exportData.Endpoints) == 0 {
+		return toJSON(ImportResult{
+			Success: false,
+			Message: "No endpoints found in import data",
+		})
+	}
+
+	if mode != "skip" && mode != "overwrite" && mode != "rename" {
+		mode = "skip"
+	}
+
+	imported := 0
+	skipped := 0
+	var errors []string
+
+	for _, importEp := range exportData.Endpoints {
+		if importEp.Name == "" {
+			errors = append(errors, "Endpoint with empty name skipped")
+			skipped++
+			continue
+		}
+		if importEp.APIUrl == "" {
+			errors = append(errors, fmt.Sprintf("Endpoint '%s': missing API URL", importEp.Name))
+			skipped++
+			continue
+		}
+		if importEp.APIKey == "" || strings.Contains(importEp.APIKey, "****") {
+			errors = append(errors, fmt.Sprintf("Endpoint '%s': missing or masked API key", importEp.Name))
+			skipped++
+			continue
+		}
+
+		clientType := normalizeClientType(importEp.ClientType)
+		transformer := normalizeTransformer(importEp.Transformer)
+
+		existingEndpoints := e.config.GetEndpointsByClient(clientType)
+		exists := false
+		existingIndex := -1
+		for i, ep := range existingEndpoints {
+			if ep.Name == importEp.Name {
+				exists = true
+				existingIndex = i
+				break
+			}
+		}
+
+		if exists {
+			switch mode {
+			case "skip":
+				skipped++
+				continue
+			case "overwrite":
+				err := e.UpdateEndpoint(clientType, existingIndex, importEp.Name, importEp.APIUrl, importEp.APIKey, transformer, importEp.Model, importEp.Remark)
+				if err != nil {
+					errors = append(errors, fmt.Sprintf("Failed to update '%s': %v", importEp.Name, err))
+					skipped++
+				} else {
+					imported++
+				}
+				continue
+			case "rename":
+				baseName := importEp.Name
+				suffix := 1
+				for suffix <= 100 {
+					newName := fmt.Sprintf("%s_%d", baseName, suffix)
+					nameExists := false
+					for _, ep := range existingEndpoints {
+						if ep.Name == newName {
+							nameExists = true
+							break
+						}
+					}
+					if !nameExists {
+						importEp.Name = newName
+						break
+					}
+					suffix++
+				}
+				if suffix > 100 {
+					errors = append(errors, fmt.Sprintf("Could not find unique name for '%s'", baseName))
+					skipped++
+					continue
+				}
+			}
+		}
+
+		err := e.AddEndpoint(clientType, importEp.Name, importEp.APIUrl, importEp.APIKey, transformer, importEp.Model, importEp.Remark)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("Failed to add '%s': %v", importEp.Name, err))
+			skipped++
+		} else {
+			imported++
+		}
+	}
+
+	result := ImportResult{
+		Success:  imported > 0 || (imported == 0 && skipped > 0 && len(errors) == 0),
+		Message:  fmt.Sprintf("Imported %d endpoints, skipped %d", imported, skipped),
+		Imported: imported,
+		Skipped:  skipped,
+		Errors:   errors,
+	}
+
+	if imported == 0 && len(errors) > 0 {
+		result.Success = false
+		result.Message = "Import failed"
+	}
+
+	logger.Info("Import completed: %d imported, %d skipped, %d errors", imported, skipped, len(errors))
+	return toJSON(result)
 }

@@ -11,7 +11,7 @@ import { loadLogs, toggleLogPanel, changeLogLevel, copyLogs, clearLogs } from '.
 import { showDataSyncDialog } from './modules/webdav.js'
 import { initTips } from './modules/tips.js'
 import { showDailyDetailsModal, closeDailyDetailsModal, changeDetailsPageSize, loadPreviousDetailsPage, loadNextDetailsPage } from './modules/details.js'
-import { showSettingsModal, closeSettingsModal, saveSettings, applyTheme, initTheme, showAutoThemeConfigModal, closeAutoThemeConfigModal, saveAutoThemeConfig } from './modules/settings.js'
+import { showSettingsModal, closeSettingsModal, saveSettings, applyTheme, initTheme, showAutoThemeConfigModal, closeAutoThemeConfigModal, saveAutoThemeConfig, updateAutoThemeModeHelp } from './modules/settings.js'
 import { initBroadcast } from './modules/broadcast.js'
 import {
     showInteractionsModal,
@@ -58,6 +58,7 @@ import {
     changeClientsHoursFilter
 } from './modules/modal.js'
 import { initMonitor } from './modules/monitor.js'
+import './modules/importexport.js'
 
 // Load data on startup
 window.addEventListener('DOMContentLoaded', async () => {
@@ -157,11 +158,59 @@ window.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Handle Cmd/Ctrl+W to hide window
+    // Handle keyboard shortcuts
     window.addEventListener('keydown', (e) => {
+        // Cmd/Ctrl+W to hide window
         if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
             e.preventDefault();
             window.runtime.WindowHide();
+            return;
+        }
+
+        // Escape to close modals
+        if (e.key === 'Escape') {
+            // Close any open modal
+            const activeModal = document.querySelector('.modal.active');
+            if (activeModal) {
+                e.preventDefault();
+                activeModal.classList.remove('active');
+                return;
+            }
+        }
+
+        // Cmd/Ctrl+N to add new endpoint
+        if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+            e.preventDefault();
+            window.showAddEndpointModal();
+            return;
+        }
+
+        // Cmd/Ctrl+, to open settings
+        if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+            e.preventDefault();
+            window.showSettingsModal();
+            return;
+        }
+
+        // Cmd/Ctrl+R to refresh endpoints (without page reload)
+        if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
+            e.preventDefault();
+            loadConfigAndRender();
+            return;
+        }
+
+        // Cmd/Ctrl+L to toggle log panel
+        if ((e.metaKey || e.ctrlKey) && e.key === 'l') {
+            e.preventDefault();
+            window.toggleLogPanel();
+            return;
+        }
+
+        // Cmd/Ctrl+E to toggle endpoint panel
+        if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+            e.preventDefault();
+            window.toggleEndpointPanel();
+            return;
         }
     });
 });
@@ -220,6 +269,7 @@ window.saveSettings = saveSettings;
 window.showAutoThemeConfigModal = showAutoThemeConfigModal;
 window.closeAutoThemeConfigModal = closeAutoThemeConfigModal;
 window.saveAutoThemeConfig = saveAutoThemeConfig;
+window.updateAutoThemeModeHelp = updateAutoThemeModeHelp;
 window.initTokenChart = initTokenChart;
 
 // History modal functions

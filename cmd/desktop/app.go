@@ -469,6 +469,15 @@ func (a *App) TestAllEndpointsZeroCost(clientType string) string {
 func (a *App) FetchModels(apiUrl, apiKey, transformer string) string {
 	return a.endpoint.FetchModels(apiUrl, apiKey, transformer)
 }
+func (a *App) ExportEndpoints(clientType string, includeKeys bool) string {
+	return a.endpoint.ExportEndpoints(clientType, includeKeys)
+}
+func (a *App) ExportAllEndpoints(includeKeys bool) string {
+	return a.endpoint.ExportAllEndpoints(includeKeys)
+}
+func (a *App) ImportEndpoints(jsonData string, mode string) string {
+	return a.endpoint.ImportEndpoints(jsonData, mode)
+}
 
 // ========== Settings Bindings ==========
 
@@ -488,6 +497,8 @@ func (a *App) GetAutoLightTheme() string            { return a.settings.GetAutoL
 func (a *App) SetAutoLightTheme(theme string) error { return a.settings.SetAutoLightTheme(theme) }
 func (a *App) GetAutoDarkTheme() string             { return a.settings.GetAutoDarkTheme() }
 func (a *App) SetAutoDarkTheme(theme string) error  { return a.settings.SetAutoDarkTheme(theme) }
+func (a *App) GetAutoThemeMode() string             { return a.settings.GetAutoThemeMode() }
+func (a *App) SetAutoThemeMode(mode string) error   { return a.settings.SetAutoThemeMode(mode) }
 func (a *App) GetLogs() string                      { return a.settings.GetLogs() }
 func (a *App) GetLogsByLevel(level int) string      { return a.settings.GetLogsByLevel(level) }
 func (a *App) ClearLogs()                           { a.settings.ClearLogs() }
@@ -511,6 +522,13 @@ func (a *App) SetHealthCheckInterval(interval int) error {
 		a.healthCheck.Restart()
 	}
 	return nil
+}
+func (a *App) GetRequestTimeout() int { return a.config.GetRequestTimeout() }
+func (a *App) SetRequestTimeout(timeout int) error {
+	a.config.UpdateRequestTimeout(timeout)
+	// Save to storage
+	configAdapter := storage.NewConfigStorageAdapter(a.storage)
+	return a.config.SaveToStorage(configAdapter)
 }
 
 // ========== WebDAV Bindings ==========

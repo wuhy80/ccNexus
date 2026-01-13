@@ -500,7 +500,10 @@ export function initUI() {
                             👥 ${t('clients.viewClients')}
                         </button>
                         <button class="btn btn-secondary" onclick="window.showDataSyncDialog()">
-                            🔄 ${t('webdav.dataSync')}
+                          🔄 ${t('webdav.dataSync')}
+                        </button>
+                        <button class="btn btn-secondary" onclick="window.showImportExportModal()">
+                         📦 ${t('endpoints.export')}/${t('endpoints.import')}
                         </button>
                         <button class="btn btn-primary" onclick="window.showAddEndpointModal()">
                             ➕ ${t('header.addEndpoint')}
@@ -871,6 +874,22 @@ export function initUI() {
                        ${t('settings.healthCheckHelp')}
                         </p>
                  </div>
+                    <div class="form-group">
+                        <label>${t('settings.requestTimeout')}</label>
+                        <select id="settingsRequestTimeout">
+                            <option value="0">${t('settings.requestTimeoutOptions.default')}</option>
+                            <option value="60">${t('settings.requestTimeoutOptions.min1')}</option>
+                            <option value="120">${t('settings.requestTimeoutOptions.min2')}</option>
+                            <option value="180">${t('settings.requestTimeoutOptions.min3')}</option>
+                            <option value="300">${t('settings.requestTimeoutOptions.min5')}</option>
+                            <option value="600">${t('settings.requestTimeoutOptions.min10')}</option>
+                            <option value="900">${t('settings.requestTimeoutOptions.min15')}</option>
+                            <option value="1800">${t('settings.requestTimeoutOptions.min30')}</option>
+                        </select>
+                        <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                            ${t('settings.requestTimeoutHelp')}
+                        </p>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="window.closeSettingsModal()">${t('settings.cancel')}</button>
@@ -890,6 +909,16 @@ export function initUI() {
                     <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px;">
                         ${t('settings.autoThemeConfigDesc')}
                     </p>
+                    <div class="form-group">
+                        <label><span class="required">*</span>${t('settings.autoThemeMode')}</label>
+                        <select id="autoThemeMode" onchange="window.updateAutoThemeModeHelp()">
+                            <option value="time">${t('settings.autoThemeModeTime')}</option>
+                            <option value="system">${t('settings.autoThemeModeSystem')}</option>
+                        </select>
+                        <p id="autoThemeModeHelp" style="color: var(--text-secondary); font-size: 12px; margin-top: 5px;">
+                            ${t('settings.autoThemeModeTimeHelp')}
+                        </p>
+                    </div>
                     <div class="form-group">
                         <label><span class="required">*</span>${t('settings.lightThemeLabel')}</label>
                         <select id="autoLightTheme">

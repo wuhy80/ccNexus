@@ -4,6 +4,8 @@ import { destroyFestivalEffects, initFestivalEffects } from './festival.js';
 
 // Auto theme check interval ID
 let autoThemeIntervalId = null;
+// System theme change listener
+let systemThemeMediaQuery = null;
 
 // Apply theme to body element
 export function applyTheme(theme) {
@@ -68,21 +70,48 @@ async function getTimeBasedTheme() {
     }
 }
 
-// Check and apply auto theme
+// Get theme based on system preference
+async function getSystemTheme() {
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    try {
+        if (prefersDark) {
+            const darkTheme = await window.go.main.App.GetAutoDarkTheme();
+            return darkTheme || 'dark';
+        } else {
+            const lightTheme = await window.go.main.App.GetAutoLightTheme();
+            return lightTheme || 'light';
+        }
+    } catch (error) {
+        console.error('Failed to get system theme settings:', error);
+        return prefersDark ? 'dark' : 'light';
+    }
+}
+
+// Check and apply auto theme (time-based or system-based)
 export async function checkAndApplyAutoTheme() {
     try {
-        // Get theme based on time and auto theme settings
-        const theme = await getTimeBasedTheme();
+        // Check if we should follow system theme
+        const autoMode = await window.go.main.App.GetAutoThemeMode();
+        let theme;
+
+        if (autoMode === 'system') {
+            theme = await getSystemTheme();
+        } else {
+            // Default to time-based
+            theme = await getTimeBasedTheme();
+        }
+
         applyTheme(theme);
     } catch (error) {
         console.error('Failed to check auto theme:', error);
-        // Fallback to light/dark switching
+        // Fallback to time-based light/dark switching
         const hour = new Date().getHours();
         applyTheme((hour >= 7 && hour < 19) ? 'light' : 'dark');
     }
 }
 
-// Start auto theme checking (check every minute)
+// Start auto theme checking (check every minute for time-based, or listen for system changes)
 export async function startAutoThemeCheck() {
     // Apply immediately and wait for it to complete
     await checkAndApplyAutoTheme();
@@ -90,10 +119,35 @@ export async function startAutoThemeCheck() {
     // Clear existing interval if any
     if (autoThemeIntervalId) {
         clearInterval(autoThemeIntervalId);
+        autoThemeIntervalId = null;
     }
 
-    // Check every minute
-    autoThemeIntervalId = setInterval(checkAndApplyAutoTheme, 60000);
+    // Remove existing system theme listener if any
+    if (systemThemeMediaQuery) {
+        systemThemeMediaQuery.removeEventListener('change', handleSystemThemeChange);
+        systemThemeMediaQuery = null;
+    }
+
+    try {
+        const autoMode = await window.go.main.App.GetAutoThemeMode();
+
+        if (autoMode === 'system') {
+            // Listen for system theme changes
+            systemThemeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            systemThemeMediaQuery.addEventListener('change', handleSystemThemeChange);
+        } else {
+            // Time-based: check every minute
+            autoThemeIntervalId = setInterval(checkAndApplyAutoTheme, 60000);
+        }
+    } catch (error) {
+        // Fallback to time-based checking
+        autoThemeIntervalId = setInterval(checkAndApplyAutoTheme, 60000);
+    }
+}
+
+// Handle system theme change event
+async function handleSystemThemeChange() {
+    await checkAndApplyAutoTheme();
 }
 
 // Stop auto theme checking
@@ -101,6 +155,10 @@ export function stopAutoThemeCheck() {
     if (autoThemeIntervalId) {
         clearInterval(autoThemeIntervalId);
         autoThemeIntervalId = null;
+    }
+    if (systemThemeMediaQuery) {
+        systemThemeMediaQuery.removeEventListener('change', handleSystemThemeChange);
+        systemThemeMediaQuery = null;
     }
 }
 
@@ -216,6 +274,13 @@ async function loadCurrentSettings() {
         if (healthCheckSelect) {
             healthCheckSelect.value = healthCheckInterval.toString();
         }
+
+        // Load request timeout
+        const requestTimeout = await window.go.main.App.GetRequestTimeout();
+        const requestTimeoutSelect = document.getElementById('settingsRequestTimeout');
+        if (requestTimeoutSelect) {
+            requestTimeoutSelect.value = requestTimeout.toString();
+        }
     } catch (error) {
         console.error('Failed to load settings:', error);
     }
@@ -228,14 +293,20 @@ export async function showAutoThemeConfigModal() {
 
     try {
         // Load current auto theme settings
+        const autoMode = await window.go.main.App.GetAutoThemeMode();
         const lightTheme = await window.go.main.App.GetAutoLightTheme();
         const darkTheme = await window.go.main.App.GetAutoDarkTheme();
 
+        const modeSelect = document.getElementById('autoThemeMode');
         const lightSelect = document.getElementById('autoLightTheme');
         const darkSelect = document.getElementById('autoDarkTheme');
 
+        if (modeSelect) modeSelect.value = autoMode || 'time';
         if (lightSelect) lightSelect.value = lightTheme || 'light';
         if (darkSelect) darkSelect.value = darkTheme || 'dark';
+
+        // Update help text
+        updateAutoThemeModeHelp();
     } catch (error) {
         console.error('Failed to load auto theme settings:', error);
     }
@@ -262,13 +333,28 @@ export function closeAutoThemeConfigModal() {
     }
 }
 
+// Update auto theme mode help text
+export function updateAutoThemeModeHelp() {
+    const modeSelect = document.getElementById('autoThemeMode');
+    const helpEl = document.getElementById('autoThemeModeHelp');
+    if (modeSelect && helpEl) {
+        if (modeSelect.value === 'system') {
+            helpEl.textContent = t('settings.autoThemeModeSystemHelp');
+        } else {
+            helpEl.textContent = t('settings.autoThemeModeTimeHelp');
+        }
+    }
+}
+
 // Save auto theme config
 export async function saveAutoThemeConfig() {
     try {
+        const autoMode = document.getElementById('autoThemeMode').value;
         const lightTheme = document.getElementById('autoLightTheme').value;
         const darkTheme = document.getElementById('autoDarkTheme').value;
 
-        // Save both themes
+        // Save mode and themes
+        await window.go.main.App.SetAutoThemeMode(autoMode);
         await window.go.main.App.SetAutoLightTheme(lightTheme);
         await window.go.main.App.SetAutoDarkTheme(darkTheme);
 
@@ -284,7 +370,7 @@ export async function saveAutoThemeConfig() {
         // Close the config modal
         closeAutoThemeConfigModal();
 
-        // Apply theme immediately based on current time
+        // Apply theme immediately based on current time or system
         stopAutoThemeCheck();
         await startAutoThemeCheck();
     } catch (error) {
@@ -303,6 +389,7 @@ export async function saveSettings() {
         const themeAuto = document.getElementById('settingsThemeAuto').checked;
         const proxyUrl = document.getElementById('settingsProxyUrl').value.trim();
         const healthCheckInterval = parseInt(document.getElementById('settingsHealthCheckInterval').value, 10);
+        const requestTimeout = parseInt(document.getElementById('settingsRequestTimeout').value, 10);
 
         // Save close window behavior
         await window.go.main.App.SetCloseWindowBehavior(closeWindowBehavior);
@@ -312,6 +399,9 @@ export async function saveSettings() {
 
         // Save health check interval
         await window.go.main.App.SetHealthCheckInterval(healthCheckInterval);
+
+        // Save request timeout
+        await window.go.main.App.SetRequestTimeout(requestTimeout);
 
         // Get current config
         const configStr = await window.go.main.App.GetConfig();
