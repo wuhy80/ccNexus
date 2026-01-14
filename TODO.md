@@ -23,10 +23,10 @@
 - [ ] 缓存命中率统计 - 展示节省的 Token 和成本
 
 ### 4. 告警和通知
-- [ ] 端点故障告警 - 连续失败时通知
+- [x] 端点故障告警 - 连续失败时通知（系统通知）
 - [ ] 性能异常告警 - 响应时间突然变慢
 - [ ] 配额告警 - 接近 API 限额时提醒
-- [ ] 通知渠道 - 系统通知、Webhook、邮件
+- [ ] 通知渠道 - Webhook、邮件
 
 ### 5. 请求重放和调试
 - [ ] 保存请求 - 将特定请求保存为模板
@@ -76,8 +76,8 @@
 - [ ] `internal/tray/tray_other.go:7` - Implement for Linux using appropriate libraries
 
 ### OpenAI Responses API 兼容性
-- [ ] `internal/transformer/convert/claude_openai2.go:51` - max_output_tokens 参数兼容性处理
-- [ ] `internal/transformer/convert/openai_openai2.go:48` - max_output_tokens 参数兼容性处理
+- [x] `internal/transformer/convert/claude_openai2.go:51` - max_output_tokens 参数兼容性处理
+- [x] `internal/transformer/convert/openai_openai2.go:48` - max_output_tokens 参数兼容性处理
 
 ---
 

@@ -912,6 +912,49 @@ export function initUI() {
                             ${t('settings.healthHistoryRetentionHelp')}
                         </p>
                     </div>
+                    <div class="form-group">
+                        <label>${t('settings.alertConfig')}</label>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                            <span style="font-size: 13px; color: var(--text-secondary);">${t('settings.alertEnabled')}</span>
+                            <label class="toggle-switch" style="width: 40px; height: 20px; margin-top: 7px;">
+                                <input type="checkbox" id="settingsAlertEnabled">
+                                <span class="toggle-slider" style="border-radius: 20px;"></span>
+                            </label>
+                        </div>
+                        <div id="alertConfigDetails" style="display: none; padding: 10px; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="margin-bottom: 10px;">
+                                <label style="font-size: 13px;">${t('settings.alertConsecutiveFailures')}</label>
+                                <select id="settingsAlertConsecutiveFailures" style="width: 100%; margin-top: 5px;">
+                                    <option value="1">1 ${t('settings.alertTimes')}</option>
+                                    <option value="2">2 ${t('settings.alertTimes')}</option>
+                                    <option value="3">3 ${t('settings.alertTimes')}</option>
+                                    <option value="5">5 ${t('settings.alertTimes')}</option>
+                                    <option value="10">10 ${t('settings.alertTimes')}</option>
+                                </select>
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <label style="font-size: 13px;">${t('settings.alertCooldown')}</label>
+                                <select id="settingsAlertCooldown" style="width: 100%; margin-top: 5px;">
+                                    <option value="1">1 ${t('settings.alertMinutes')}</option>
+                                    <option value="5">5 ${t('settings.alertMinutes')}</option>
+                                    <option value="10">10 ${t('settings.alertMinutes')}</option>
+                                    <option value="30">30 ${t('settings.alertMinutes')}</option>
+                                    <option value="60">60 ${t('settings.alertMinutes')}</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                <input type="checkbox" id="settingsAlertNotifyOnRecovery" checked>
+                                <span style="font-size: 13px;">${t('settings.alertNotifyOnRecovery')}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="settingsAlertSystemNotification" checked>
+                                <span style="font-size: 13px;">${t('settings.alertSystemNotification')}</span>
+                            </div>
+                        </div>
+                        <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                            ${t('settings.alertConfigHelp')}
+                        </p>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="window.closeSettingsModal()">${t('settings.cancel')}</button>

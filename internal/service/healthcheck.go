@@ -14,6 +14,25 @@ import (
 	"github.com/lich0821/ccNexus/internal/storage"
 )
 
+// AlertEvent 告警事件类型
+type AlertEvent struct {
+	EndpointName string    // 端点名称
+	ClientType   string    // 客户端类型
+	AlertType    string    // 告警类型: "failure" 或 "recovery"
+	Message      string    // 告警消息
+	Timestamp    time.Time // 事件时间
+}
+
+// AlertCallback 告警回调函数类型
+type AlertCallback func(event AlertEvent)
+
+// endpointAlertState 端点告警状态
+type endpointAlertState struct {
+	consecutiveFailures int       // 连续失败次数
+	lastAlertTime       time.Time // 上次告警时间
+	wasHealthy          bool      // 上次检测是否健康
+}
+
 // HealthCheckService handles periodic health checks for all enabled endpoints
 type HealthCheckService struct {
 	config  *config.Config
@@ -30,6 +49,11 @@ type HealthCheckService struct {
 
 	// Device ID for health history records
 	deviceID string
+
+	// 告警相关
+	alertStates   map[string]*endpointAlertState // key: endpointName
+	alertStatesMu sync.RWMutex
+	alertCallback AlertCallback
 }
 
 // NewHealthCheckService creates a new HealthCheckService
@@ -40,8 +64,14 @@ func NewHealthCheckService(cfg *config.Config, monitor *proxy.Monitor) *HealthCh
 		clientCache: &httpClientCache{
 			clients: make(map[time.Duration]*http.Client),
 		},
-		deviceID: "default",
+		deviceID:    "default",
+		alertStates: make(map[string]*endpointAlertState),
 	}
+}
+
+// SetAlertCallback 设置告警回调函数
+func (h *HealthCheckService) SetAlertCallback(callback AlertCallback) {
+	h.alertCallback = callback
 }
 
 // SetStorage sets the storage for recording health history
@@ -164,12 +194,14 @@ func (h *HealthCheckService) checkEndpoint(endpoint config.Endpoint) {
 
 	var status string
 	var errorMsg string
+	isHealthy := false
 
 	if err == nil {
 		// Success - record latency
 		h.monitor.RecordHealthCheckLatency(endpoint.Name, latencyMs)
 		logger.Debug("Health check OK for %s: %.0fms", endpoint.Name, latencyMs)
 		status = "healthy"
+		isHealthy = true
 	} else if statusCode == 401 || statusCode == 403 {
 		// Auth error - still record latency but log warning
 		h.monitor.RecordHealthCheckLatency(endpoint.Name, latencyMs)
@@ -188,6 +220,9 @@ func (h *HealthCheckService) checkEndpoint(endpoint config.Endpoint) {
 
 	// Record to health history
 	h.recordHealthHistory(endpoint.Name, clientType, status, latencyMs, errorMsg)
+
+	// 处理告警逻辑
+	h.processAlert(endpoint.Name, clientType, isHealthy, errorMsg)
 }
 
 // testMinimalRequest sends a minimal request to test if the LLM service is available
@@ -341,5 +376,90 @@ func (h *HealthCheckService) CleanupOldHistory() {
 		logger.Warn("Failed to cleanup old health history: %v", err)
 	} else {
 		logger.Debug("Cleaned up health history older than %d days", days)
+	}
+}
+
+// processAlert 处理告警逻辑
+func (h *HealthCheckService) processAlert(endpointName, clientType string, isHealthy bool, errorMsg string) {
+	alertConfig := h.config.GetAlert()
+	if alertConfig == nil || !alertConfig.Enabled {
+		return
+	}
+
+	if h.alertCallback == nil {
+		return
+	}
+
+	h.alertStatesMu.Lock()
+	defer h.alertStatesMu.Unlock()
+
+	// 获取或创建端点告警状态
+	state, exists := h.alertStates[endpointName]
+	if !exists {
+		state = &endpointAlertState{
+			wasHealthy: true, // 假设初始状态是健康的
+		}
+		h.alertStates[endpointName] = state
+	}
+
+	now := time.Now()
+	cooldownDuration := time.Duration(alertConfig.AlertCooldownMinutes) * time.Minute
+	if cooldownDuration == 0 {
+		cooldownDuration = 5 * time.Minute // 默认5分钟冷却
+	}
+
+	consecutiveThreshold := alertConfig.ConsecutiveFailures
+	if consecutiveThreshold <= 0 {
+		consecutiveThreshold = 3 // 默认连续3次失败触发告警
+	}
+
+	if isHealthy {
+		// 端点恢复健康
+		if !state.wasHealthy && alertConfig.NotifyOnRecovery {
+			// 检查冷却时间
+			if now.Sub(state.lastAlertTime) >= cooldownDuration {
+				// 发送恢复通知
+				event := AlertEvent{
+					EndpointName: endpointName,
+					ClientType:   clientType,
+					AlertType:    "recovery",
+					Message:      fmt.Sprintf("端点 %s 已恢复正常", endpointName),
+					Timestamp:    now,
+				}
+				h.alertCallback(event)
+				state.lastAlertTime = now
+				logger.Info("Alert: endpoint %s recovered", endpointName)
+			}
+		}
+		// 重置失败计数
+		state.consecutiveFailures = 0
+		state.wasHealthy = true
+	} else {
+		// 端点故障
+		state.consecutiveFailures++
+		logger.Debug("Endpoint %s consecutive failures: %d", endpointName, state.consecutiveFailures)
+
+		// 检查是否达到告警阈值
+		if state.consecutiveFailures >= consecutiveThreshold {
+			// 检查冷却时间
+			if now.Sub(state.lastAlertTime) >= cooldownDuration {
+				// 发送故障告警
+				message := fmt.Sprintf("端点 %s 连续 %d 次健康检测失败", endpointName, state.consecutiveFailures)
+				if errorMsg != "" {
+					message += fmt.Sprintf("，错误: %s", errorMsg)
+				}
+				event := AlertEvent{
+					EndpointName: endpointName,
+					ClientType:   clientType,
+					AlertType:    "failure",
+					Message:      message,
+					Timestamp:    now,
+				}
+				h.alertCallback(event)
+				state.lastAlertTime = now
+				logger.Warn("Alert: endpoint %s failed %d times consecutively", endpointName, state.consecutiveFailures)
+			}
+		}
+		state.wasHealthy = false
 	}
 }

@@ -58,6 +58,15 @@ type ProxyConfig struct {
 	URL string `json:"url"` // Proxy URL, e.g., http://127.0.0.1:7890 or socks5://127.0.0.1:1080
 }
 
+// AlertConfig 端点故障告警配置
+type AlertConfig struct {
+	Enabled              bool `json:"enabled"`              // 是否启用告警
+	ConsecutiveFailures  int  `json:"consecutiveFailures"`  // 连续失败次数触发告警，默认3次
+	NotifyOnRecovery     bool `json:"notifyOnRecovery"`     // 恢复时是否通知
+	SystemNotification   bool `json:"systemNotification"`   // 是否发送系统通知
+	AlertCooldownMinutes int  `json:"alertCooldownMinutes"` // 告警冷却时间（分钟），避免频繁告警，默认5分钟
+}
+
 // Config represents the application configuration
 type Config struct {
 	Port                       int             `json:"port"`
@@ -75,6 +84,7 @@ type Config struct {
 	HealthCheckInterval        int             `json:"healthCheckInterval"`           // Health check interval in seconds, 0 to disable
 	HealthHistoryRetentionDays int             `json:"healthHistoryRetentionDays"`    // Health history retention days, default 7
 	RequestTimeout             int             `json:"requestTimeout"`                // Request timeout in seconds, 0 for default (300s)
+	Alert                      *AlertConfig    `json:"alert,omitempty"`               // 端点故障告警配置
 	WebDAV                     *WebDAVConfig   `json:"webdav,omitempty"`              // WebDAV synchronization config
 	Backup                     *BackupConfig   `json:"backup,omitempty"`              // Backup/sync configuration
 	Proxy                      *ProxyConfig    `json:"proxy,omitempty"`               // HTTP proxy config
@@ -145,6 +155,18 @@ func (c *Config) CopyFrom(other *Config) {
 		c.Proxy = &ProxyConfig{URL: other.Proxy.URL}
 	} else {
 		c.Proxy = nil
+	}
+
+	if other.Alert != nil {
+		c.Alert = &AlertConfig{
+			Enabled:              other.Alert.Enabled,
+			ConsecutiveFailures:  other.Alert.ConsecutiveFailures,
+			NotifyOnRecovery:     other.Alert.NotifyOnRecovery,
+			SystemNotification:   other.Alert.SystemNotification,
+			AlertCooldownMinutes: other.Alert.AlertCooldownMinutes,
+		}
+	} else {
+		c.Alert = nil
 	}
 }
 
@@ -509,6 +531,30 @@ func (c *Config) UpdateHealthHistoryRetentionDays(days int) {
 	c.HealthHistoryRetentionDays = days
 }
 
+// GetAlert returns the alert configuration (thread-safe)
+// Returns default config if not set
+func (c *Config) GetAlert() *AlertConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.Alert == nil {
+		return &AlertConfig{
+			Enabled:              false,
+			ConsecutiveFailures:  3,
+			NotifyOnRecovery:     true,
+			SystemNotification:   true,
+			AlertCooldownMinutes: 5,
+		}
+	}
+	return c.Alert
+}
+
+// UpdateAlert updates the alert configuration (thread-safe)
+func (c *Config) UpdateAlert(alert *AlertConfig) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Alert = alert
+}
+
 // StorageAdapter defines the interface needed for loading/saving config
 type StorageAdapter interface {
 	GetEndpoints() ([]StorageEndpoint, error)
@@ -735,6 +781,33 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 		}
 	}
 
+	// Load alert config
+	if alertEnabled, err := storage.GetConfig("alert_enabled"); err == nil && alertEnabled != "" {
+		config.Alert = &AlertConfig{
+			Enabled:              alertEnabled == "true",
+			ConsecutiveFailures:  3,
+			NotifyOnRecovery:     true,
+			SystemNotification:   true,
+			AlertCooldownMinutes: 5,
+		}
+		if consecutiveStr, err := storage.GetConfig("alert_consecutiveFailures"); err == nil && consecutiveStr != "" {
+			if consecutive, err := strconv.Atoi(consecutiveStr); err == nil {
+				config.Alert.ConsecutiveFailures = consecutive
+			}
+		}
+		if notifyRecovery, err := storage.GetConfig("alert_notifyOnRecovery"); err == nil && notifyRecovery != "" {
+			config.Alert.NotifyOnRecovery = notifyRecovery == "true"
+		}
+		if sysNotify, err := storage.GetConfig("alert_systemNotification"); err == nil && sysNotify != "" {
+			config.Alert.SystemNotification = sysNotify == "true"
+		}
+		if cooldownStr, err := storage.GetConfig("alert_cooldownMinutes"); err == nil && cooldownStr != "" {
+			if cooldown, err := strconv.Atoi(cooldownStr); err == nil {
+				config.Alert.AlertCooldownMinutes = cooldown
+			}
+		}
+	}
+
 	return config, nil
 }
 
@@ -857,6 +930,15 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 
 	// Save request timeout
 	storage.SetConfig("requestTimeout", strconv.Itoa(c.RequestTimeout))
+
+	// Save alert config
+	if c.Alert != nil {
+		storage.SetConfig("alert_enabled", strconv.FormatBool(c.Alert.Enabled))
+		storage.SetConfig("alert_consecutiveFailures", strconv.Itoa(c.Alert.ConsecutiveFailures))
+		storage.SetConfig("alert_notifyOnRecovery", strconv.FormatBool(c.Alert.NotifyOnRecovery))
+		storage.SetConfig("alert_systemNotification", strconv.FormatBool(c.Alert.SystemNotification))
+		storage.SetConfig("alert_cooldownMinutes", strconv.Itoa(c.Alert.AlertCooldownMinutes))
+	}
 
 	return nil
 }

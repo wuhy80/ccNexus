@@ -48,8 +48,10 @@ func ClaudeReqToOpenAI2(claudeReq []byte, model string) ([]byte, error) {
 	}
 	openai2Req["input"] = input
 
-	// TODO: max_output_tokens is standard OpenAI Responses API param but some
-	// third-party endpoints (e.g. SiliconFlow) don't support it. Skipping for compatibility.
+	// Pass max_output_tokens if specified in the original request
+	if req.MaxTokens > 0 {
+		openai2Req["max_output_tokens"] = req.MaxTokens
+	}
 
 	// Convert tools
 	if len(req.Tools) > 0 {

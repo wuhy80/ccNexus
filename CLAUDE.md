@@ -6,6 +6,8 @@
 
 ccNexus 是一个为 Claude Code 和 Codex CLI 设计的智能 API 端点轮换代理。它提供多个 API 端点之间的自动故障转移，支持不同 AI API 格式（Claude、OpenAI、Gemini）之间的转换，并通过 WebDAV 或 S3 提供跨设备配置同步。
 
+要求后续使用中文交互，注释也要用中文
+
 **两种部署模式：**
 - **桌面应用** (`cmd/desktop/`): Wails v2 图形界面，带系统托盘、会话查看器和自动更新
 - **服务器应用** (`cmd/server/`): 无头 HTTP 服务，适用于 Docker/服务器部署

@@ -288,6 +288,42 @@ async function loadCurrentSettings() {
         if (healthHistoryRetentionSelect) {
             healthHistoryRetentionSelect.value = healthHistoryRetention.toString();
         }
+
+        // Load alert config
+        const alertConfigStr = await window.go.main.App.GetAlertConfig();
+        const alertConfig = JSON.parse(alertConfigStr);
+        const alertEnabledCheckbox = document.getElementById('settingsAlertEnabled');
+        const alertConfigDetails = document.getElementById('alertConfigDetails');
+        const alertConsecutiveFailuresSelect = document.getElementById('settingsAlertConsecutiveFailures');
+        const alertCooldownSelect = document.getElementById('settingsAlertCooldown');
+        const alertNotifyOnRecoveryCheckbox = document.getElementById('settingsAlertNotifyOnRecovery');
+        const alertSystemNotificationCheckbox = document.getElementById('settingsAlertSystemNotification');
+
+        if (alertEnabledCheckbox) {
+            alertEnabledCheckbox.checked = alertConfig.enabled;
+            // Show/hide details based on enabled state
+            if (alertConfigDetails) {
+                alertConfigDetails.style.display = alertConfig.enabled ? 'block' : 'none';
+            }
+            // Add event listener for toggle
+            alertEnabledCheckbox.onchange = function() {
+                if (alertConfigDetails) {
+                    alertConfigDetails.style.display = this.checked ? 'block' : 'none';
+                }
+            };
+        }
+        if (alertConsecutiveFailuresSelect) {
+            alertConsecutiveFailuresSelect.value = (alertConfig.consecutiveFailures || 3).toString();
+        }
+        if (alertCooldownSelect) {
+            alertCooldownSelect.value = (alertConfig.alertCooldownMinutes || 5).toString();
+        }
+        if (alertNotifyOnRecoveryCheckbox) {
+            alertNotifyOnRecoveryCheckbox.checked = alertConfig.notifyOnRecovery !== false;
+        }
+        if (alertSystemNotificationCheckbox) {
+            alertSystemNotificationCheckbox.checked = alertConfig.systemNotification !== false;
+        }
     } catch (error) {
         console.error('Failed to load settings:', error);
     }
@@ -413,6 +449,20 @@ export async function saveSettings() {
 
         // Save health history retention days
         await window.go.main.App.SetHealthHistoryRetentionDays(healthHistoryRetention);
+
+        // Save alert config
+        const alertEnabled = document.getElementById('settingsAlertEnabled').checked;
+        const alertConsecutiveFailures = parseInt(document.getElementById('settingsAlertConsecutiveFailures').value, 10);
+        const alertCooldown = parseInt(document.getElementById('settingsAlertCooldown').value, 10);
+        const alertNotifyOnRecovery = document.getElementById('settingsAlertNotifyOnRecovery').checked;
+        const alertSystemNotification = document.getElementById('settingsAlertSystemNotification').checked;
+        await window.go.main.App.SetAlertConfig(
+            alertEnabled,
+            alertConsecutiveFailures,
+            alertNotifyOnRecovery,
+            alertSystemNotification,
+            alertCooldown
+        );
 
         // Get current config
         const configStr = await window.go.main.App.GetConfig();

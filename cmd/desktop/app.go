@@ -15,6 +15,7 @@ import (
 	"github.com/lich0821/ccNexus/internal/config"
 	"github.com/lich0821/ccNexus/internal/interaction"
 	"github.com/lich0821/ccNexus/internal/logger"
+	"github.com/lich0821/ccNexus/internal/notify"
 	"github.com/lich0821/ccNexus/internal/proxy"
 	"github.com/lich0821/ccNexus/internal/service"
 	"github.com/lich0821/ccNexus/internal/storage"
@@ -175,6 +176,34 @@ func (a *App) startup(ctx context.Context) {
 	a.healthCheck = service.NewHealthCheckService(a.config, a.proxy.GetMonitor())
 	a.healthCheck.SetStorage(sqliteStorage)
 	a.healthCheck.SetDeviceID(deviceID)
+
+	// 设置告警回调
+	a.healthCheck.SetAlertCallback(func(event service.AlertEvent) {
+		// 发送前端事件
+		a.ctxMutex.RLock()
+		ctx := a.ctx
+		a.ctxMutex.RUnlock()
+		if ctx != nil {
+			runtime.EventsEmit(ctx, "endpoint:alert", map[string]interface{}{
+				"endpointName": event.EndpointName,
+				"clientType":   event.ClientType,
+				"alertType":    event.AlertType,
+				"message":      event.Message,
+				"timestamp":    event.Timestamp.Unix(),
+			})
+		}
+
+		// 发送系统通知
+		alertConfig := a.config.GetAlert()
+		if alertConfig != nil && alertConfig.SystemNotification {
+			title := "ccNexus"
+			if event.AlertType == "failure" {
+				notify.SendAlert(title, event.Message)
+			} else if event.AlertType == "recovery" {
+				notify.SendRecovery(title, event.Message)
+			}
+		}
+	})
 
 	// Initialize interaction storage and service
 	exePath, err := os.Executable()
@@ -563,6 +592,30 @@ func (a *App) SetHealthCheckInterval(interval int) error {
 func (a *App) GetRequestTimeout() int { return a.config.GetRequestTimeout() }
 func (a *App) SetRequestTimeout(timeout int) error {
 	a.config.UpdateRequestTimeout(timeout)
+	// Save to storage
+	configAdapter := storage.NewConfigStorageAdapter(a.storage)
+	return a.config.SaveToStorage(configAdapter)
+}
+
+// ========== Alert Bindings ==========
+
+// GetAlertConfig 获取告警配置
+func (a *App) GetAlertConfig() string {
+	alertConfig := a.config.GetAlert()
+	data, _ := json.Marshal(alertConfig)
+	return string(data)
+}
+
+// SetAlertConfig 设置告警配置
+func (a *App) SetAlertConfig(enabled bool, consecutiveFailures int, notifyOnRecovery bool, systemNotification bool, cooldownMinutes int) error {
+	alertConfig := &config.AlertConfig{
+		Enabled:              enabled,
+		ConsecutiveFailures:  consecutiveFailures,
+		NotifyOnRecovery:     notifyOnRecovery,
+		SystemNotification:   systemNotification,
+		AlertCooldownMinutes: cooldownMinutes,
+	}
+	a.config.UpdateAlert(alertConfig)
 	// Save to storage
 	configAdapter := storage.NewConfigStorageAdapter(a.storage)
 	return a.config.SaveToStorage(configAdapter)
