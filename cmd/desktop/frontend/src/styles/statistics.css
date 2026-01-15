@@ -603,3 +603,44 @@
 .endpoint-metrics-header .section-icon {
     font-size: 14px;
 }
+
+/* Cost Statistics Styles */
+.cost-stat-box .cost-value {
+    color: var(--accent-color, #4CAF50);
+    font-weight: 600;
+}
+
+.savings-stat-box .savings-value {
+    color: var(--success-color, #2196F3);
+    font-weight: 600;
+}
+
+.cost-stat-box .stat-value,
+.savings-stat-box .stat-value {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.trend-indicator {
+    font-size: 11px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+.trend-up {
+    color: #f44336;
+    background: rgba(244, 67, 54, 0.1);
+}
+
+.trend-down {
+    color: #4CAF50;
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.trend-neutral {
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+}

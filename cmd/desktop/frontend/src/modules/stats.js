@@ -1,4 +1,5 @@
 import { formatTokens } from '../utils/format.js';
+import { loadCostByPeriod, loadCostTrend } from './cost.js';
 
 let endpointStats = {};
 let currentPeriod = 'daily'; // 'daily', 'weekly', 'monthly'
@@ -133,6 +134,10 @@ export async function loadStatsByPeriod(period = 'daily') {
 
         // Load performance metrics for current period
         await loadPerformanceMetrics(period);
+
+        // Load cost statistics for current period
+        await loadCostByPeriod(period);
+        await loadCostTrend(period);
 
         // Store endpoint stats for today
         endpointStats = normalizeEndpointStats(stats.endpoints);

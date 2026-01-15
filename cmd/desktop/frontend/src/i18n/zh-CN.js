@@ -324,6 +324,22 @@ export default {
         streaming: '流式',
         nonStreaming: '非流式'
     },
+    cost: {
+        title: '成本统计',
+        totalCost: '总成本',
+        inputCost: '输入成本',
+        outputCost: '输出成本',
+        cacheWriteCost: '缓存写入',
+        cacheReadCost: '缓存读取',
+        cacheSavings: '缓存节省',
+        byEndpoint: '按端点',
+        byTransformer: '按类型',
+        currency: '$',
+        noData: '暂无成本数据',
+        trend: '趋势',
+        viewCost: '查看成本',
+        costBreakdown: '成本明细'
+    },
     chart: {
         minutes: '分钟',
         perRequest: '每次请求',

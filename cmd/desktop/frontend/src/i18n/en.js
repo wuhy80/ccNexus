@@ -324,6 +324,22 @@ export default {
         streaming: 'Stream',
         nonStreaming: 'Non-stream'
     },
+    cost: {
+        title: 'Cost Statistics',
+        totalCost: 'Total Cost',
+        inputCost: 'Input Cost',
+        outputCost: 'Output Cost',
+        cacheWriteCost: 'Cache Write',
+        cacheReadCost: 'Cache Read',
+        cacheSavings: 'Cache Savings',
+        byEndpoint: 'By Endpoint',
+        byTransformer: 'By Type',
+        currency: '$',
+        noData: 'No cost data available',
+        trend: 'Trend',
+        viewCost: 'View Cost',
+        costBreakdown: 'Cost Breakdown'
+    },
     chart: {
         minutes: 'min',
         perRequest: 'Per Request',

@@ -193,6 +193,38 @@ export function initUI() {
                                     <span id="streamingPercentage" class="stat-primary">-</span>
                                 </div>
                             </div>
+                            <!-- Cost Statistics -->
+                            <div class="stat-box-compact stat-box-condensed cost-stat-box">
+                                <div class="stat-info">
+                                    <div class="stat-label">💰 ${t('cost.totalCost')}</div>
+                                    <div class="stat-detail">
+                                        <span>⬇️</span>
+                                        <span id="periodInputCost">$0.00</span>
+                                        <span class="stat-divider">/</span>
+                                        <span>⬆️</span>
+                                        <span id="periodOutputCost">$0.00</span>
+                                    </div>
+                                </div>
+                                <div class="stat-value">
+                                    <span id="periodTotalCost" class="stat-primary cost-value">$0.00</span>
+                                    <span id="costTrend" class="trend-indicator trend-neutral">→ 0%</span>
+                                </div>
+                            </div>
+                            <div class="stat-box-compact stat-box-condensed savings-stat-box">
+                                <div class="stat-info">
+                                    <div class="stat-label">💎 ${t('cost.cacheSavings')}</div>
+                                    <div class="stat-detail">
+                                        <span>📝</span>
+                                        <span id="periodCacheWriteCost">$0.00</span>
+                                        <span class="stat-divider">/</span>
+                                        <span>📖</span>
+                                        <span id="periodCacheReadCost">$0.00</span>
+                                    </div>
+                                </div>
+                                <div class="stat-value">
+                                    <span id="periodCacheSavings" class="stat-primary savings-value">$0.00</span>
+                                </div>
+                            </div>
                             <!-- Endpoint Metrics (merged into same grid) -->
                             <div id="endpointMetricsGrid" style="display: contents;"></div>
                         </div>

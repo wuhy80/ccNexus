@@ -59,6 +59,7 @@ type App struct {
 	interaction *service.InteractionService
 	monitor     *service.MonitorService
 	healthCheck *service.HealthCheckService
+	cost        *service.CostService
 
 	// Interaction storage
 	interactionStorage *interaction.Storage
@@ -176,6 +177,7 @@ func (a *App) startup(ctx context.Context) {
 	a.healthCheck = service.NewHealthCheckService(a.config, a.proxy.GetMonitor())
 	a.healthCheck.SetStorage(sqliteStorage)
 	a.healthCheck.SetDeviceID(deviceID)
+	a.cost = service.NewCostService(a.proxy, a.config)
 
 	// 设置告警回调
 	a.healthCheck.SetAlertCallback(func(event service.AlertEvent) {
@@ -746,3 +748,17 @@ func (a *App) GetEndpointHealth() string {
 func (a *App) GetRecentRequests(limit int) string {
 	return a.stats.GetRecentRequestStats(limit)
 }
+
+// ========== Cost Bindings ==========
+
+func (a *App) GetCostDaily() string     { return a.cost.GetCostDaily() }
+func (a *App) GetCostYesterday() string { return a.cost.GetCostYesterday() }
+func (a *App) GetCostWeekly() string    { return a.cost.GetCostWeekly() }
+func (a *App) GetCostMonthly() string   { return a.cost.GetCostMonthly() }
+func (a *App) GetCostByPeriod(period string) string {
+	return a.cost.GetCostByPeriod(period)
+}
+func (a *App) GetCostTrend(period string) string {
+	return a.cost.GetCostTrend(period)
+}
+func (a *App) GetPricingInfo() string { return a.cost.GetPricingInfo() }
