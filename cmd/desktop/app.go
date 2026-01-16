@@ -838,6 +838,18 @@ func (a *App) GetRecentRequests(limit int) string {
 	return a.stats.GetRecentRequestStats(limit)
 }
 
+// GetEndpointCheckResults 获取所有端点的检测结果（包含最后检测时间）
+func (a *App) GetEndpointCheckResults() string {
+	results := a.proxy.GetMonitor().GetCheckResults()
+	jsonData, _ := json.Marshal(results)
+	return string(jsonData)
+}
+
+// TestAllEndpointsAndOptimize 一键检测并优化端点配置
+func (a *App) TestAllEndpointsAndOptimize(clientType string) string {
+	return a.endpoint.TestAllEndpointsAndOptimize(clientType)
+}
+
 // ========== Cost Bindings ==========
 
 func (a *App) GetCostDaily() string     { return a.cost.GetCostDaily() }

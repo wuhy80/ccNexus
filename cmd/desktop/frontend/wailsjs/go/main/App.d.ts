@@ -9,6 +9,8 @@ export function BackupToWebDAV(arg1:string):Promise<void>;
 
 export function CleanupInteractions(arg1:number):Promise<string>;
 
+export function ClearCache():Promise<void>;
+
 export function ClearLogs():Promise<void>;
 
 export function DeleteArchive(arg1:string):Promise<string>;
@@ -37,6 +39,8 @@ export function GenerateMockArchives(arg1:number):Promise<string>;
 
 export function GetActiveRequests():Promise<string>;
 
+export function GetAlertConfig():Promise<string>;
+
 export function GetAllEndpointTags():Promise<Array<string>>;
 
 export function GetArchiveData(arg1:string):Promise<string>;
@@ -49,15 +53,33 @@ export function GetAutoLightTheme():Promise<string>;
 
 export function GetAutoThemeMode():Promise<string>;
 
+export function GetCacheConfig():Promise<string>;
+
+export function GetCacheStats():Promise<string>;
+
 export function GetChangelog(arg1:string):Promise<string>;
 
 export function GetConfig():Promise<string>;
 
 export function GetConnectedClients(arg1:number):Promise<string>;
 
+export function GetCostByPeriod(arg1:string):Promise<string>;
+
+export function GetCostDaily():Promise<string>;
+
+export function GetCostMonthly():Promise<string>;
+
+export function GetCostTrend(arg1:string):Promise<string>;
+
+export function GetCostWeekly():Promise<string>;
+
+export function GetCostYesterday():Promise<string>;
+
 export function GetCurrentEndpoint(arg1:string):Promise<string>;
 
 export function GetDailyRequestDetails(arg1:number,arg2:number):Promise<string>;
+
+export function GetEndpointCheckResults():Promise<string>;
 
 export function GetEndpointHealth():Promise<string>;
 
@@ -91,7 +113,13 @@ export function GetMonitorSnapshot():Promise<string>;
 
 export function GetPerformanceStats(arg1:string):Promise<string>;
 
+export function GetPricingInfo():Promise<string>;
+
 export function GetProxyURL():Promise<string>;
+
+export function GetRateLimitConfig():Promise<string>;
+
+export function GetRateLimitStats():Promise<string>;
 
 export function GetRecentRequests(arg1:number):Promise<string>;
 
@@ -141,15 +169,21 @@ export function ReorderEndpoints(arg1:string,arg2:Array<string>):Promise<void>;
 
 export function ResetMonitorMetrics():Promise<void>;
 
+export function ResetRateLimitStats():Promise<void>;
+
 export function RestoreFromProvider(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function RestoreFromWebDAV(arg1:string,arg2:string):Promise<void>;
+
+export function SetAlertConfig(arg1:boolean,arg2:number,arg3:boolean,arg4:boolean,arg5:number,arg6:boolean,arg7:number,arg8:number):Promise<void>;
 
 export function SetAutoDarkTheme(arg1:string):Promise<void>;
 
 export function SetAutoLightTheme(arg1:string):Promise<void>;
 
 export function SetAutoThemeMode(arg1:string):Promise<void>;
+
+export function SetCacheConfig(arg1:boolean,arg2:number,arg3:number):Promise<void>;
 
 export function SetCloseWindowBehavior(arg1:string):Promise<void>;
 
@@ -165,6 +199,8 @@ export function SetLogLevel(arg1:number):Promise<void>;
 
 export function SetProxyURL(arg1:string):Promise<void>;
 
+export function SetRateLimitConfig(arg1:boolean,arg2:number,arg3:number):Promise<void>;
+
 export function SetRequestTimeout(arg1:number):Promise<void>;
 
 export function SetTheme(arg1:string):Promise<void>;
@@ -174,6 +210,8 @@ export function SetThemeAuto(arg1:boolean):Promise<void>;
 export function ShowWindow():Promise<void>;
 
 export function SwitchToEndpoint(arg1:string,arg2:string):Promise<void>;
+
+export function TestAllEndpointsAndOptimize(arg1:string):Promise<string>;
 
 export function TestAllEndpointsZeroCost(arg1:string):Promise<string>;
 

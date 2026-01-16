@@ -346,6 +346,77 @@ func (c *Config) UpdateEndpoints(endpoints []Endpoint) {
 	c.Endpoints = endpoints
 }
 
+// SetEndpointEnabled 设置指定客户端类型下指定索引的端点的启用状态
+func (c *Config) SetEndpointEnabled(clientType string, index int, enabled bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	// 找到该客户端类型的端点在全局列表中的实际索引
+	currentIndex := 0
+	for i := range c.Endpoints {
+		epClientType := c.Endpoints[i].ClientType
+		if epClientType == "" {
+			epClientType = "claude"
+		}
+		if epClientType == clientType {
+			if currentIndex == index {
+				c.Endpoints[i].Enabled = enabled
+				return
+			}
+			currentIndex++
+		}
+	}
+}
+
+// MoveEndpoint 将指定客户端类型下的端点从 fromIndex 移动到 toIndex
+func (c *Config) MoveEndpoint(clientType string, fromIndex, toIndex int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	if fromIndex == toIndex {
+		return
+	}
+
+	// 找到该客户端类型的端点在全局列表中的实际索引
+	var globalIndices []int
+	for i := range c.Endpoints {
+		epClientType := c.Endpoints[i].ClientType
+		if epClientType == "" {
+			epClientType = "claude"
+		}
+		if epClientType == clientType {
+			globalIndices = append(globalIndices, i)
+		}
+	}
+
+	if fromIndex < 0 || fromIndex >= len(globalIndices) || toIndex < 0 || toIndex >= len(globalIndices) {
+		return
+	}
+
+	// 获取全局索引
+	globalFromIndex := globalIndices[fromIndex]
+	globalToIndex := globalIndices[toIndex]
+
+	// 执行移动
+	endpoint := c.Endpoints[globalFromIndex]
+	// 先删除
+	c.Endpoints = append(c.Endpoints[:globalFromIndex], c.Endpoints[globalFromIndex+1:]...)
+	// 调整目标索引（如果源索引在目标索引之前）
+	if globalFromIndex < globalToIndex {
+		globalToIndex--
+	}
+	// 再插入
+	c.Endpoints = append(c.Endpoints[:globalToIndex], append([]Endpoint{endpoint}, c.Endpoints[globalToIndex:]...)...)
+}
+
 // UpdatePort updates the port (thread-safe)
 func (c *Config) UpdatePort(port int) {
 	c.mu.Lock()

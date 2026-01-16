@@ -221,6 +221,9 @@ func (h *HealthCheckService) checkEndpoint(endpoint config.Endpoint) {
 		}
 	}
 
+	// 记录检测结果到 Monitor（用于前端显示检测时间）
+	h.monitor.RecordCheckResult(endpoint.Name, isHealthy, latencyMs, errorMsg)
+
 	// Record to health history
 	h.recordHealthHistory(endpoint.Name, clientType, status, latencyMs, errorMsg)
 

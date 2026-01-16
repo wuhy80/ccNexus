@@ -50,3 +50,4 @@ node_modules/
 # Logs
 *.log
 cmd/desktop/frontend/package.json.md5
+nul

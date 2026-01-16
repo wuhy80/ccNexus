@@ -529,6 +529,9 @@ export function initUI() {
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px;">
+                        <button id="testAllEndpointsBtn" class="btn btn-secondary" onclick="window.testAllEndpointsAndOptimize && window.testAllEndpointsAndOptimize()">
+                            🔍 ${t('monitor.testAllEndpoints')}
+                        </button>
                         <button class="btn btn-secondary" onclick="window.showInteractionsModal()">
                             📝 ${t('interactions.viewInteractions')}
                         </button>

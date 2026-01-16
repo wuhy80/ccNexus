@@ -1,5 +1,5 @@
 import { t } from '../i18n/index.js';
-import { getCurrentClientType } from './endpoints.js';
+import { getCurrentClientType, refreshEndpoints } from './endpoints.js';
 
 // State
 let activeRequests = new Map(); // requestId -> request data
@@ -7,6 +7,7 @@ let endpointMetrics = new Map(); // endpointName -> metrics
 let recentRequests = [];           // Recent completed requests
 let endpointHealth = new Map();    // endpointName -> health status
 let healthCheckLatencies = {};     // endpointName -> latency in ms (from health checks)
+let endpointCheckResults = new Map(); // endpointName -> {lastCheckAt, success, latencyMs, errorMessage}
 let throughputStats = {            // Throughput statistics
     requestsPerMin: 0,
     tokensPerMin: 0,
@@ -15,7 +16,9 @@ let throughputStats = {            // Throughput statistics
 };
 let durationUpdateInterval = null;
 let throughputUpdateInterval = null;
+let checkTimeUpdateInterval = null; // 检测时间更新定时器
 let isMonitorVisible = true;
+let isTestingAllEndpoints = false; // 是否正在进行一键检测
 
 // Phase icons and labels
 const phaseConfig = {
@@ -40,10 +43,14 @@ export function initMonitor() {
     // Start throughput update timer
     startThroughputUpdates();
 
+    // Start check time update timer (每秒更新检测时间显示)
+    startCheckTimeUpdates();
+
     // Load initial data
     loadMonitorSnapshot();
     loadRecentRequests();
     loadEndpointHealth();
+    loadEndpointCheckResults();
 }
 
 // Handle monitor events from backend
@@ -366,6 +373,24 @@ async function loadEndpointHealth() {
             // Ignore
         }
 
+        // 同时加载检测结果
+        try {
+            const checkResultStr = await window.go.main.App.GetEndpointCheckResults();
+            const results = JSON.parse(checkResultStr);
+
+            endpointCheckResults.clear();
+            for (const [name, result] of Object.entries(results)) {
+                endpointCheckResults.set(name, {
+                    lastCheckAt: new Date(result.lastCheckAt),
+                    success: result.success,
+                    latencyMs: result.latencyMs,
+                    errorMessage: result.errorMessage
+                });
+            }
+        } catch (e) {
+            // Ignore
+        }
+
         renderEndpointHealth();
     } catch (error) {
         console.error('Failed to load endpoint health:', error);
@@ -634,7 +659,11 @@ function renderEndpointHealth() {
         return;
     }
 
-    let html = '';
+    // 添加结果通知容器
+    let html = `
+        <div id="testResultNotification"></div>
+    `;
+
     endpointHealth.forEach((health, name) => {
         const statusClass = `status-${health.status}`;
         // Prefer healthCheckLatency from health object, then from healthCheckLatencies map, then avgResponseTime
@@ -650,8 +679,21 @@ function renderEndpointHealth() {
             ? health.successRate.toFixed(1) + '%'
             : '-';
 
+        // 获取检测结果
+        const checkResult = endpointCheckResults.get(name);
+        let checkTimeText = t('monitor.neverChecked');
+        let checkStatusIcon = '';
+        let checkStatusClass = '';
+
+        if (checkResult && checkResult.lastCheckAt) {
+            const secondsAgo = Math.floor((Date.now() - checkResult.lastCheckAt.getTime()) / 1000);
+            checkTimeText = formatTimeAgo(secondsAgo);
+            checkStatusIcon = checkResult.success ? '✓' : '✗';
+            checkStatusClass = checkResult.success ? 'check-success' : 'check-failed';
+        }
+
         html += `
-            <div class="endpoint-health-item ${statusClass}">
+            <div class="endpoint-health-item ${statusClass}" data-endpoint-name="${escapeHtml(name)}">
                 <div class="health-status-indicator"></div>
                 <div class="health-info">
                     <span class="health-endpoint-name">${escapeHtml(name)}</span>
@@ -661,6 +703,10 @@ function renderEndpointHealth() {
                         <span class="health-divider">|</span>
                         <span>${avgTime}</span>
                     </span>
+                </div>
+                <div class="health-check-info ${checkStatusClass}">
+                    ${checkStatusIcon ? `<span class="check-status-icon">${checkStatusIcon}</span>` : ''}
+                    <span class="check-time">${checkTimeText}</span>
                 </div>
             </div>
         `;
@@ -998,5 +1044,229 @@ export function refreshHealthHistory() {
         loadHealthHistory();
     }
     populateHealthHistoryEndpoints();
+}
+
+// ========== 端点检测结果相关函数 ==========
+
+// 加载端点检测结果
+async function loadEndpointCheckResults() {
+    try {
+        const resultStr = await window.go.main.App.GetEndpointCheckResults();
+        const results = JSON.parse(resultStr);
+
+        endpointCheckResults.clear();
+        for (const [name, result] of Object.entries(results)) {
+            endpointCheckResults.set(name, {
+                lastCheckAt: new Date(result.lastCheckAt),
+                success: result.success,
+                latencyMs: result.latencyMs,
+                errorMessage: result.errorMessage
+            });
+        }
+
+        renderEndpointHealth();
+    } catch (error) {
+        console.error('Failed to load endpoint check results:', error);
+    }
+}
+
+// 启动检测时间更新定时器
+function startCheckTimeUpdates() {
+    if (checkTimeUpdateInterval) {
+        clearInterval(checkTimeUpdateInterval);
+    }
+
+    // 每秒更新检测时间显示
+    checkTimeUpdateInterval = setInterval(() => {
+        if (isMonitorVisible && endpointCheckResults.size > 0) {
+            updateCheckTimeDisplays();
+        }
+    }, 1000);
+
+    // 每 10 秒刷新一次健康数据和检测结果
+    setInterval(() => {
+        if (isMonitorVisible) {
+            loadEndpointHealth().catch(console.error);
+        }
+    }, 10000);
+}
+
+// 更新检测时间显示
+function updateCheckTimeDisplays() {
+    const now = Date.now();
+    endpointCheckResults.forEach((result, name) => {
+        const timeEl = document.querySelector(`[data-endpoint-name="${name}"] .check-time`);
+        if (timeEl && result.lastCheckAt) {
+            const secondsAgo = Math.floor((now - result.lastCheckAt.getTime()) / 1000);
+            timeEl.textContent = formatTimeAgo(secondsAgo);
+        }
+    });
+}
+
+// 格式化时间差
+function formatTimeAgo(seconds) {
+    if (seconds < 60) {
+        return t('monitor.secondsAgo').replace('{count}', seconds);
+    } else if (seconds < 3600) {
+        const minutes = Math.floor(seconds / 60);
+        return t('monitor.minutesAgo').replace('{count}', minutes);
+    } else if (seconds < 86400) {
+        const hours = Math.floor(seconds / 3600);
+        return t('monitor.hoursAgo').replace('{count}', hours);
+    } else {
+        return t('monitor.neverChecked');
+    }
+}
+
+// 一键检测所有端点并优化（异步执行，不阻塞 UI）
+export async function testAllEndpointsAndOptimize() {
+    if (isTestingAllEndpoints) {
+        return;
+    }
+
+    isTestingAllEndpoints = true;
+    const btn = document.getElementById('testAllEndpointsBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `⏳ ${t('monitor.testing')}`;
+    }
+
+    // 异步执行检测，不等待结果
+    const clientType = getCurrentClientType() || 'claude';
+
+    // 使用 setTimeout 确保 UI 更新后再执行
+    setTimeout(async () => {
+        try {
+            const resultStr = await window.go.main.App.TestAllEndpointsAndOptimize(clientType);
+            const result = JSON.parse(resultStr);
+
+            if (result.success) {
+                // 显示结果通知
+                showTestResultNotification(result);
+
+                // 异步刷新数据，不阻塞
+                loadEndpointCheckResults().catch(console.error);
+                if (typeof refreshEndpoints === 'function') {
+                    refreshEndpoints().catch(console.error);
+                }
+                loadEndpointHealth().catch(console.error);
+            } else {
+                showTestErrorNotification(result.message || t('monitor.testFailed'));
+            }
+        } catch (error) {
+            console.error('Failed to test all endpoints:', error);
+            showTestErrorNotification(t('monitor.testFailed') + ': ' + error.message);
+        } finally {
+            isTestingAllEndpoints = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `🔍 ${t('monitor.testAllEndpoints')}`;
+            }
+        }
+    }, 0);
+}
+
+// 显示检测错误通知
+function showTestErrorNotification(message) {
+    const container = document.getElementById('testResultNotification');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="test-result-notification error">
+            <div class="test-result-header">
+                <span class="test-result-icon">✗</span>
+                <span class="test-result-title">${t('monitor.testFailed')}</span>
+                <button class="test-result-close" onclick="this.parentElement.parentElement.remove()">×</button>
+            </div>
+            <div class="test-result-body">
+                <div class="test-result-error">${escapeHtml(message)}</div>
+            </div>
+        </div>
+    `;
+
+    // 5秒后自动隐藏
+    setTimeout(() => {
+        const notification = container.querySelector('.test-result-notification');
+        if (notification) {
+            notification.classList.add('fade-out');
+            setTimeout(() => notification.remove(), 300);
+        }
+    }, 5000);
+}
+
+// 显示检测结果通知
+function showTestResultNotification(result) {
+    const container = document.getElementById('testResultNotification');
+    if (!container) return;
+
+    let html = `
+        <div class="test-result-notification">
+            <div class="test-result-header">
+                <span class="test-result-icon">✓</span>
+                <span class="test-result-title">${t('monitor.testComplete')}</span>
+                <button class="test-result-close" onclick="this.parentElement.parentElement.remove()">×</button>
+            </div>
+            <div class="test-result-body">
+                <div class="test-result-summary">
+                    ${result.bestEndpoint ? `<div class="test-result-best"><span class="label">${t('monitor.bestEndpoint')}:</span> <span class="value">${escapeHtml(result.bestEndpoint)}</span></div>` : ''}
+                    ${result.enabledCount > 0 ? `<div class="test-result-enabled"><span class="label">${t('monitor.enabledCount')}:</span> <span class="value">${result.enabledCount}</span></div>` : ''}
+                    ${result.disabledCount > 0 ? `<div class="test-result-disabled"><span class="label">${t('monitor.disabledCount')}:</span> <span class="value">${result.disabledCount}</span></div>` : ''}
+                </div>
+                <div class="test-result-details">
+    `;
+
+    for (const r of result.results) {
+        const statusClass = r.success ? 'success' : 'failed';
+        const statusIcon = r.success ? '✓' : '✗';
+        const actionText = getActionText(r.action);
+
+        html += `
+            <div class="test-result-item ${statusClass}">
+                <span class="result-status">${statusIcon}</span>
+                <span class="result-name">${escapeHtml(r.name)}</span>
+                <span class="result-latency">${r.success ? Math.round(r.latencyMs) + 'ms' : (r.errorMessage || t('monitor.checkFailed'))}</span>
+                ${actionText ? `<span class="result-action">${actionText}</span>` : ''}
+            </div>
+        `;
+    }
+
+    html += `
+                </div>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+
+    // 5秒后自动隐藏
+    setTimeout(() => {
+        const notification = container.querySelector('.test-result-notification');
+        if (notification) {
+            notification.classList.add('fade-out');
+            setTimeout(() => notification.remove(), 300);
+        }
+    }, 5000);
+}
+
+// 获取操作文本
+function getActionText(action) {
+    switch (action) {
+        case 'set_current':
+            return t('monitor.actionSetCurrent');
+        case 'enabled':
+            return t('monitor.actionEnabled');
+        case 'disabled':
+            return t('monitor.actionDisabled');
+        default:
+            return '';
+    }
+}
+
+// 导出加载检测结果函数供外部调用
+export { loadEndpointCheckResults };
+
+// 将一键检测函数暴露到 window 对象
+if (typeof window !== 'undefined') {
+    window.testAllEndpointsAndOptimize = testAllEndpointsAndOptimize;
 }
 

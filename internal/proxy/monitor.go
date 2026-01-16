@@ -70,6 +70,15 @@ type MonitorEvent struct {
 // EventCallback is a function that handles monitor events
 type EventCallback func(event MonitorEvent)
 
+// EndpointCheckResult 端点检测结果
+type EndpointCheckResult struct {
+	EndpointName string    `json:"endpointName"`
+	LastCheckAt  time.Time `json:"lastCheckAt"`  // 最后检测时间
+	Success      bool      `json:"success"`      // 检测是否成功
+	LatencyMs    float64   `json:"latencyMs"`    // 延迟（毫秒）
+	ErrorMessage string    `json:"errorMessage"` // 错误信息（如果失败）
+}
+
 // Monitor tracks active requests and endpoint metrics
 type Monitor struct {
 	mu              sync.RWMutex
@@ -83,6 +92,9 @@ type Monitor struct {
 
 	// Health check latency tracking (separate from request latency)
 	healthCheckLatencies map[string]float64 // endpointName -> latency in ms
+
+	// 端点检测结果存储
+	checkResults map[string]*EndpointCheckResult // endpointName -> 检测结果
 }
 
 // NewMonitor creates a new Monitor instance
@@ -92,6 +104,7 @@ func NewMonitor() *Monitor {
 		endpointMetrics:      make(map[string]*EndpointMetric),
 		responseTimes:        make(map[string][]float64),
 		healthCheckLatencies: make(map[string]float64),
+		checkResults:         make(map[string]*EndpointCheckResult),
 		maxSamples:           100,
 	}
 }
@@ -516,4 +529,53 @@ func calculateHealthStatus(metric *EndpointMetric) string {
 	}
 
 	return "healthy"
+}
+
+// RecordCheckResult 记录端点检测结果
+func (m *Monitor) RecordCheckResult(endpointName string, success bool, latencyMs float64, errorMsg string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.checkResults[endpointName] = &EndpointCheckResult{
+		EndpointName: endpointName,
+		LastCheckAt:  time.Now(),
+		Success:      success,
+		LatencyMs:    latencyMs,
+		ErrorMessage: errorMsg,
+	}
+}
+
+// GetCheckResults 获取所有端点的检测结果
+func (m *Monitor) GetCheckResults() map[string]*EndpointCheckResult {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	results := make(map[string]*EndpointCheckResult, len(m.checkResults))
+	for k, v := range m.checkResults {
+		results[k] = &EndpointCheckResult{
+			EndpointName: v.EndpointName,
+			LastCheckAt:  v.LastCheckAt,
+			Success:      v.Success,
+			LatencyMs:    v.LatencyMs,
+			ErrorMessage: v.ErrorMessage,
+		}
+	}
+	return results
+}
+
+// GetCheckResult 获取单个端点的检测结果
+func (m *Monitor) GetCheckResult(endpointName string) *EndpointCheckResult {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if result, exists := m.checkResults[endpointName]; exists {
+		return &EndpointCheckResult{
+			EndpointName: result.EndpointName,
+			LastCheckAt:  result.LastCheckAt,
+			Success:      result.Success,
+			LatencyMs:    result.LatencyMs,
+			ErrorMessage: result.ErrorMessage,
+		}
+	}
+	return nil
 }

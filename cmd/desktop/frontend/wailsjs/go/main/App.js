@@ -18,6 +18,10 @@ export function CleanupInteractions(arg1) {
   return window['go']['main']['App']['CleanupInteractions'](arg1);
 }
 
+export function ClearCache() {
+  return window['go']['main']['App']['ClearCache']();
+}
+
 export function ClearLogs() {
   return window['go']['main']['App']['ClearLogs']();
 }
@@ -74,6 +78,10 @@ export function GetActiveRequests() {
   return window['go']['main']['App']['GetActiveRequests']();
 }
 
+export function GetAlertConfig() {
+  return window['go']['main']['App']['GetAlertConfig']();
+}
+
 export function GetAllEndpointTags() {
   return window['go']['main']['App']['GetAllEndpointTags']();
 }
@@ -98,6 +106,14 @@ export function GetAutoThemeMode() {
   return window['go']['main']['App']['GetAutoThemeMode']();
 }
 
+export function GetCacheConfig() {
+  return window['go']['main']['App']['GetCacheConfig']();
+}
+
+export function GetCacheStats() {
+  return window['go']['main']['App']['GetCacheStats']();
+}
+
 export function GetChangelog(arg1) {
   return window['go']['main']['App']['GetChangelog'](arg1);
 }
@@ -110,12 +126,40 @@ export function GetConnectedClients(arg1) {
   return window['go']['main']['App']['GetConnectedClients'](arg1);
 }
 
+export function GetCostByPeriod(arg1) {
+  return window['go']['main']['App']['GetCostByPeriod'](arg1);
+}
+
+export function GetCostDaily() {
+  return window['go']['main']['App']['GetCostDaily']();
+}
+
+export function GetCostMonthly() {
+  return window['go']['main']['App']['GetCostMonthly']();
+}
+
+export function GetCostTrend(arg1) {
+  return window['go']['main']['App']['GetCostTrend'](arg1);
+}
+
+export function GetCostWeekly() {
+  return window['go']['main']['App']['GetCostWeekly']();
+}
+
+export function GetCostYesterday() {
+  return window['go']['main']['App']['GetCostYesterday']();
+}
+
 export function GetCurrentEndpoint(arg1) {
   return window['go']['main']['App']['GetCurrentEndpoint'](arg1);
 }
 
 export function GetDailyRequestDetails(arg1, arg2) {
   return window['go']['main']['App']['GetDailyRequestDetails'](arg1, arg2);
+}
+
+export function GetEndpointCheckResults() {
+  return window['go']['main']['App']['GetEndpointCheckResults']();
 }
 
 export function GetEndpointHealth() {
@@ -182,8 +226,20 @@ export function GetPerformanceStats(arg1) {
   return window['go']['main']['App']['GetPerformanceStats'](arg1);
 }
 
+export function GetPricingInfo() {
+  return window['go']['main']['App']['GetPricingInfo']();
+}
+
 export function GetProxyURL() {
   return window['go']['main']['App']['GetProxyURL']();
+}
+
+export function GetRateLimitConfig() {
+  return window['go']['main']['App']['GetRateLimitConfig']();
+}
+
+export function GetRateLimitStats() {
+  return window['go']['main']['App']['GetRateLimitStats']();
 }
 
 export function GetRecentRequests(arg1) {
@@ -282,12 +338,20 @@ export function ResetMonitorMetrics() {
   return window['go']['main']['App']['ResetMonitorMetrics']();
 }
 
+export function ResetRateLimitStats() {
+  return window['go']['main']['App']['ResetRateLimitStats']();
+}
+
 export function RestoreFromProvider(arg1, arg2, arg3) {
   return window['go']['main']['App']['RestoreFromProvider'](arg1, arg2, arg3);
 }
 
 export function RestoreFromWebDAV(arg1, arg2) {
   return window['go']['main']['App']['RestoreFromWebDAV'](arg1, arg2);
+}
+
+export function SetAlertConfig(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
+  return window['go']['main']['App']['SetAlertConfig'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 }
 
 export function SetAutoDarkTheme(arg1) {
@@ -300,6 +364,10 @@ export function SetAutoLightTheme(arg1) {
 
 export function SetAutoThemeMode(arg1) {
   return window['go']['main']['App']['SetAutoThemeMode'](arg1);
+}
+
+export function SetCacheConfig(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetCacheConfig'](arg1, arg2, arg3);
 }
 
 export function SetCloseWindowBehavior(arg1) {
@@ -330,6 +398,10 @@ export function SetProxyURL(arg1) {
   return window['go']['main']['App']['SetProxyURL'](arg1);
 }
 
+export function SetRateLimitConfig(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SetRateLimitConfig'](arg1, arg2, arg3);
+}
+
 export function SetRequestTimeout(arg1) {
   return window['go']['main']['App']['SetRequestTimeout'](arg1);
 }
@@ -348,6 +420,10 @@ export function ShowWindow() {
 
 export function SwitchToEndpoint(arg1, arg2) {
   return window['go']['main']['App']['SwitchToEndpoint'](arg1, arg2);
+}
+
+export function TestAllEndpointsAndOptimize(arg1) {
+  return window['go']['main']['App']['TestAllEndpointsAndOptimize'](arg1);
 }
 
 export function TestAllEndpointsZeroCost(arg1) {

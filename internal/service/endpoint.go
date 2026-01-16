@@ -1388,3 +1388,195 @@ func (e *EndpointService) CleanupOldHealthHistory() error {
 	days := e.config.GetHealthHistoryRetentionDays()
 	return e.storage.CleanupOldHealthHistory(days)
 }
+
+// EndpointTestResult 单个端点的检测结果
+type EndpointTestResult struct {
+	Name         string  `json:"name"`
+	Success      bool    `json:"success"`
+	LatencyMs    float64 `json:"latencyMs"`
+	ErrorMessage string  `json:"errorMessage,omitempty"`
+	Action       string  `json:"action"` // "enabled", "disabled", "set_current", "unchanged"
+	WasEnabled   bool    `json:"wasEnabled"`
+}
+
+// TestAllEndpointsResult 一键检测的结果
+type TestAllEndpointsResult struct {
+	Success       bool                 `json:"success"`
+	Message       string               `json:"message"`
+	Results       []EndpointTestResult `json:"results"`
+	BestEndpoint  string               `json:"bestEndpoint,omitempty"`
+	EnabledCount  int                  `json:"enabledCount"`
+	DisabledCount int                  `json:"disabledCount"`
+}
+
+// TestAllEndpointsAndOptimize 一键检测所有端点并优化配置
+// 1. 检测所有端点（包括禁用的）
+// 2. 将检测成功且延迟最低的端点设为当前使用（移到第一位）
+// 3. 将检测成功但被禁用的端点启用
+// 4. 将检测失败的端点禁用
+func (e *EndpointService) TestAllEndpointsAndOptimize(clientType string) string {
+	clientType = normalizeClientType(clientType)
+
+	// 获取所有端点（包括禁用的）
+	allEndpoints := e.config.GetEndpointsByClient(clientType)
+	if len(allEndpoints) == 0 {
+		return toJSON(TestAllEndpointsResult{
+			Success: false,
+			Message: "没有找到端点",
+		})
+	}
+
+	// 并发测试所有端点
+	type testResult struct {
+		index     int
+		endpoint  config.Endpoint
+		success   bool
+		latencyMs float64
+		errorMsg  string
+	}
+
+	results := make([]testResult, len(allEndpoints))
+	var wg sync.WaitGroup
+
+	for i, ep := range allEndpoints {
+		wg.Add(1)
+		go func(idx int, endpoint config.Endpoint) {
+			defer wg.Done()
+
+			transformer := normalizeTransformer(endpoint.Transformer)
+			normalizedURL := normalizeAPIUrlWithScheme(endpoint.APIUrl)
+
+			start := time.Now()
+			statusCode, err := e.testMinimalRequest(normalizedURL, endpoint.APIKey, transformer, endpoint.Model)
+			latencyMs := float64(time.Since(start).Milliseconds())
+
+			success := err == nil
+			errorMsg := ""
+			if err != nil {
+				if statusCode > 0 {
+					errorMsg = fmt.Sprintf("HTTP %d", statusCode)
+				} else {
+					errorMsg = err.Error()
+				}
+			}
+
+			results[idx] = testResult{
+				index:     idx,
+				endpoint:  endpoint,
+				success:   success,
+				latencyMs: latencyMs,
+				errorMsg:  errorMsg,
+			}
+
+			// 记录检测结果到 Monitor
+			if e.proxy != nil {
+				e.proxy.GetMonitor().RecordCheckResult(endpoint.Name, success, latencyMs, errorMsg)
+				if success {
+					e.proxy.GetMonitor().RecordHealthCheckLatency(endpoint.Name, latencyMs)
+				} else {
+					e.proxy.GetMonitor().ClearHealthCheckLatency(endpoint.Name)
+				}
+			}
+		}(i, ep)
+	}
+
+	wg.Wait()
+
+	// 找出检测成功且延迟最低的端点
+	var bestResult *testResult
+	for i := range results {
+		if results[i].success {
+			if bestResult == nil || results[i].latencyMs < bestResult.latencyMs {
+				bestResult = &results[i]
+			}
+		}
+	}
+
+	// 构建结果并调整端点状态
+	testResults := make([]EndpointTestResult, len(results))
+	enabledCount := 0
+	disabledCount := 0
+
+	for i, r := range results {
+		action := "unchanged"
+		wasEnabled := r.endpoint.Enabled
+
+		if r.success {
+			// 检测成功
+			if !r.endpoint.Enabled {
+				// 之前禁用的，现在启用
+				action = "enabled"
+				enabledCount++
+			}
+			if bestResult != nil && r.index == bestResult.index {
+				action = "set_current"
+			}
+		} else {
+			// 检测失败
+			if r.endpoint.Enabled {
+				// 之前启用的，现在禁用
+				action = "disabled"
+				disabledCount++
+			}
+		}
+
+		testResults[i] = EndpointTestResult{
+			Name:         r.endpoint.Name,
+			Success:      r.success,
+			LatencyMs:    r.latencyMs,
+			ErrorMessage: r.errorMsg,
+			Action:       action,
+			WasEnabled:   wasEnabled,
+		}
+	}
+
+	// 应用更改：调整端点状态
+	// 1. 先处理启用/禁用
+	for i, r := range results {
+		if r.success && !r.endpoint.Enabled {
+			// 启用之前禁用的端点
+			e.config.SetEndpointEnabled(clientType, i, true)
+		} else if !r.success && r.endpoint.Enabled {
+			// 禁用检测失败的端点
+			e.config.SetEndpointEnabled(clientType, i, false)
+		}
+	}
+
+	// 2. 将最佳端点移到第一位
+	bestEndpointName := ""
+	if bestResult != nil {
+		bestEndpointName = bestResult.endpoint.Name
+		if bestResult.index != 0 {
+			// 移动到第一位
+			e.config.MoveEndpoint(clientType, bestResult.index, 0)
+		}
+		// 设置为当前端点
+		if e.proxy != nil {
+			e.proxy.SetCurrentEndpointForClient(clientType, bestEndpointName)
+		}
+	}
+
+	// 保存配置
+	if e.storage != nil {
+		configAdapter := storage.NewConfigStorageAdapter(e.storage)
+		if err := e.config.SaveToStorage(configAdapter); err != nil {
+			logger.Warn("Failed to save config after endpoint optimization: %v", err)
+		}
+	}
+
+	message := fmt.Sprintf("检测完成：%d 个成功，%d 个失败", len(results)-disabledCount, disabledCount)
+	if bestEndpointName != "" {
+		message += fmt.Sprintf("，最佳端点：%s", bestEndpointName)
+	}
+
+	logger.Info("TestAllEndpointsAndOptimize: %s (enabled=%d, disabled=%d)", message, enabledCount, disabledCount)
+
+	return toJSON(TestAllEndpointsResult{
+		Success:       true,
+		Message:       message,
+		Results:       testResults,
+		BestEndpoint:  bestEndpointName,
+		EnabledCount:  enabledCount,
+		DisabledCount: disabledCount,
+	})
+}
