@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lich0821/ccNexus/internal/cache"
 	"github.com/lich0821/ccNexus/internal/config"
 	"github.com/lich0821/ccNexus/internal/interaction"
 	"github.com/lich0821/ccNexus/internal/logger"
@@ -48,6 +49,7 @@ type APIResponse struct {
 type Proxy struct {
 	config           *config.Config
 	stats            *Stats
+	cache            *cache.Cache                 // 请求缓存
 	currentIndex     int                          // Legacy: for backward compatibility
 	currentIndexByClient map[ClientType]int       // Per-client endpoint index
 	mu               sync.RWMutex
@@ -67,9 +69,18 @@ type Proxy struct {
 func New(cfg *config.Config, statsStorage StatsStorage, deviceID string) *Proxy {
 	stats := NewStats(statsStorage, deviceID)
 
+	// 初始化缓存
+	var reqCache *cache.Cache
+	if cfg.Cache != nil {
+		reqCache = cache.New(cfg.Cache.Enabled, cfg.Cache.TTLSeconds, cfg.Cache.MaxEntries)
+	} else {
+		reqCache = cache.New(false, 300, 1000) // 默认禁用
+	}
+
 	return &Proxy{
 		config:              cfg,
 		stats:               stats,
+		cache:               reqCache,
 		currentIndex:        0,
 		currentIndexByClient: make(map[ClientType]int),
 		activeRequests:      make(map[string]bool),
@@ -97,6 +108,26 @@ func (p *Proxy) SetInteractionStorage(storage *interaction.Storage) {
 // GetMonitor returns the monitor instance for real-time request tracking
 func (p *Proxy) GetMonitor() *Monitor {
 	return p.monitor
+}
+
+// GetCache returns the cache instance
+func (p *Proxy) GetCache() *cache.Cache {
+	return p.cache
+}
+
+// GetCacheStats returns cache statistics
+func (p *Proxy) GetCacheStats() cache.CacheStats {
+	return p.cache.GetStats()
+}
+
+// ClearCache clears all cached entries
+func (p *Proxy) ClearCache() {
+	p.cache.Clear()
+}
+
+// UpdateCacheConfig updates cache configuration
+func (p *Proxy) UpdateCacheConfig(enabled bool, ttlSeconds, maxEntries int) {
+	p.cache.UpdateConfig(enabled, ttlSeconds, maxEntries)
 }
 
 // Start starts the proxy server
@@ -576,6 +607,21 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		interactionRecord.Request.Model = streamReq.Model
 	}
 
+	// 缓存检查（仅对非流式请求启用缓存）
+	// 流式请求不缓存，因为需要实时返回数据
+	if !streamReq.Stream && p.cache.IsEnabled() {
+		cacheKey := cache.GenerateKey(bodyBytes)
+		if entry, found := p.cache.Get(cacheKey); found {
+			logger.Debug("[CACHE] Serving cached response for key: %s", cacheKey[:16])
+			// 返回缓存的响应
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("X-CCNexus-Cache", "HIT")
+			w.WriteHeader(http.StatusOK)
+			w.Write(entry.Response)
+			return
+		}
+	}
+
 	// Check if a specific endpoint is requested via header (used for testing)
 	// This must be checked BEFORE the enabled endpoints check, because test requests
 	// can target disabled endpoints
@@ -873,8 +919,14 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if resp.StatusCode == http.StatusOK {
-			usage, rawResp, transformedResp, err := p.handleNonStreamingResponse(w, resp, endpoint, trans)
+			usage, rawResp, transformedResp, respBytes, err := p.handleNonStreamingResponse(w, resp, endpoint, trans)
 			if err == nil {
+				// 缓存成功的非流式响应
+				if !streamReq.Stream && p.cache.IsEnabled() {
+					cacheKey := cache.GenerateKey(bodyBytes)
+					p.cache.Set(cacheKey, respBytes, nil, false)
+				}
+
 				// Fallback: estimate tokens when usage is 0
 				if usage.TotalInputTokens() == 0 {
 					usage.InputTokens = p.estimateInputTokens(bodyBytes)

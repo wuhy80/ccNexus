@@ -67,6 +67,13 @@ type AlertConfig struct {
 	AlertCooldownMinutes int  `json:"alertCooldownMinutes"` // 告警冷却时间（分钟），避免频繁告警，默认5分钟
 }
 
+// CacheConfig 请求缓存配置
+type CacheConfig struct {
+	Enabled    bool `json:"enabled"`    // 是否启用缓存
+	TTLSeconds int  `json:"ttlSeconds"` // 缓存过期时间（秒），默认300秒（5分钟）
+	MaxEntries int  `json:"maxEntries"` // 最大缓存条目数，默认1000
+}
+
 // Config represents the application configuration
 type Config struct {
 	Port                       int             `json:"port"`
@@ -85,6 +92,7 @@ type Config struct {
 	HealthHistoryRetentionDays int             `json:"healthHistoryRetentionDays"`    // Health history retention days, default 7
 	RequestTimeout             int             `json:"requestTimeout"`                // Request timeout in seconds, 0 for default (300s)
 	Alert                      *AlertConfig    `json:"alert,omitempty"`               // 端点故障告警配置
+	Cache                      *CacheConfig    `json:"cache,omitempty"`               // 请求缓存配置
 	WebDAV                     *WebDAVConfig   `json:"webdav,omitempty"`              // WebDAV synchronization config
 	Backup                     *BackupConfig   `json:"backup,omitempty"`              // Backup/sync configuration
 	Proxy                      *ProxyConfig    `json:"proxy,omitempty"`               // HTTP proxy config
@@ -167,6 +175,16 @@ func (c *Config) CopyFrom(other *Config) {
 		}
 	} else {
 		c.Alert = nil
+	}
+
+	if other.Cache != nil {
+		c.Cache = &CacheConfig{
+			Enabled:    other.Cache.Enabled,
+			TTLSeconds: other.Cache.TTLSeconds,
+			MaxEntries: other.Cache.MaxEntries,
+		}
+	} else {
+		c.Cache = nil
 	}
 }
 
@@ -553,6 +571,28 @@ func (c *Config) UpdateAlert(alert *AlertConfig) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Alert = alert
+}
+
+// GetCache returns the cache configuration (thread-safe)
+// Returns default config if not set
+func (c *Config) GetCache() *CacheConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.Cache == nil {
+		return &CacheConfig{
+			Enabled:    false,
+			TTLSeconds: 300,
+			MaxEntries: 1000,
+		}
+	}
+	return c.Cache
+}
+
+// UpdateCache updates the cache configuration (thread-safe)
+func (c *Config) UpdateCache(cache *CacheConfig) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Cache = cache
 }
 
 // StorageAdapter defines the interface needed for loading/saving config

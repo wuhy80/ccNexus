@@ -11,8 +11,8 @@ import (
 )
 
 // handleNonStreamingResponse processes non-streaming responses
-// Returns: usage, rawResponse, transformedResponse, error
-func (p *Proxy) handleNonStreamingResponse(w http.ResponseWriter, resp *http.Response, endpoint config.Endpoint, trans transformer.Transformer) (transformer.TokenUsageDetail, interface{}, interface{}, error) {
+// Returns: usage, rawResponse, transformedResponse, transformedBytes, error
+func (p *Proxy) handleNonStreamingResponse(w http.ResponseWriter, resp *http.Response, endpoint config.Endpoint, trans transformer.Transformer) (transformer.TokenUsageDetail, interface{}, interface{}, []byte, error) {
 	var bodyBytes []byte
 	var err error
 
@@ -20,13 +20,13 @@ func (p *Proxy) handleNonStreamingResponse(w http.ResponseWriter, resp *http.Res
 		bodyBytes, err = decompressGzip(resp.Body)
 		if err != nil {
 			logger.Error("[%s] Failed to decompress gzip response: %v", endpoint.Name, err)
-			return transformer.TokenUsageDetail{}, nil, nil, err
+			return transformer.TokenUsageDetail{}, nil, nil, nil, err
 		}
 	} else {
 		bodyBytes, err = io.ReadAll(resp.Body)
 		if err != nil {
 			logger.Error("[%s] Failed to read response body: %v", endpoint.Name, err)
-			return transformer.TokenUsageDetail{}, nil, nil, err
+			return transformer.TokenUsageDetail{}, nil, nil, nil, err
 		}
 	}
 	resp.Body.Close()
@@ -41,7 +41,7 @@ func (p *Proxy) handleNonStreamingResponse(w http.ResponseWriter, resp *http.Res
 	transformedResp, err := trans.TransformResponse(bodyBytes, false)
 	if err != nil {
 		logger.Error("[%s] Failed to transform response: %v", endpoint.Name, err)
-		return transformer.TokenUsageDetail{}, rawResponse, nil, err
+		return transformer.TokenUsageDetail{}, rawResponse, nil, nil, err
 	}
 
 	logger.DebugLog("[%s] Transformed Response: %s", endpoint.Name, string(transformedResp))
@@ -66,7 +66,7 @@ func (p *Proxy) handleNonStreamingResponse(w http.ResponseWriter, resp *http.Res
 	w.WriteHeader(resp.StatusCode)
 	w.Write(transformedResp)
 
-	return usage, rawResponse, transformedResponse, nil
+	return usage, rawResponse, transformedResponse, transformedResp, nil
 }
 
 // extractTokenUsage extracts detailed token usage from response

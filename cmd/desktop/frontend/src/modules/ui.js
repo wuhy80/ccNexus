@@ -987,6 +987,64 @@ export function initUI() {
                             ${t('settings.alertConfigHelp')}
                         </p>
                     </div>
+                    <div class="form-group">
+                        <label>${t('settings.cacheConfig')}</label>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                            <span style="font-size: 13px; color: var(--text-secondary);">${t('settings.cacheEnabled')}</span>
+                            <label class="toggle-switch" style="width: 40px; height: 20px; margin-top: 7px;">
+                                <input type="checkbox" id="settingsCacheEnabled">
+                                <span class="toggle-slider" style="border-radius: 20px;"></span>
+                            </label>
+                        </div>
+                        <div id="cacheConfigDetails" style="display: none; padding: 10px; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="margin-bottom: 10px;">
+                                <label style="font-size: 13px;">${t('settings.cacheTTL')}</label>
+                                <select id="settingsCacheTTL" style="width: 100%; margin-top: 5px;">
+                                    <option value="60">60 ${t('settings.cacheSeconds')}</option>
+                                    <option value="120">120 ${t('settings.cacheSeconds')}</option>
+                                    <option value="300">300 ${t('settings.cacheSeconds')}</option>
+                                    <option value="600">600 ${t('settings.cacheSeconds')}</option>
+                                    <option value="1800">1800 ${t('settings.cacheSeconds')}</option>
+                                    <option value="3600">3600 ${t('settings.cacheSeconds')}</option>
+                                </select>
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <label style="font-size: 13px;">${t('settings.cacheMaxEntries')}</label>
+                                <select id="settingsCacheMaxEntries" style="width: 100%; margin-top: 5px;">
+                                    <option value="100">100 ${t('settings.cacheEntries')}</option>
+                                    <option value="500">500 ${t('settings.cacheEntries')}</option>
+                                    <option value="1000">1000 ${t('settings.cacheEntries')}</option>
+                                    <option value="2000">2000 ${t('settings.cacheEntries')}</option>
+                                    <option value="5000">5000 ${t('settings.cacheEntries')}</option>
+                                </select>
+                            </div>
+                            <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color);">
+                                <label style="font-size: 13px; margin-bottom: 8px; display: block;">${t('settings.cacheStats')}</label>
+                                <div id="cacheStatsDisplay" style="font-size: 12px; color: var(--text-secondary);">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                        <span>${t('settings.cacheTotalEntries')}:</span>
+                                        <span id="cacheStatEntries">0</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                        <span>${t('settings.cacheTotalHits')}:</span>
+                                        <span id="cacheStatHits">0</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                        <span>${t('settings.cacheTotalMisses')}:</span>
+                                        <span id="cacheStatMisses">0</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                        <span>${t('settings.cacheTotalSize')}:</span>
+                                        <span id="cacheStatSize">0 B</span>
+                                    </div>
+                                </div>
+                                <button class="btn btn-secondary" style="width: 100%; padding: 6px;" onclick="window.clearCache()">${t('settings.cacheClear')}</button>
+                            </div>
+                        </div>
+                        <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                            ${t('settings.cacheConfigHelp')}
+                        </p>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="window.closeSettingsModal()">${t('settings.cancel')}</button>

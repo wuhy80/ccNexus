@@ -324,6 +324,43 @@ async function loadCurrentSettings() {
         if (alertSystemNotificationCheckbox) {
             alertSystemNotificationCheckbox.checked = alertConfig.systemNotification !== false;
         }
+
+        // Load cache config
+        const cacheConfigStr = await window.go.main.App.GetCacheConfig();
+        const cacheConfig = JSON.parse(cacheConfigStr);
+        const cacheEnabledCheckbox = document.getElementById('settingsCacheEnabled');
+        const cacheConfigDetails = document.getElementById('cacheConfigDetails');
+        const cacheTTLSelect = document.getElementById('settingsCacheTTL');
+        const cacheMaxEntriesSelect = document.getElementById('settingsCacheMaxEntries');
+
+        if (cacheEnabledCheckbox) {
+            cacheEnabledCheckbox.checked = cacheConfig.enabled;
+            // Show/hide details based on enabled state
+            if (cacheConfigDetails) {
+                cacheConfigDetails.style.display = cacheConfig.enabled ? 'block' : 'none';
+            }
+            // Add event listener for toggle
+            cacheEnabledCheckbox.onchange = function() {
+                if (cacheConfigDetails) {
+                    cacheConfigDetails.style.display = this.checked ? 'block' : 'none';
+                }
+                // Refresh cache stats when enabled
+                if (this.checked) {
+                    refreshCacheStats();
+                }
+            };
+        }
+        if (cacheTTLSelect) {
+            cacheTTLSelect.value = (cacheConfig.ttlSeconds || 300).toString();
+        }
+        if (cacheMaxEntriesSelect) {
+            cacheMaxEntriesSelect.value = (cacheConfig.maxEntries || 1000).toString();
+        }
+
+        // Load cache stats if enabled
+        if (cacheConfig.enabled) {
+            refreshCacheStats();
+        }
     } catch (error) {
         console.error('Failed to load settings:', error);
     }
@@ -464,6 +501,12 @@ export async function saveSettings() {
             alertCooldown
         );
 
+        // Save cache config
+        const cacheEnabled = document.getElementById('settingsCacheEnabled').checked;
+        const cacheTTL = parseInt(document.getElementById('settingsCacheTTL').value, 10);
+        const cacheMaxEntries = parseInt(document.getElementById('settingsCacheMaxEntries').value, 10);
+        await window.go.main.App.SetCacheConfig(cacheEnabled, cacheTTL, cacheMaxEntries);
+
         // Get current config
         const configStr = await window.go.main.App.GetConfig();
         const config = JSON.parse(configStr);
@@ -546,3 +589,47 @@ async function refreshChartWithTheme() {
         }
     }
 }
+
+// 刷新缓存统计
+async function refreshCacheStats() {
+    try {
+        const statsStr = await window.go.main.App.GetCacheStats();
+        const stats = JSON.parse(statsStr);
+
+        const entriesEl = document.getElementById('cacheStatEntries');
+        const hitsEl = document.getElementById('cacheStatHits');
+        const missesEl = document.getElementById('cacheStatMisses');
+        const sizeEl = document.getElementById('cacheStatSize');
+
+        if (entriesEl) entriesEl.textContent = stats.totalEntries || 0;
+        if (hitsEl) hitsEl.textContent = stats.totalHits || 0;
+        if (missesEl) missesEl.textContent = stats.totalMisses || 0;
+        if (sizeEl) sizeEl.textContent = formatCacheSize(stats.totalSize || 0);
+    } catch (error) {
+        console.error('Failed to refresh cache stats:', error);
+    }
+}
+
+// 格式化缓存大小
+function formatCacheSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// 清空缓存
+export async function clearCache() {
+    try {
+        await window.go.main.App.ClearCache();
+        await refreshCacheStats();
+        showNotification('Cache cleared', 'success');
+    } catch (error) {
+        console.error('Failed to clear cache:', error);
+        showNotification('Failed to clear cache: ' + error, 'error');
+    }
+}
+
+// 导出 clearCache 到 window 对象
+window.clearCache = clearCache;

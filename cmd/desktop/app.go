@@ -623,6 +623,49 @@ func (a *App) SetAlertConfig(enabled bool, consecutiveFailures int, notifyOnReco
 	return a.config.SaveToStorage(configAdapter)
 }
 
+// ========== Cache Bindings ==========
+
+// GetCacheConfig 获取缓存配置
+func (a *App) GetCacheConfig() string {
+	cacheConfig := a.config.GetCache()
+	data, _ := json.Marshal(cacheConfig)
+	return string(data)
+}
+
+// SetCacheConfig 设置缓存配置
+func (a *App) SetCacheConfig(enabled bool, ttlSeconds, maxEntries int) error {
+	cacheConfig := &config.CacheConfig{
+		Enabled:    enabled,
+		TTLSeconds: ttlSeconds,
+		MaxEntries: maxEntries,
+	}
+	a.config.UpdateCache(cacheConfig)
+	// 更新代理缓存配置
+	if a.proxy != nil {
+		a.proxy.UpdateCacheConfig(enabled, ttlSeconds, maxEntries)
+	}
+	// Save to storage
+	configAdapter := storage.NewConfigStorageAdapter(a.storage)
+	return a.config.SaveToStorage(configAdapter)
+}
+
+// GetCacheStats 获取缓存统计
+func (a *App) GetCacheStats() string {
+	if a.proxy == nil {
+		return "{}"
+	}
+	stats := a.proxy.GetCacheStats()
+	data, _ := json.Marshal(stats)
+	return string(data)
+}
+
+// ClearCache 清空缓存
+func (a *App) ClearCache() {
+	if a.proxy != nil {
+		a.proxy.ClearCache()
+	}
+}
+
 // ========== WebDAV Bindings ==========
 
 func (a *App) UpdateWebDAVConfig(url, username, password string) error {
