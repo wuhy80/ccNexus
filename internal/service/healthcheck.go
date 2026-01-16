@@ -28,9 +28,12 @@ type AlertCallback func(event AlertEvent)
 
 // endpointAlertState 端点告警状态
 type endpointAlertState struct {
-	consecutiveFailures int       // 连续失败次数
-	lastAlertTime       time.Time // 上次告警时间
-	wasHealthy          bool      // 上次检测是否健康
+	consecutiveFailures int         // 连续失败次数
+	lastAlertTime       time.Time   // 上次告警时间
+	wasHealthy          bool        // 上次检测是否健康
+	// 性能告警相关
+	latencyHistory      []float64   // 延迟历史记录（最近10次）
+	lastPerfAlertTime   time.Time   // 上次性能告警时间
 }
 
 // HealthCheckService handles periodic health checks for all enabled endpoints
@@ -223,6 +226,11 @@ func (h *HealthCheckService) checkEndpoint(endpoint config.Endpoint) {
 
 	// 处理告警逻辑
 	h.processAlert(endpoint.Name, clientType, isHealthy, errorMsg)
+
+	// 处理性能告警逻辑（仅在健康时检查）
+	if isHealthy {
+		h.processPerformanceAlert(endpoint.Name, clientType, latencyMs)
+	}
 }
 
 // testMinimalRequest sends a minimal request to test if the LLM service is available
@@ -461,5 +469,101 @@ func (h *HealthCheckService) processAlert(endpointName, clientType string, isHea
 			}
 		}
 		state.wasHealthy = false
+	}
+}
+
+// processPerformanceAlert 处理性能异常告警
+func (h *HealthCheckService) processPerformanceAlert(endpointName, clientType string, latencyMs float64) {
+	alertConfig := h.config.GetAlert()
+	if alertConfig == nil || !alertConfig.PerformanceAlertEnabled {
+		return
+	}
+
+	if h.alertCallback == nil {
+		return
+	}
+
+	h.alertStatesMu.Lock()
+	defer h.alertStatesMu.Unlock()
+
+	// 获取或创建端点告警状态
+	state, exists := h.alertStates[endpointName]
+	if !exists {
+		state = &endpointAlertState{
+			wasHealthy:     true,
+			latencyHistory: make([]float64, 0, 10),
+		}
+		h.alertStates[endpointName] = state
+	}
+
+	// 初始化延迟历史
+	if state.latencyHistory == nil {
+		state.latencyHistory = make([]float64, 0, 10)
+	}
+
+	now := time.Now()
+	cooldownDuration := time.Duration(alertConfig.AlertCooldownMinutes) * time.Minute
+	if cooldownDuration == 0 {
+		cooldownDuration = 5 * time.Minute
+	}
+
+	// 获取配置的阈值
+	latencyThreshold := float64(alertConfig.LatencyThresholdMs)
+	if latencyThreshold <= 0 {
+		latencyThreshold = 5000 // 默认5秒
+	}
+
+	increasePercent := float64(alertConfig.LatencyIncreasePercent)
+	if increasePercent <= 0 {
+		increasePercent = 200 // 默认200%
+	}
+
+	// 计算平均延迟
+	var avgLatency float64
+	if len(state.latencyHistory) > 0 {
+		var sum float64
+		for _, l := range state.latencyHistory {
+			sum += l
+		}
+		avgLatency = sum / float64(len(state.latencyHistory))
+	}
+
+	// 检查是否需要告警
+	shouldAlert := false
+	var alertReason string
+
+	// 条件1: 延迟超过绝对阈值
+	if latencyMs > latencyThreshold {
+		shouldAlert = true
+		alertReason = fmt.Sprintf("延迟 %.0fms 超过阈值 %.0fms", latencyMs, latencyThreshold)
+	}
+
+	// 条件2: 延迟相比平均值增加超过指定百分比（需要有足够的历史数据）
+	if !shouldAlert && len(state.latencyHistory) >= 5 && avgLatency > 0 {
+		increaseRatio := (latencyMs - avgLatency) / avgLatency * 100
+		if increaseRatio > increasePercent {
+			shouldAlert = true
+			alertReason = fmt.Sprintf("延迟 %.0fms 相比平均值 %.0fms 增加了 %.0f%%", latencyMs, avgLatency, increaseRatio)
+		}
+	}
+
+	// 发送告警
+	if shouldAlert && now.Sub(state.lastPerfAlertTime) >= cooldownDuration {
+		event := AlertEvent{
+			EndpointName: endpointName,
+			ClientType:   clientType,
+			AlertType:    "performance",
+			Message:      fmt.Sprintf("端点 %s 性能异常: %s", endpointName, alertReason),
+			Timestamp:    now,
+		}
+		h.alertCallback(event)
+		state.lastPerfAlertTime = now
+		logger.Warn("Performance alert: endpoint %s - %s", endpointName, alertReason)
+	}
+
+	// 更新延迟历史（保留最近10次）
+	state.latencyHistory = append(state.latencyHistory, latencyMs)
+	if len(state.latencyHistory) > 10 {
+		state.latencyHistory = state.latencyHistory[1:]
 	}
 }

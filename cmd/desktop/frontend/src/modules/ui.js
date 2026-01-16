@@ -982,6 +982,37 @@ export function initUI() {
                                 <input type="checkbox" id="settingsAlertSystemNotification" checked>
                                 <span style="font-size: 13px;">${t('settings.alertSystemNotification')}</span>
                             </div>
+                            <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color);">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                    <input type="checkbox" id="settingsPerformanceAlertEnabled">
+                                    <span style="font-size: 13px;">${t('settings.performanceAlertEnabled')}</span>
+                                </div>
+                                <div id="performanceAlertDetails" style="display: none;">
+                                    <div style="margin-bottom: 10px;">
+                                        <label style="font-size: 13px;">${t('settings.performanceLatencyThreshold')}</label>
+                                        <select id="settingsLatencyThreshold" style="width: 100%; margin-top: 5px;">
+                                            <option value="2000">2000 ${t('settings.performanceLatencyMs')}</option>
+                                            <option value="3000">3000 ${t('settings.performanceLatencyMs')}</option>
+                                            <option value="5000">5000 ${t('settings.performanceLatencyMs')}</option>
+                                            <option value="10000">10000 ${t('settings.performanceLatencyMs')}</option>
+                                            <option value="15000">15000 ${t('settings.performanceLatencyMs')}</option>
+                                        </select>
+                                    </div>
+                                    <div style="margin-bottom: 10px;">
+                                        <label style="font-size: 13px;">${t('settings.performanceLatencyIncrease')}</label>
+                                        <select id="settingsLatencyIncrease" style="width: 100%; margin-top: 5px;">
+                                            <option value="100">100 ${t('settings.performanceLatencyPercent')}</option>
+                                            <option value="150">150 ${t('settings.performanceLatencyPercent')}</option>
+                                            <option value="200">200 ${t('settings.performanceLatencyPercent')}</option>
+                                            <option value="300">300 ${t('settings.performanceLatencyPercent')}</option>
+                                            <option value="500">500 ${t('settings.performanceLatencyPercent')}</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                                    ${t('settings.performanceAlertHelp')}
+                                </p>
+                            </div>
                         </div>
                         <p style="color: #666; font-size: 12px; margin-top: 5px;">
                             ${t('settings.alertConfigHelp')}

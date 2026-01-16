@@ -325,6 +325,32 @@ async function loadCurrentSettings() {
             alertSystemNotificationCheckbox.checked = alertConfig.systemNotification !== false;
         }
 
+        // Load performance alert config
+        const performanceAlertEnabledCheckbox = document.getElementById('settingsPerformanceAlertEnabled');
+        const performanceAlertDetails = document.getElementById('performanceAlertDetails');
+        const latencyThresholdSelect = document.getElementById('settingsLatencyThreshold');
+        const latencyIncreaseSelect = document.getElementById('settingsLatencyIncrease');
+
+        if (performanceAlertEnabledCheckbox) {
+            performanceAlertEnabledCheckbox.checked = alertConfig.performanceAlertEnabled || false;
+            // Show/hide details based on enabled state
+            if (performanceAlertDetails) {
+                performanceAlertDetails.style.display = alertConfig.performanceAlertEnabled ? 'block' : 'none';
+            }
+            // Add event listener for toggle
+            performanceAlertEnabledCheckbox.onchange = function() {
+                if (performanceAlertDetails) {
+                    performanceAlertDetails.style.display = this.checked ? 'block' : 'none';
+                }
+            };
+        }
+        if (latencyThresholdSelect) {
+            latencyThresholdSelect.value = (alertConfig.latencyThresholdMs || 5000).toString();
+        }
+        if (latencyIncreaseSelect) {
+            latencyIncreaseSelect.value = (alertConfig.latencyIncreasePercent || 200).toString();
+        }
+
         // Load cache config
         const cacheConfigStr = await window.go.main.App.GetCacheConfig();
         const cacheConfig = JSON.parse(cacheConfigStr);
@@ -530,12 +556,18 @@ export async function saveSettings() {
         const alertCooldown = parseInt(document.getElementById('settingsAlertCooldown').value, 10);
         const alertNotifyOnRecovery = document.getElementById('settingsAlertNotifyOnRecovery').checked;
         const alertSystemNotification = document.getElementById('settingsAlertSystemNotification').checked;
+        const performanceAlertEnabled = document.getElementById('settingsPerformanceAlertEnabled').checked;
+        const latencyThreshold = parseInt(document.getElementById('settingsLatencyThreshold').value, 10);
+        const latencyIncrease = parseInt(document.getElementById('settingsLatencyIncrease').value, 10);
         await window.go.main.App.SetAlertConfig(
             alertEnabled,
             alertConsecutiveFailures,
             alertNotifyOnRecovery,
             alertSystemNotification,
-            alertCooldown
+            alertCooldown,
+            performanceAlertEnabled,
+            latencyThreshold,
+            latencyIncrease
         );
 
         // Save cache config

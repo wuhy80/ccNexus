@@ -65,6 +65,10 @@ type AlertConfig struct {
 	NotifyOnRecovery     bool `json:"notifyOnRecovery"`     // 恢复时是否通知
 	SystemNotification   bool `json:"systemNotification"`   // 是否发送系统通知
 	AlertCooldownMinutes int  `json:"alertCooldownMinutes"` // 告警冷却时间（分钟），避免频繁告警，默认5分钟
+	// 性能异常告警配置
+	PerformanceAlertEnabled   bool `json:"performanceAlertEnabled"`   // 是否启用性能异常告警
+	LatencyThresholdMs        int  `json:"latencyThresholdMs"`        // 延迟阈值（毫秒），超过此值触发告警，默认5000ms
+	LatencyIncreasePercent    int  `json:"latencyIncreasePercent"`    // 延迟增加百分比，相比平均值增加此比例触发告警，默认200%
 }
 
 // CacheConfig 请求缓存配置
@@ -175,11 +179,14 @@ func (c *Config) CopyFrom(other *Config) {
 
 	if other.Alert != nil {
 		c.Alert = &AlertConfig{
-			Enabled:              other.Alert.Enabled,
-			ConsecutiveFailures:  other.Alert.ConsecutiveFailures,
-			NotifyOnRecovery:     other.Alert.NotifyOnRecovery,
-			SystemNotification:   other.Alert.SystemNotification,
-			AlertCooldownMinutes: other.Alert.AlertCooldownMinutes,
+			Enabled:                   other.Alert.Enabled,
+			ConsecutiveFailures:       other.Alert.ConsecutiveFailures,
+			NotifyOnRecovery:          other.Alert.NotifyOnRecovery,
+			SystemNotification:        other.Alert.SystemNotification,
+			AlertCooldownMinutes:      other.Alert.AlertCooldownMinutes,
+			PerformanceAlertEnabled:   other.Alert.PerformanceAlertEnabled,
+			LatencyThresholdMs:        other.Alert.LatencyThresholdMs,
+			LatencyIncreasePercent:    other.Alert.LatencyIncreasePercent,
 		}
 	} else {
 		c.Alert = nil
@@ -574,11 +581,14 @@ func (c *Config) GetAlert() *AlertConfig {
 	defer c.mu.RUnlock()
 	if c.Alert == nil {
 		return &AlertConfig{
-			Enabled:              false,
-			ConsecutiveFailures:  3,
-			NotifyOnRecovery:     true,
-			SystemNotification:   true,
-			AlertCooldownMinutes: 5,
+			Enabled:                   false,
+			ConsecutiveFailures:       3,
+			NotifyOnRecovery:          true,
+			SystemNotification:        true,
+			AlertCooldownMinutes:      5,
+			PerformanceAlertEnabled:   false,
+			LatencyThresholdMs:        5000,
+			LatencyIncreasePercent:    200,
 		}
 	}
 	return c.Alert

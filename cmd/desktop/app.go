@@ -609,13 +609,16 @@ func (a *App) GetAlertConfig() string {
 }
 
 // SetAlertConfig 设置告警配置
-func (a *App) SetAlertConfig(enabled bool, consecutiveFailures int, notifyOnRecovery bool, systemNotification bool, cooldownMinutes int) error {
+func (a *App) SetAlertConfig(enabled bool, consecutiveFailures int, notifyOnRecovery bool, systemNotification bool, cooldownMinutes int, performanceAlertEnabled bool, latencyThresholdMs int, latencyIncreasePercent int) error {
 	alertConfig := &config.AlertConfig{
-		Enabled:              enabled,
-		ConsecutiveFailures:  consecutiveFailures,
-		NotifyOnRecovery:     notifyOnRecovery,
-		SystemNotification:   systemNotification,
-		AlertCooldownMinutes: cooldownMinutes,
+		Enabled:                   enabled,
+		ConsecutiveFailures:       consecutiveFailures,
+		NotifyOnRecovery:          notifyOnRecovery,
+		SystemNotification:        systemNotification,
+		AlertCooldownMinutes:      cooldownMinutes,
+		PerformanceAlertEnabled:   performanceAlertEnabled,
+		LatencyThresholdMs:        latencyThresholdMs,
+		LatencyIncreasePercent:    latencyIncreasePercent,
 	}
 	a.config.UpdateAlert(alertConfig)
 	// Save to storage
