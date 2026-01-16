@@ -74,6 +74,13 @@ type CacheConfig struct {
 	MaxEntries int  `json:"maxEntries"` // 最大缓存条目数，默认1000
 }
 
+// RateLimitConfig 速率限制配置
+type RateLimitConfig struct {
+	Enabled          bool `json:"enabled"`          // 是否启用速率限制
+	GlobalLimit      int  `json:"globalLimit"`      // 全局每分钟最大请求数，默认60
+	PerEndpointLimit int  `json:"perEndpointLimit"` // 每端点每分钟最大请求数，默认30
+}
+
 // Config represents the application configuration
 type Config struct {
 	Port                       int             `json:"port"`
@@ -91,11 +98,12 @@ type Config struct {
 	HealthCheckInterval        int             `json:"healthCheckInterval"`           // Health check interval in seconds, 0 to disable
 	HealthHistoryRetentionDays int             `json:"healthHistoryRetentionDays"`    // Health history retention days, default 7
 	RequestTimeout             int             `json:"requestTimeout"`                // Request timeout in seconds, 0 for default (300s)
-	Alert                      *AlertConfig    `json:"alert,omitempty"`               // 端点故障告警配置
-	Cache                      *CacheConfig    `json:"cache,omitempty"`               // 请求缓存配置
-	WebDAV                     *WebDAVConfig   `json:"webdav,omitempty"`              // WebDAV synchronization config
-	Backup                     *BackupConfig   `json:"backup,omitempty"`              // Backup/sync configuration
-	Proxy                      *ProxyConfig    `json:"proxy,omitempty"`               // HTTP proxy config
+	Alert                      *AlertConfig      `json:"alert,omitempty"`               // 端点故障告警配置
+	Cache                      *CacheConfig      `json:"cache,omitempty"`               // 请求缓存配置
+	RateLimit                  *RateLimitConfig  `json:"rateLimit,omitempty"`           // 速率限制配置
+	WebDAV                     *WebDAVConfig     `json:"webdav,omitempty"`              // WebDAV synchronization config
+	Backup                     *BackupConfig     `json:"backup,omitempty"`              // Backup/sync configuration
+	Proxy                      *ProxyConfig      `json:"proxy,omitempty"`               // HTTP proxy config
 	mu                         sync.RWMutex
 }
 
@@ -185,6 +193,16 @@ func (c *Config) CopyFrom(other *Config) {
 		}
 	} else {
 		c.Cache = nil
+	}
+
+	if other.RateLimit != nil {
+		c.RateLimit = &RateLimitConfig{
+			Enabled:          other.RateLimit.Enabled,
+			GlobalLimit:      other.RateLimit.GlobalLimit,
+			PerEndpointLimit: other.RateLimit.PerEndpointLimit,
+		}
+	} else {
+		c.RateLimit = nil
 	}
 }
 
@@ -593,6 +611,28 @@ func (c *Config) UpdateCache(cache *CacheConfig) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Cache = cache
+}
+
+// GetRateLimit returns the rate limit configuration (thread-safe)
+// Returns default config if not set
+func (c *Config) GetRateLimit() *RateLimitConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.RateLimit == nil {
+		return &RateLimitConfig{
+			Enabled:          false,
+			GlobalLimit:      60,
+			PerEndpointLimit: 30,
+		}
+	}
+	return c.RateLimit
+}
+
+// UpdateRateLimit updates the rate limit configuration (thread-safe)
+func (c *Config) UpdateRateLimit(rateLimit *RateLimitConfig) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.RateLimit = rateLimit
 }
 
 // StorageAdapter defines the interface needed for loading/saving config

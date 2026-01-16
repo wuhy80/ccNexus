@@ -17,6 +17,7 @@ import (
 	"github.com/lich0821/ccNexus/internal/config"
 	"github.com/lich0821/ccNexus/internal/interaction"
 	"github.com/lich0821/ccNexus/internal/logger"
+	"github.com/lich0821/ccNexus/internal/ratelimit"
 )
 
 // requestCounter is used to generate unique request IDs for monitoring
@@ -50,6 +51,7 @@ type Proxy struct {
 	config           *config.Config
 	stats            *Stats
 	cache            *cache.Cache                 // 请求缓存
+	rateLimiter      *ratelimit.RateLimiter       // 速率限制器
 	currentIndex     int                          // Legacy: for backward compatibility
 	currentIndexByClient map[ClientType]int       // Per-client endpoint index
 	mu               sync.RWMutex
@@ -77,10 +79,19 @@ func New(cfg *config.Config, statsStorage StatsStorage, deviceID string) *Proxy 
 		reqCache = cache.New(false, 300, 1000) // 默认禁用
 	}
 
+	// 初始化速率限制器
+	var rateLimiter *ratelimit.RateLimiter
+	if cfg.RateLimit != nil {
+		rateLimiter = ratelimit.New(cfg.RateLimit.Enabled, cfg.RateLimit.GlobalLimit, cfg.RateLimit.PerEndpointLimit)
+	} else {
+		rateLimiter = ratelimit.New(false, 60, 30) // 默认禁用
+	}
+
 	return &Proxy{
 		config:              cfg,
 		stats:               stats,
 		cache:               reqCache,
+		rateLimiter:         rateLimiter,
 		currentIndex:        0,
 		currentIndexByClient: make(map[ClientType]int),
 		activeRequests:      make(map[string]bool),
@@ -128,6 +139,26 @@ func (p *Proxy) ClearCache() {
 // UpdateCacheConfig updates cache configuration
 func (p *Proxy) UpdateCacheConfig(enabled bool, ttlSeconds, maxEntries int) {
 	p.cache.UpdateConfig(enabled, ttlSeconds, maxEntries)
+}
+
+// GetRateLimiter returns the rate limiter instance
+func (p *Proxy) GetRateLimiter() *ratelimit.RateLimiter {
+	return p.rateLimiter
+}
+
+// GetRateLimitStats returns rate limit statistics
+func (p *Proxy) GetRateLimitStats() ratelimit.RateLimitStats {
+	return p.rateLimiter.GetStats()
+}
+
+// UpdateRateLimitConfig updates rate limit configuration
+func (p *Proxy) UpdateRateLimitConfig(enabled bool, globalLimit, perEndpointLimit int) {
+	p.rateLimiter.UpdateConfig(enabled, globalLimit, perEndpointLimit)
+}
+
+// ResetRateLimitStats resets rate limit statistics
+func (p *Proxy) ResetRateLimitStats() {
+	p.rateLimiter.Reset()
 }
 
 // Start starts the proxy server
@@ -622,10 +653,33 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 速率限制检查（在端点选择之前）
+	// 测试请求不受速率限制
+	specifiedEndpoint := r.Header.Get("X-CCNexus-Endpoint")
+	if specifiedEndpoint == "" && p.rateLimiter.IsEnabled() {
+		// 先获取当前端点名称用于检查
+		currentEndpoint := p.getCurrentEndpointForClient(clientType)
+		if currentEndpoint.Name != "" {
+			allowed, waitTime := p.rateLimiter.Allow(currentEndpoint.Name)
+			if !allowed {
+				logger.Warn("[RATELIMIT] Request rejected, wait: %v", waitTime)
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Retry-After", fmt.Sprintf("%.0f", waitTime.Seconds()))
+				w.WriteHeader(http.StatusTooManyRequests)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": map[string]interface{}{
+						"type":    "rate_limit_error",
+						"message": fmt.Sprintf("Rate limit exceeded. Please retry after %.0f seconds.", waitTime.Seconds()),
+					},
+				})
+				return
+			}
+		}
+	}
+
 	// Check if a specific endpoint is requested via header (used for testing)
 	// This must be checked BEFORE the enabled endpoints check, because test requests
 	// can target disabled endpoints
-	specifiedEndpoint := r.Header.Get("X-CCNexus-Endpoint")
 	var fixedEndpoint *config.Endpoint
 	if specifiedEndpoint != "" {
 		// For test requests, search in ALL endpoints (including disabled ones)

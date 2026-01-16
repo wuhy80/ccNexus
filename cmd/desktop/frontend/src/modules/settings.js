@@ -361,6 +361,43 @@ async function loadCurrentSettings() {
         if (cacheConfig.enabled) {
             refreshCacheStats();
         }
+
+        // Load rate limit config
+        const rateLimitConfigStr = await window.go.main.App.GetRateLimitConfig();
+        const rateLimitConfig = JSON.parse(rateLimitConfigStr);
+        const rateLimitEnabledCheckbox = document.getElementById('settingsRateLimitEnabled');
+        const rateLimitConfigDetails = document.getElementById('rateLimitConfigDetails');
+        const rateLimitGlobalSelect = document.getElementById('settingsRateLimitGlobal');
+        const rateLimitPerEndpointSelect = document.getElementById('settingsRateLimitPerEndpoint');
+
+        if (rateLimitEnabledCheckbox) {
+            rateLimitEnabledCheckbox.checked = rateLimitConfig.enabled;
+            // Show/hide details based on enabled state
+            if (rateLimitConfigDetails) {
+                rateLimitConfigDetails.style.display = rateLimitConfig.enabled ? 'block' : 'none';
+            }
+            // Add event listener for toggle
+            rateLimitEnabledCheckbox.onchange = function() {
+                if (rateLimitConfigDetails) {
+                    rateLimitConfigDetails.style.display = this.checked ? 'block' : 'none';
+                }
+                // Refresh rate limit stats when enabled
+                if (this.checked) {
+                    refreshRateLimitStats();
+                }
+            };
+        }
+        if (rateLimitGlobalSelect) {
+            rateLimitGlobalSelect.value = (rateLimitConfig.globalLimit || 60).toString();
+        }
+        if (rateLimitPerEndpointSelect) {
+            rateLimitPerEndpointSelect.value = (rateLimitConfig.perEndpointLimit || 30).toString();
+        }
+
+        // Load rate limit stats if enabled
+        if (rateLimitConfig.enabled) {
+            refreshRateLimitStats();
+        }
     } catch (error) {
         console.error('Failed to load settings:', error);
     }
@@ -507,6 +544,12 @@ export async function saveSettings() {
         const cacheMaxEntries = parseInt(document.getElementById('settingsCacheMaxEntries').value, 10);
         await window.go.main.App.SetCacheConfig(cacheEnabled, cacheTTL, cacheMaxEntries);
 
+        // Save rate limit config
+        const rateLimitEnabled = document.getElementById('settingsRateLimitEnabled').checked;
+        const rateLimitGlobal = parseInt(document.getElementById('settingsRateLimitGlobal').value, 10);
+        const rateLimitPerEndpoint = parseInt(document.getElementById('settingsRateLimitPerEndpoint').value, 10);
+        await window.go.main.App.SetRateLimitConfig(rateLimitEnabled, rateLimitGlobal, rateLimitPerEndpoint);
+
         // Get current config
         const configStr = await window.go.main.App.GetConfig();
         const config = JSON.parse(configStr);
@@ -633,3 +676,36 @@ export async function clearCache() {
 
 // 导出 clearCache 到 window 对象
 window.clearCache = clearCache;
+
+// 刷新速率限制统计
+async function refreshRateLimitStats() {
+    try {
+        const statsStr = await window.go.main.App.GetRateLimitStats();
+        const stats = JSON.parse(statsStr);
+
+        const rpmEl = document.getElementById('rateLimitStatRpm');
+        const allowedEl = document.getElementById('rateLimitStatAllowed');
+        const rejectedEl = document.getElementById('rateLimitStatRejected');
+
+        if (rpmEl) rpmEl.textContent = stats.currentGlobalRpm || 0;
+        if (allowedEl) allowedEl.textContent = stats.totalAllowed || 0;
+        if (rejectedEl) rejectedEl.textContent = stats.totalRejected || 0;
+    } catch (error) {
+        console.error('Failed to refresh rate limit stats:', error);
+    }
+}
+
+// 重置速率限制统计
+export async function resetRateLimitStats() {
+    try {
+        await window.go.main.App.ResetRateLimitStats();
+        await refreshRateLimitStats();
+        showNotification('Rate limit stats reset', 'success');
+    } catch (error) {
+        console.error('Failed to reset rate limit stats:', error);
+        showNotification('Failed to reset rate limit stats: ' + error, 'error');
+    }
+}
+
+// 导出 resetRateLimitStats 到 window 对象
+window.resetRateLimitStats = resetRateLimitStats;

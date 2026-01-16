@@ -666,6 +666,49 @@ func (a *App) ClearCache() {
 	}
 }
 
+// ========== Rate Limit Bindings ==========
+
+// GetRateLimitConfig 获取速率限制配置
+func (a *App) GetRateLimitConfig() string {
+	rateLimitConfig := a.config.GetRateLimit()
+	data, _ := json.Marshal(rateLimitConfig)
+	return string(data)
+}
+
+// SetRateLimitConfig 设置速率限制配置
+func (a *App) SetRateLimitConfig(enabled bool, globalLimit, perEndpointLimit int) error {
+	rateLimitConfig := &config.RateLimitConfig{
+		Enabled:          enabled,
+		GlobalLimit:      globalLimit,
+		PerEndpointLimit: perEndpointLimit,
+	}
+	a.config.UpdateRateLimit(rateLimitConfig)
+	// 更新代理速率限制配置
+	if a.proxy != nil {
+		a.proxy.UpdateRateLimitConfig(enabled, globalLimit, perEndpointLimit)
+	}
+	// Save to storage
+	configAdapter := storage.NewConfigStorageAdapter(a.storage)
+	return a.config.SaveToStorage(configAdapter)
+}
+
+// GetRateLimitStats 获取速率限制统计
+func (a *App) GetRateLimitStats() string {
+	if a.proxy == nil {
+		return "{}"
+	}
+	stats := a.proxy.GetRateLimitStats()
+	data, _ := json.Marshal(stats)
+	return string(data)
+}
+
+// ResetRateLimitStats 重置速率限制统计
+func (a *App) ResetRateLimitStats() {
+	if a.proxy != nil {
+		a.proxy.ResetRateLimitStats()
+	}
+}
+
 // ========== WebDAV Bindings ==========
 
 func (a *App) UpdateWebDAVConfig(url, username, password string) error {
