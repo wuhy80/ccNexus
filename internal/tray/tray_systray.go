@@ -1,5 +1,5 @@
-//go:build windows
-// +build windows
+//go:build windows || linux
+// +build windows linux
 
 package tray
 
@@ -18,7 +18,7 @@ var (
 	currentLang string
 )
 
-// Tray menu texts
+// menuTexts 定义托盘菜单的多语言文本
 var menuTexts = map[string]struct {
 	Show    string
 	ShowTip string
@@ -42,7 +42,7 @@ var menuTexts = map[string]struct {
 	},
 }
 
-// Setup initializes the system tray using energye/systray library
+// Setup 初始化系统托盘，使用 energye/systray 库
 func Setup(icon []byte, showFunc func(), hideFunc func(), quitFunc func(), language string) {
 	showWindow = showFunc
 	hideWindow = hideFunc
@@ -75,7 +75,7 @@ func onReady(icon []byte) {
 		}
 	})
 
-	// 设置右键事件 - 显示菜单（默认行为，可选）
+	// 设置右键事件 - 显示菜单
 	systray.SetOnRClick(func(menu systray.IMenu) {
 		menu.ShowMenu()
 	})
@@ -99,24 +99,27 @@ func onReady(icon []byte) {
 }
 
 func onExit() {
-	// cleanup if needed
+	// 清理资源（如需要）
 }
 
+// Quit 退出系统托盘
 func Quit() {
 	systray.Quit()
 }
 
-// UpdateLanguage updates the tray menu language
+// UpdateLanguage 更新托盘菜单语言
 func UpdateLanguage(language string) {
 	currentLang = language
-	if mShow != nil && mQuit != nil {
-		texts := getMenuTexts(language)
-		systray.SetTooltip(texts.Tooltip)
-		mShow.SetTitle(texts.Show)
-		mShow.SetTooltip(texts.ShowTip)
-		mQuit.SetTitle(texts.Quit)
-		mQuit.SetTooltip(texts.QuitTip)
+	if mShow == nil || mQuit == nil {
+		return
 	}
+
+	texts := getMenuTexts(language)
+	systray.SetTooltip(texts.Tooltip)
+	mShow.SetTitle(texts.Show)
+	mShow.SetTooltip(texts.ShowTip)
+	mQuit.SetTitle(texts.Quit)
+	mQuit.SetTooltip(texts.QuitTip)
 }
 
 func getMenuTexts(lang string) struct {

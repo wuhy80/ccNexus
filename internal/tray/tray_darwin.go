@@ -17,6 +17,8 @@ var (
 	quitApp    func()
 )
 
+// goShowWindow 由 Objective-C 代码调用，显示主窗口
+//
 //export goShowWindow
 func goShowWindow() {
 	if showWindow != nil {
@@ -24,6 +26,8 @@ func goShowWindow() {
 	}
 }
 
+// goHideWindow 由 Objective-C 代码调用，隐藏主窗口
+//
 //export goHideWindow
 func goHideWindow() {
 	if hideWindow != nil {
@@ -31,6 +35,8 @@ func goHideWindow() {
 	}
 }
 
+// goQuitApp 由 Objective-C 代码调用，退出应用程序
+//
 //export goQuitApp
 func goQuitApp() {
 	if quitApp != nil {
@@ -38,21 +44,27 @@ func goQuitApp() {
 	}
 }
 
-// Setup initializes the system tray using native macOS APIs
+// Setup 初始化系统托盘，使用原生 macOS API
 func Setup(icon []byte, showFunc func(), hideFunc func(), quitFunc func(), language string) {
 	showWindow = showFunc
 	hideWindow = hideFunc
 	quitApp = quitFunc
 
 	if len(icon) > 0 {
-		C.setupTray(unsafe.Pointer(&icon[0]), C.int(len(icon)))
+		cLang := C.CString(language)
+		defer C.free(unsafe.Pointer(cLang))
+		C.setupTray(unsafe.Pointer(&icon[0]), C.int(len(icon)), cLang)
 	}
 }
 
+// Quit 退出系统托盘
 func Quit() {
-	// Cleanup if needed
+	// 清理资源（如需要）
 }
 
+// UpdateLanguage 更新托盘菜单语言
 func UpdateLanguage(language string) {
-	// TODO: Implement native menu update for macOS
+	cLang := C.CString(language)
+	defer C.free(unsafe.Pointer(cLang))
+	C.updateTrayLanguage(cLang)
 }

@@ -3,11 +3,16 @@
 @interface TrayDelegate : NSObject
 @property (strong, nonatomic) NSStatusItem *statusItem;
 @property (strong, nonatomic) NSMenu *menu;
+@property (strong, nonatomic) NSMenuItem *showItem;
+@property (strong, nonatomic) NSMenuItem *quitItem;
+@property (copy, nonatomic) NSString *currentLang;
 @end
 
 @implementation TrayDelegate
 
-- (void)setupTray:(NSData *)iconData {
+- (void)setupTray:(NSData *)iconData language:(NSString *)lang {
+    self.currentLang = lang;
+
     dispatch_async(dispatch_get_main_queue(), ^{
         [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
 
@@ -20,15 +25,51 @@
 
         self.menu = [[NSMenu alloc] init];
 
-        NSMenuItem *quitItem = [[NSMenuItem alloc] initWithTitle:@"Quit | 退出"
-                                                          action:@selector(quitApp:)
-                                                   keyEquivalent:@""];
-        [quitItem setTarget:self];
-        [self.menu addItem:quitItem];
+        // 显示窗口菜单项
+        self.showItem = [[NSMenuItem alloc] initWithTitle:[self showTitle]
+                                                   action:@selector(showWindow:)
+                                            keyEquivalent:@""];
+        [self.showItem setTarget:self];
+        [self.menu addItem:self.showItem];
+
+        [self.menu addItem:[NSMenuItem separatorItem]];
+
+        // 退出菜单项
+        self.quitItem = [[NSMenuItem alloc] initWithTitle:[self quitTitle]
+                                                   action:@selector(quitApp:)
+                                            keyEquivalent:@""];
+        [self.quitItem setTarget:self];
+        [self.menu addItem:self.quitItem];
 
         [self.statusItem.button setTarget:self];
         [self.statusItem.button setAction:@selector(iconClicked:)];
         [[self.statusItem button] sendActionOn:NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp];
+    });
+}
+
+- (NSString *)showTitle {
+    if ([self.currentLang isEqualToString:@"zh-CN"]) {
+        return @"显示窗口";
+    }
+    return @"Show Window";
+}
+
+- (NSString *)quitTitle {
+    if ([self.currentLang isEqualToString:@"zh-CN"]) {
+        return @"退出程序";
+    }
+    return @"Quit";
+}
+
+- (void)updateLanguage:(NSString *)lang {
+    self.currentLang = lang;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.showItem != nil) {
+            [self.showItem setTitle:[self showTitle]];
+        }
+        if (self.quitItem != nil) {
+            [self.quitItem setTitle:[self quitTitle]];
+        }
     });
 }
 
@@ -45,6 +86,10 @@ extern void goQuitApp();
     }
 }
 
+- (void)showWindow:(id)sender {
+    goShowWindow();
+}
+
 - (void)quitApp:(id)sender {
     goQuitApp();
 }
@@ -53,11 +98,18 @@ extern void goQuitApp();
 
 static TrayDelegate *trayDelegate = nil;
 
-void setupTray(void *iconData, int iconLen) {
+void setupTray(void *iconData, int iconLen, const char *lang) {
     if (trayDelegate == nil) {
         trayDelegate = [[TrayDelegate alloc] init];
     }
     NSData *data = [NSData dataWithBytes:iconData length:iconLen];
-    [trayDelegate setupTray:data];
+    NSString *langStr = [NSString stringWithUTF8String:lang];
+    [trayDelegate setupTray:data language:langStr];
 }
 
+void updateTrayLanguage(const char *lang) {
+    if (trayDelegate != nil) {
+        NSString *langStr = [NSString stringWithUTF8String:lang];
+        [trayDelegate updateLanguage:langStr];
+    }
+}

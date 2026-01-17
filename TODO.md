@@ -70,10 +70,10 @@
 以下是代码中已存在的 TODO 注释：
 
 ### macOS 菜单更新
-- [ ] `internal/tray/tray_darwin.go:57` - Implement native menu update for macOS
+- [x] `internal/tray/tray_darwin.go` - 实现原生菜单更新和多语言支持
 
 ### Linux 托盘支持
-- [ ] `internal/tray/tray_other.go:7` - Implement for Linux using appropriate libraries
+- [x] `internal/tray/tray_linux.go` - 使用 energye/systray 库实现 Linux 托盘支持
 
 ### OpenAI Responses API 兼容性
 - [x] `internal/transformer/convert/claude_openai2.go:51` - max_output_tokens 参数兼容性处理
@@ -105,6 +105,12 @@
 - [x] 延迟增加比例告警（相比平均值增加超过指定百分比触发）
 - [x] 可配置告警冷却时间
 
+### 一键检测和端点优化 ✅
+- [x] 并发测试所有端点（包括禁用的）
+- [x] 自动将延迟最低的端点设为当前使用
+- [x] 自动启用检测成功的端点，禁用检测失败的端点
+- [x] 实时监控面板显示每个端点的检测时间和结果
+
 ### 导入/导出端点配置 ✅
 - [x] 导出端点配置为 JSON（支持导出当前客户端或全部端点）
 - [x] 从文件批量导入端点（支持跳过/覆盖/重命名三种模式）
@@ -128,6 +134,12 @@
 - [x] 自动主题支持两种模式：按时间切换、跟随系统
 - [x] 跟随系统模式实时响应系统主题变化
 
+### 系统托盘多语言支持 ✅
+- [x] macOS 原生托盘菜单多语言支持（显示窗口、退出）
+- [x] Linux 系统托盘支持（使用 energye/systray 库）
+- [x] Windows 系统托盘支持
+- [x] 托盘菜单语言动态切换
+
 ---
 
-*最后更新: 2026-01-16*
+*最后更新: 2026-01-17*
