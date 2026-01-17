@@ -1086,6 +1086,13 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			p.markRequestInactive(endpoint.Name)
 			// 记录配额使用量（智能路由）
 			p.recordQuotaUsage(endpoint.Name, string(clientType), usage)
+
+			// 实际请求成功时，将端点状态设置为可用
+			if endpoint.Status != config.EndpointStatusAvailable {
+				p.config.SetEndpointStatus(endpoint.Name, string(clientType), config.EndpointStatusAvailable)
+				logger.Info("Endpoint %s (client: %s) is now AVAILABLE (via successful request)", endpoint.Name, clientType)
+			}
+
 			if p.onEndpointSuccess != nil {
 				p.onEndpointSuccess(endpoint.Name, string(clientType))
 			}
@@ -1157,6 +1164,13 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 				p.markRequestInactive(endpoint.Name)
 				// 记录配额使用量（智能路由）
 				p.recordQuotaUsage(endpoint.Name, string(clientType), usage)
+
+				// 实际请求成功时，将端点状态设置为可用
+				if endpoint.Status != config.EndpointStatusAvailable {
+					p.config.SetEndpointStatus(endpoint.Name, string(clientType), config.EndpointStatusAvailable)
+					logger.Info("Endpoint %s (client: %s) is now AVAILABLE (via successful request)", endpoint.Name, clientType)
+				}
+
 				if p.onEndpointSuccess != nil {
 					p.onEndpointSuccess(endpoint.Name, string(clientType))
 				}

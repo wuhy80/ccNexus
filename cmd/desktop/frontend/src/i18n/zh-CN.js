@@ -862,6 +862,8 @@ export default {
         actionSetCurrent: '设为当前',
         actionEnabled: '已启用',
         actionDisabled: '已禁用',
+        priority: '优先级',
+        recent5min: '最近5分钟',
         phase: {
             waiting: '等待中',
             connecting: '连接中',

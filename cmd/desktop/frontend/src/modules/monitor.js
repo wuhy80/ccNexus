@@ -692,17 +692,40 @@ function renderEndpointHealth() {
             checkStatusClass = checkResult.success ? 'check-success' : 'check-failed';
         }
 
+        // 优先级显示
+        const priority = health.priority || 100;
+        const priorityClass = priority < 50 ? 'priority-high' : priority < 100 ? 'priority-medium' : 'priority-low';
+
+        // 5分钟统计
+        const recentSuccess = health.recentSuccess || 0;
+        const recentFailure = health.recentFailure || 0;
+        const recentTotal = recentSuccess + recentFailure;
+
         html += `
             <div class="endpoint-health-item ${statusClass}" data-endpoint-name="${escapeHtml(name)}">
                 <div class="health-status-indicator"></div>
-                <div class="health-info">
-                    <span class="health-endpoint-name">${escapeHtml(name)}</span>
-                    <span class="health-stats">
-                        ${health.activeCount > 0 ? `<span class="health-active">${health.activeCount} ${t('monitor.active')}</span><span class="health-divider">|</span>` : ''}
-                        <span>${successRate}</span>
-                        <span class="health-divider">|</span>
-                        <span>${avgTime}</span>
-                    </span>
+                <div class="health-main-info">
+                    <div class="health-header">
+                        <span class="health-endpoint-name">${escapeHtml(name)}</span>
+                        <span class="health-priority ${priorityClass}" title="${t('monitor.priority')}: ${priority}">P${priority}</span>
+                    </div>
+                    <div class="health-stats-row">
+                        <span class="health-stat-item">
+                            ${health.activeCount > 0 ? `<span class="health-active">${health.activeCount} ${t('monitor.active')}</span>` : ''}
+                            ${health.activeCount > 0 ? '<span class="health-divider">|</span>' : ''}
+                            <span class="health-success-rate">${successRate}</span>
+                            <span class="health-divider">|</span>
+                            <span class="health-latency">${avgTime}</span>
+                        </span>
+                    </div>
+                    ${recentTotal > 0 ? `
+                    <div class="health-recent-stats">
+                        <span class="recent-label">${t('monitor.recent5min')}:</span>
+                        <span class="recent-success">✓ ${recentSuccess}</span>
+                        <span class="recent-divider">/</span>
+                        <span class="recent-failure">✗ ${recentFailure}</span>
+                    </div>
+                    ` : ''}
                 </div>
                 <div class="health-check-info ${checkStatusClass}">
                     ${checkStatusIcon ? `<span class="check-status-icon">${checkStatusIcon}</span>` : ''}

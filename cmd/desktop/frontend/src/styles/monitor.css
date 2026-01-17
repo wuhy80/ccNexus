@@ -445,6 +445,83 @@
     color: var(--border-light);
 }
 
+/* 新增：端点健康状态的主信息区域 */
+.health-main-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+}
+
+.health-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.health-priority {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.priority-high {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.priority-medium {
+    background: rgba(251, 191, 36, 0.15);
+    color: #f59e0b;
+}
+
+.priority-low {
+    background: rgba(156, 163, 175, 0.15);
+    color: #6b7280;
+}
+
+.health-stats-row {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
+.health-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.health-recent-stats {
+    font-size: 10px;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-top: 2px;
+}
+
+.recent-label {
+    color: var(--text-secondary);
+}
+
+.recent-success {
+    color: #10b981;
+    font-weight: 500;
+}
+
+.recent-failure {
+    color: #ef4444;
+    font-weight: 500;
+}
+
+.recent-divider {
+    color: var(--border-light);
+}
+
 /* Recent Requests Panel */
 .recent-requests-panel {
     background: transparent;

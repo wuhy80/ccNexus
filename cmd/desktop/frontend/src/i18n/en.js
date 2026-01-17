@@ -862,6 +862,8 @@ export default {
         actionSetCurrent: 'Set as current',
         actionEnabled: 'Enabled',
         actionDisabled: 'Disabled',
+        priority: 'Priority',
+        recent5min: 'Last 5 min',
         phase: {
             waiting: 'Waiting',
             connecting: 'Connecting',

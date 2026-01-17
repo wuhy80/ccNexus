@@ -59,7 +59,32 @@ func (s *MonitorService) GetEndpointHealth() string {
 	// Get all enabled endpoint names
 	enabledEndpoints := s.getEnabledEndpointNames()
 
-	return toJSON(s.monitor.GetEndpointHealth(enabledEndpoints))
+	// Get health data from monitor
+	healthList := s.monitor.GetEndpointHealth(enabledEndpoints)
+
+	// Enrich with priority and recent stats from config
+	if s.config != nil {
+		endpoints := s.config.GetEndpoints()
+		endpointMap := make(map[string]config.Endpoint)
+		for _, ep := range endpoints {
+			endpointMap[ep.Name] = ep
+		}
+
+		// Get recent stats from monitor
+		recentStats := s.monitor.GetRecentStats()
+
+		for i := range healthList {
+			if ep, exists := endpointMap[healthList[i].EndpointName]; exists {
+				healthList[i].Priority = ep.Priority
+			}
+			if stats, exists := recentStats[healthList[i].EndpointName]; exists {
+				healthList[i].RecentSuccess = stats.SuccessCount
+				healthList[i].RecentFailure = stats.FailureCount
+			}
+		}
+	}
+
+	return toJSON(healthList)
 }
 
 // getEnabledEndpointNames returns names of all enabled endpoints

@@ -95,6 +95,16 @@ type Monitor struct {
 
 	// 端点检测结果存储
 	checkResults map[string]*EndpointCheckResult // endpointName -> 检测结果
+
+	// 最近5分钟的请求记录（用于统计）
+	recentRequests []recentRequestRecord // 按时间排序的请求记录
+}
+
+// recentRequestRecord 最近请求记录
+type recentRequestRecord struct {
+	endpointName string
+	timestamp    time.Time
+	success      bool
 }
 
 // NewMonitor creates a new Monitor instance
@@ -225,9 +235,39 @@ func (m *Monitor) CompleteRequest(requestID string, success bool, errorMsg strin
 	metric.TotalRequests++
 	if success {
 		metric.SuccessCount++
+
+		// 实际请求成功时，也更新检测结果（作为"活跃检测"）
+		latencyMs := responseTime * 1000 // 转换为毫秒
+		m.checkResults[endpointName] = &EndpointCheckResult{
+			EndpointName: endpointName,
+			LastCheckAt:  time.Now(),
+			Success:      true,
+			LatencyMs:    latencyMs,
+			ErrorMessage: "",
+		}
 	} else {
 		metric.LastError = errorMsg
 		metric.LastErrorTime = time.Now().UnixMilli()
+	}
+
+	// 记录到最近请求列表（用于5分钟统计）
+	m.recentRequests = append(m.recentRequests, recentRequestRecord{
+		endpointName: endpointName,
+		timestamp:    time.Now(),
+		success:      success,
+	})
+
+	// 清理超过5分钟的记录
+	fiveMinutesAgo := time.Now().Add(-5 * time.Minute)
+	validIdx := 0
+	for i, record := range m.recentRequests {
+		if record.timestamp.After(fiveMinutesAgo) {
+			validIdx = i
+			break
+		}
+	}
+	if validIdx > 0 {
+		m.recentRequests = m.recentRequests[validIdx:]
 	}
 
 	// Update rolling average response time
@@ -468,6 +508,9 @@ type EndpointHealth struct {
 	HealthCheckLatency float64 `json:"healthCheckLatency,omitempty"` // Health check latency in ms
 	LastError          string  `json:"lastError,omitempty"`
 	LastErrorTime      int64   `json:"lastErrorTime,omitempty"`
+	Priority           int     `json:"priority"`           // 端点优先级
+	RecentSuccess      int     `json:"recentSuccess"`      // 最近5分钟成功次数
+	RecentFailure      int     `json:"recentFailure"`      // 最近5分钟失败次数
 }
 
 // GetEndpointHealth returns health status for all specified endpoints
@@ -589,4 +632,34 @@ func (m *Monitor) GetCheckResult(endpointName string) *EndpointCheckResult {
 		}
 	}
 	return nil
+}
+
+// RecentStats 最近5分钟的统计信息
+type RecentStats struct {
+	SuccessCount int
+	FailureCount int
+}
+
+// GetRecentStats 获取所有端点最近5分钟的统计信息
+func (m *Monitor) GetRecentStats() map[string]RecentStats {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	stats := make(map[string]RecentStats)
+	fiveMinutesAgo := time.Now().Add(-5 * time.Minute)
+
+	// 统计每个端点的成功/失败次数
+	for _, record := range m.recentRequests {
+		if record.timestamp.After(fiveMinutesAgo) {
+			s := stats[record.endpointName]
+			if record.success {
+				s.SuccessCount++
+			} else {
+				s.FailureCount++
+			}
+			stats[record.endpointName] = s
+		}
+	}
+
+	return stats
 }
