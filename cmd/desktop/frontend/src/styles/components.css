@@ -698,32 +698,31 @@
     top: -1px;
 }
 
-/* Status badges - 三状态系统 */
+/* Status badges - 三状态系统(只显示图标) */
 .status-badge {
-    padding: 3px 7px;
-    border-radius: 4px;
-    font-size: 12px;
+    padding: 2px 4px;
+    border-radius: 50%;
+    font-size: 16px;
     font-weight: normal;
-    margin-left: 8px;
+    margin-left: 6px;
     vertical-align: middle;
     display: inline-block;
     position: relative;
     top: -1px;
+    cursor: help;
+    line-height: 1;
 }
 
 .status-available {
-    background: #10b981;
-    color: white;
+    color: #10b981;
 }
 
 .status-unavailable {
-    background: #f59e0b;
-    color: white;
+    color: #f59e0b;
 }
 
 .status-disabled {
-    background: #6b7280;
-    color: white;
+    color: #6b7280;
 }
 
 /* Disabled badge - 向后兼容 */

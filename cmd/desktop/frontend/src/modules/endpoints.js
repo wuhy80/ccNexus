@@ -333,14 +333,14 @@ export async function renderEndpoints(endpoints) {
             testStatusTip = t('endpoints.testTipFailed');
         }
 
-        // 确定状态显示
+        // 确定状态显示(只显示图标,鼠标悬停显示文字)
         let statusBadge = '';
         if (status === 'available') {
-            statusBadge = '<span class="status-badge status-available">' + t('endpoints.statusAvailable') + '</span>';
+            statusBadge = '<span class="status-badge status-available" title="' + t('endpoints.statusAvailable') + '">●</span>';
         } else if (status === 'unavailable') {
-            statusBadge = '<span class="status-badge status-unavailable">' + t('endpoints.statusUnavailable') + '</span>';
+            statusBadge = '<span class="status-badge status-unavailable" title="' + t('endpoints.statusUnavailable') + '">●</span>';
         } else if (status === 'disabled') {
-            statusBadge = '<span class="status-badge status-disabled">' + t('endpoints.statusDisabled') + '</span>';
+            statusBadge = '<span class="status-badge status-disabled" title="' + t('endpoints.statusDisabled') + '">●</span>';
         }
 
         item.innerHTML = `
@@ -663,14 +663,14 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
             testStatusTip = t('endpoints.testTipFailed');
         }
 
-        // 确定状态显示
+        // 确定状态显示(只显示图标,鼠标悬停显示文字)
         let statusBadge = '';
         if (status === 'available') {
-            statusBadge = '<span class="status-badge status-available">' + t('endpoints.statusAvailable') + '</span>';
+            statusBadge = '<span class="status-badge status-available" title="' + t('endpoints.statusAvailable') + '">●</span>';
         } else if (status === 'unavailable') {
-            statusBadge = '<span class="status-badge status-unavailable">' + t('endpoints.statusUnavailable') + '</span>';
+            statusBadge = '<span class="status-badge status-unavailable" title="' + t('endpoints.statusUnavailable') + '">●</span>';
         } else if (status === 'disabled') {
-            statusBadge = '<span class="status-badge status-disabled">' + t('endpoints.statusDisabled') + '</span>';
+            statusBadge = '<span class="status-badge status-disabled" title="' + t('endpoints.statusDisabled') + '">●</span>';
         }
 
         const item = document.createElement('div');
