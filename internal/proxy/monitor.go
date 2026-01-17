@@ -309,6 +309,17 @@ func (m *Monitor) GetEndpointMetrics() []EndpointMetric {
 	return metrics
 }
 
+// GetEndpointMetric returns metrics for a single endpoint
+func (m *Monitor) GetEndpointMetric(endpointName string) *EndpointMetric {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if metric, exists := m.endpointMetrics[endpointName]; exists {
+		return metric.clone()
+	}
+	return nil
+}
+
 // ResetMetrics resets all endpoint metrics (but keeps active requests)
 func (m *Monitor) ResetMetrics() {
 	m.mu.Lock()

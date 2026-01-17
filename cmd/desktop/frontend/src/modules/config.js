@@ -34,12 +34,16 @@ export async function updatePort(port) {
     await window.go.main.App.UpdatePort(port);
 }
 
-export async function addEndpoint(clientType, name, url, key, transformer, model, remark, tags) {
-    await window.go.main.App.AddEndpoint(clientType, name, url, key, transformer, model, remark || '', tags || '');
+export async function addEndpoint(clientType, name, url, key, transformer, model, remark, tags,
+    modelPatterns, costPerInputToken, costPerOutputToken, quotaLimit, quotaResetCycle, priority) {
+    await window.go.main.App.AddEndpoint(clientType, name, url, key, transformer, model, remark || '', tags || '',
+        modelPatterns || '', costPerInputToken || 0, costPerOutputToken || 0, quotaLimit || 0, quotaResetCycle || '', priority || 100);
 }
 
-export async function updateEndpoint(clientType, index, name, url, key, transformer, model, remark, tags) {
-    await window.go.main.App.UpdateEndpoint(clientType, index, name, url, key, transformer, model, remark || '', tags || '');
+export async function updateEndpoint(clientType, index, name, url, key, transformer, model, remark, tags,
+    modelPatterns, costPerInputToken, costPerOutputToken, quotaLimit, quotaResetCycle, priority) {
+    await window.go.main.App.UpdateEndpoint(clientType, index, name, url, key, transformer, model, remark || '', tags || '',
+        modelPatterns || '', costPerInputToken || 0, costPerOutputToken || 0, quotaLimit || 0, quotaResetCycle || '', priority || 100);
 }
 
 export async function removeEndpoint(clientType, index) {

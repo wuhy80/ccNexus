@@ -673,6 +673,50 @@ export function initUI() {
                         <input type="text" id="endpointTags" placeholder="${t('modal.tagsPlaceholder')}">
                         <p class="form-help">${t('modal.tagsHelp')}</p>
                     </div>
+
+                    <!-- 智能路由高级设置 -->
+                    <div class="form-section-divider" onclick="window.toggleRoutingSettings()">
+                        <span class="divider-label">${t('modal.routingSettings') || '智能路由设置'}</span>
+                        <span class="divider-icon" id="routingSettingsIcon">▶</span>
+                    </div>
+                    <div id="routingSettingsPanel" class="routing-settings-panel" style="display: none;">
+                        <div class="form-group">
+                            <label>${t('modal.modelPatterns') || '模型匹配模式'}</label>
+                            <input type="text" id="endpointModelPatterns" placeholder="${t('modal.modelPatternsPlaceholder') || 'claude-*,gpt-4*'}">
+                            <p class="form-help">${t('modal.modelPatternsHelp') || '逗号分隔，支持通配符 * 如 claude-*,gpt-4*'}</p>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group form-group-half">
+                                <label>${t('modal.costPerInputToken') || '输入成本 ($/M)'}</label>
+                                <input type="number" id="endpointCostInput" step="0.01" min="0" placeholder="0.00">
+                                <p class="form-help">${t('modal.costHelp') || '每百万 Token 美元'}</p>
+                            </div>
+                            <div class="form-group form-group-half">
+                                <label>${t('modal.costPerOutputToken') || '输出成本 ($/M)'}</label>
+                                <input type="number" id="endpointCostOutput" step="0.01" min="0" placeholder="0.00">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group form-group-half">
+                                <label>${t('modal.quotaLimit') || 'Token 配额'}</label>
+                                <input type="number" id="endpointQuotaLimit" min="0" placeholder="${t('modal.quotaUnlimited') || '0 = 无限制'}">
+                            </div>
+                            <div class="form-group form-group-half">
+                                <label>${t('modal.quotaResetCycle') || '重置周期'}</label>
+                                <select id="endpointQuotaResetCycle">
+                                    <option value="">${t('modal.quotaNever') || '不重置'}</option>
+                                    <option value="daily">${t('modal.quotaDaily') || '每日'}</option>
+                                    <option value="weekly">${t('modal.quotaWeekly') || '每周'}</option>
+                                    <option value="monthly">${t('modal.quotaMonthly') || '每月'}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>${t('modal.priority') || '优先级'}</label>
+                            <input type="number" id="endpointPriority" min="1" max="999" placeholder="100">
+                            <p class="form-help">${t('modal.priorityHelp') || '数字越小优先级越高，默认100'}</p>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="window.closeModal()">${t('modal.cancel')}</button>
@@ -1130,6 +1174,51 @@ export function initUI() {
                         </div>
                         <p style="color: #666; font-size: 12px; margin-top: 5px;">
                             ${t('settings.rateLimitConfigHelp')}
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label>${t('settings.routingConfig')}</label>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                            <span style="font-size: 13px; color: var(--text-secondary);">${t('settings.routingEnabled')}</span>
+                            <label class="toggle-switch" style="width: 40px; height: 20px; margin-top: 7px;">
+                                <input type="checkbox" id="settingsRoutingEnabled">
+                                <span class="toggle-slider" style="border-radius: 20px;"></span>
+                            </label>
+                        </div>
+                        <div id="routingConfigDetails" style="display: none; padding: 10px; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                <input type="checkbox" id="settingsModelRouting">
+                                <span style="font-size: 13px;">${t('settings.modelRouting')}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                <input type="checkbox" id="settingsLoadBalance">
+                                <span style="font-size: 13px;">${t('settings.loadBalance')}</span>
+                            </div>
+                            <div id="loadBalanceAlgorithmContainer" style="margin-left: 24px; margin-bottom: 10px; display: none;">
+                                <label style="font-size: 12px;">${t('settings.loadBalanceAlgorithm')}</label>
+                                <select id="settingsLoadBalanceAlgorithm" style="width: 100%; margin-top: 5px;">
+                                    <option value="fastest">${t('settings.loadBalanceAlgorithms.fastest')}</option>
+                                    <option value="weighted">${t('settings.loadBalanceAlgorithms.weighted')}</option>
+                                    <option value="round_robin">${t('settings.loadBalanceAlgorithms.roundRobin')}</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                <input type="checkbox" id="settingsCostPriority">
+                                <span style="font-size: 13px;">${t('settings.costPriority')}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                <input type="checkbox" id="settingsQuotaRouting">
+                                <span style="font-size: 13px;">${t('settings.quotaRouting')}</span>
+                            </div>
+                            <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color);">
+                                <label style="font-size: 13px; margin-bottom: 8px; display: block;">${t('settings.quotaStatus')}</label>
+                                <div id="quotaStatusDisplay" style="font-size: 12px; max-height: 150px; overflow-y: auto;">
+                                    <p style="color: var(--text-secondary);">${t('settings.quotaStatusLoading')}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                            ${t('settings.routingConfigHelp')}
                         </p>
                     </div>
                 </div>

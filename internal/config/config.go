@@ -17,6 +17,14 @@ type Endpoint struct {
 	Model       string `json:"model,omitempty"`       // Target model name for non-Claude APIs
 	Remark      string `json:"remark,omitempty"`      // Optional remark for the endpoint
 	Tags        string `json:"tags,omitempty"`        // Comma-separated tags for grouping/filtering
+
+	// 智能路由相关字段
+	ModelPatterns      string  `json:"modelPatterns,omitempty"`      // 模型匹配模式，逗号分隔，支持通配符如 claude-*,gpt-4*
+	CostPerInputToken  float64 `json:"costPerInputToken,omitempty"`  // 每百万输入 Token 成本（美元）
+	CostPerOutputToken float64 `json:"costPerOutputToken,omitempty"` // 每百万输出 Token 成本（美元）
+	QuotaLimit         int64   `json:"quotaLimit,omitempty"`         // Token 配额限制，0 表示无限制
+	QuotaResetCycle    string  `json:"quotaResetCycle,omitempty"`    // 配额重置周期：daily/weekly/monthly/never
+	Priority           int     `json:"priority,omitempty"`           // 优先级，数字越小优先级越高，默认100
 }
 
 // WebDAVConfig represents WebDAV synchronization configuration
@@ -87,27 +95,28 @@ type RateLimitConfig struct {
 
 // Config represents the application configuration
 type Config struct {
-	Port                       int             `json:"port"`
-	Endpoints                  []Endpoint      `json:"endpoints"`
-	LogLevel                   int             `json:"logLevel"`                      // 0=DEBUG, 1=INFO, 2=WARN, 3=ERROR
-	Language                   string          `json:"language"`                      // UI language: en, zh-CN
-	Theme                      string          `json:"theme"`                         // UI theme: light, dark
-	ThemeAuto                  bool            `json:"themeAuto"`                     // Auto switch theme based on time
-	AutoThemeMode              string          `json:"autoThemeMode,omitempty"`       // Auto theme mode: time, system (default: time)
-	AutoLightTheme             string          `json:"autoLightTheme,omitempty"`      // Theme to use in daytime when auto mode is on
-	AutoDarkTheme              string          `json:"autoDarkTheme,omitempty"`       // Theme to use in nighttime when auto mode is on
-	WindowWidth                int             `json:"windowWidth"`                   // Window width in pixels
-	WindowHeight               int             `json:"windowHeight"`                  // Window height in pixels
-	CloseWindowBehavior        string          `json:"closeWindowBehavior,omitempty"` // "quit", "minimize", "ask"
-	HealthCheckInterval        int             `json:"healthCheckInterval"`           // Health check interval in seconds, 0 to disable
-	HealthHistoryRetentionDays int             `json:"healthHistoryRetentionDays"`    // Health history retention days, default 7
-	RequestTimeout             int             `json:"requestTimeout"`                // Request timeout in seconds, 0 for default (300s)
-	Alert                      *AlertConfig      `json:"alert,omitempty"`               // 端点故障告警配置
-	Cache                      *CacheConfig      `json:"cache,omitempty"`               // 请求缓存配置
-	RateLimit                  *RateLimitConfig  `json:"rateLimit,omitempty"`           // 速率限制配置
-	WebDAV                     *WebDAVConfig     `json:"webdav,omitempty"`              // WebDAV synchronization config
-	Backup                     *BackupConfig     `json:"backup,omitempty"`              // Backup/sync configuration
-	Proxy                      *ProxyConfig      `json:"proxy,omitempty"`               // HTTP proxy config
+	Port                       int              `json:"port"`
+	Endpoints                  []Endpoint       `json:"endpoints"`
+	LogLevel                   int              `json:"logLevel"`                      // 0=DEBUG, 1=INFO, 2=WARN, 3=ERROR
+	Language                   string           `json:"language"`                      // UI language: en, zh-CN
+	Theme                      string           `json:"theme"`                         // UI theme: light, dark
+	ThemeAuto                  bool             `json:"themeAuto"`                     // Auto switch theme based on time
+	AutoThemeMode              string           `json:"autoThemeMode,omitempty"`       // Auto theme mode: time, system (default: time)
+	AutoLightTheme             string           `json:"autoLightTheme,omitempty"`      // Theme to use in daytime when auto mode is on
+	AutoDarkTheme              string           `json:"autoDarkTheme,omitempty"`       // Theme to use in nighttime when auto mode is on
+	WindowWidth                int              `json:"windowWidth"`                   // Window width in pixels
+	WindowHeight               int              `json:"windowHeight"`                  // Window height in pixels
+	CloseWindowBehavior        string           `json:"closeWindowBehavior,omitempty"` // "quit", "minimize", "ask"
+	HealthCheckInterval        int              `json:"healthCheckInterval"`           // Health check interval in seconds, 0 to disable
+	HealthHistoryRetentionDays int              `json:"healthHistoryRetentionDays"`    // Health history retention days, default 7
+	RequestTimeout             int              `json:"requestTimeout"`                // Request timeout in seconds, 0 for default (300s)
+	Alert                      *AlertConfig     `json:"alert,omitempty"`               // 端点故障告警配置
+	Cache                      *CacheConfig     `json:"cache,omitempty"`               // 请求缓存配置
+	RateLimit                  *RateLimitConfig `json:"rateLimit,omitempty"`           // 速率限制配置
+	Routing                    *RoutingConfig   `json:"routing,omitempty"`             // 智能路由配置
+	WebDAV                     *WebDAVConfig    `json:"webdav,omitempty"`              // WebDAV synchronization config
+	Backup                     *BackupConfig    `json:"backup,omitempty"`              // Backup/sync configuration
+	Proxy                      *ProxyConfig     `json:"proxy,omitempty"`               // HTTP proxy config
 	mu                         sync.RWMutex
 }
 
@@ -210,6 +219,18 @@ func (c *Config) CopyFrom(other *Config) {
 		}
 	} else {
 		c.RateLimit = nil
+	}
+
+	if other.Routing != nil {
+		c.Routing = &RoutingConfig{
+			EnableModelRouting:   other.Routing.EnableModelRouting,
+			EnableLoadBalance:    other.Routing.EnableLoadBalance,
+			EnableCostPriority:   other.Routing.EnableCostPriority,
+			EnableQuotaRouting:   other.Routing.EnableQuotaRouting,
+			LoadBalanceAlgorithm: other.Routing.LoadBalanceAlgorithm,
+		}
+	} else {
+		c.Routing = nil
 	}
 }
 
@@ -739,6 +760,14 @@ type StorageEndpoint struct {
 	Remark      string
 	Tags        string
 	SortOrder   int
+
+	// 智能路由相关字段
+	ModelPatterns      string
+	CostPerInputToken  float64
+	CostPerOutputToken float64
+	QuotaLimit         int64
+	QuotaResetCycle    string
+	Priority           int
 }
 
 // LoadFromStorage loads configuration from SQLite storage
@@ -759,18 +788,28 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 			clientType = "claude"
 		}
 		endpoint := Endpoint{
-			Name:        ep.Name,
-			ClientType:  clientType,
-			APIUrl:      ep.APIUrl,
-			APIKey:      ep.APIKey,
-			Enabled:     ep.Enabled,
-			Transformer: ep.Transformer,
-			Model:       ep.Model,
-			Remark:      ep.Remark,
-			Tags:        ep.Tags,
+			Name:               ep.Name,
+			ClientType:         clientType,
+			APIUrl:             ep.APIUrl,
+			APIKey:             ep.APIKey,
+			Enabled:            ep.Enabled,
+			Transformer:        ep.Transformer,
+			Model:              ep.Model,
+			Remark:             ep.Remark,
+			Tags:               ep.Tags,
+			ModelPatterns:      ep.ModelPatterns,
+			CostPerInputToken:  ep.CostPerInputToken,
+			CostPerOutputToken: ep.CostPerOutputToken,
+			QuotaLimit:         ep.QuotaLimit,
+			QuotaResetCycle:    ep.QuotaResetCycle,
+			Priority:           ep.Priority,
 		}
 		if endpoint.Transformer == "" {
 			endpoint.Transformer = "claude"
+		}
+		// 默认优先级为 100
+		if endpoint.Priority == 0 {
+			endpoint.Priority = 100
 		}
 		config.Endpoints = append(config.Endpoints, endpoint)
 	}
@@ -969,6 +1008,25 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 		}
 	}
 
+	// Load routing config
+	if enableModelRouting, err := storage.GetConfig("routing_enableModelRouting"); err == nil && enableModelRouting != "" {
+		config.Routing = &RoutingConfig{
+			EnableModelRouting: enableModelRouting == "true",
+		}
+		if enableLoadBalance, err := storage.GetConfig("routing_enableLoadBalance"); err == nil && enableLoadBalance != "" {
+			config.Routing.EnableLoadBalance = enableLoadBalance == "true"
+		}
+		if enableCostPriority, err := storage.GetConfig("routing_enableCostPriority"); err == nil && enableCostPriority != "" {
+			config.Routing.EnableCostPriority = enableCostPriority == "true"
+		}
+		if enableQuotaRouting, err := storage.GetConfig("routing_enableQuotaRouting"); err == nil && enableQuotaRouting != "" {
+			config.Routing.EnableQuotaRouting = enableQuotaRouting == "true"
+		}
+		if loadBalanceAlgorithm, err := storage.GetConfig("routing_loadBalanceAlgorithm"); err == nil && loadBalanceAlgorithm != "" {
+			config.Routing.LoadBalanceAlgorithm = loadBalanceAlgorithm
+		}
+	}
+
 	return config, nil
 }
 
@@ -1001,16 +1059,22 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 			clientType = "claude"
 		}
 		endpoint := &StorageEndpoint{
-			Name:        ep.Name,
-			ClientType:  clientType,
-			APIUrl:      ep.APIUrl,
-			APIKey:      ep.APIKey,
-			Enabled:     ep.Enabled,
-			Transformer: ep.Transformer,
-			Model:       ep.Model,
-			Remark:      ep.Remark,
-			Tags:        ep.Tags,
-			SortOrder:   i, // Use array index as sort order
+			Name:               ep.Name,
+			ClientType:         clientType,
+			APIUrl:             ep.APIUrl,
+			APIKey:             ep.APIKey,
+			Enabled:            ep.Enabled,
+			Transformer:        ep.Transformer,
+			Model:              ep.Model,
+			Remark:             ep.Remark,
+			Tags:               ep.Tags,
+			SortOrder:          i, // Use array index as sort order
+			ModelPatterns:      ep.ModelPatterns,
+			CostPerInputToken:  ep.CostPerInputToken,
+			CostPerOutputToken: ep.CostPerOutputToken,
+			QuotaLimit:         ep.QuotaLimit,
+			QuotaResetCycle:    ep.QuotaResetCycle,
+			Priority:           ep.Priority,
 		}
 
 		key := clientType + ":" + ep.Name
@@ -1099,6 +1163,15 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 		storage.SetConfig("alert_notifyOnRecovery", strconv.FormatBool(c.Alert.NotifyOnRecovery))
 		storage.SetConfig("alert_systemNotification", strconv.FormatBool(c.Alert.SystemNotification))
 		storage.SetConfig("alert_cooldownMinutes", strconv.Itoa(c.Alert.AlertCooldownMinutes))
+	}
+
+	// Save routing config
+	if c.Routing != nil {
+		storage.SetConfig("routing_enableModelRouting", strconv.FormatBool(c.Routing.EnableModelRouting))
+		storage.SetConfig("routing_enableLoadBalance", strconv.FormatBool(c.Routing.EnableLoadBalance))
+		storage.SetConfig("routing_enableCostPriority", strconv.FormatBool(c.Routing.EnableCostPriority))
+		storage.SetConfig("routing_enableQuotaRouting", strconv.FormatBool(c.Routing.EnableQuotaRouting))
+		storage.SetConfig("routing_loadBalanceAlgorithm", c.Routing.LoadBalanceAlgorithm)
 	}
 
 	return nil

@@ -1886,3 +1886,66 @@
     }
 }
 
+/* Routing Settings Panel */
+.form-section-divider {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    margin: 15px -15px 0 -15px;
+    background: var(--bg-secondary, #f8f9fa);
+    border: 1px solid var(--border-color, #e9ecef);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+    user-select: none;
+}
+
+.form-section-divider:hover {
+    background: var(--hover-bg, #f0f0f0);
+}
+
+.form-section-divider .divider-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary, #666);
+}
+
+.form-section-divider .divider-icon {
+    font-size: 12px;
+    color: var(--text-secondary, #999);
+    transition: transform 0.3s;
+}
+
+.form-section-divider.expanded .divider-icon {
+    transform: rotate(90deg);
+}
+
+.routing-settings-panel {
+    margin: 10px -15px 0 -15px;
+    padding: 15px;
+    background: var(--bg-secondary, #f8f9fa);
+    border: 1px solid var(--border-color, #e9ecef);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+}
+
+.routing-settings-panel .form-group {
+    margin-bottom: 12px;
+}
+
+.routing-settings-panel .form-group:last-child {
+    margin-bottom: 0;
+}
+
+.form-group-half {
+    flex: 1;
+    min-width: 0;
+}
+
+.form-row {
+    display: flex;
+    gap: 15px;
+}
+
+

@@ -109,7 +109,8 @@ func normalizeAPIUrl(apiUrl string) string {
 }
 
 // AddEndpoint adds a new endpoint for a specific client type
-func (e *EndpointService) AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark, tags string) error {
+func (e *EndpointService) AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark, tags string,
+    modelPatterns string, costPerInputToken, costPerOutputToken float64, quotaLimit int64, quotaResetCycle string, priority int) error {
     clientType = normalizeClientType(clientType)
 
     endpoints := e.config.GetEndpointsByClient(clientType)
@@ -123,16 +124,27 @@ func (e *EndpointService) AddEndpoint(clientType, name, apiUrl, apiKey, transfor
 
     apiUrl = normalizeAPIUrl(apiUrl)
 
+    // 默认优先级
+    if priority <= 0 {
+        priority = 100
+    }
+
     newEndpoint := config.Endpoint{
-        Name:        name,
-        ClientType:  clientType,
-        APIUrl:      apiUrl,
-        APIKey:      apiKey,
-        Enabled:     true,
-        Transformer: transformer,
-        Model:       model,
-        Remark:      remark,
-        Tags:        tags,
+        Name:               name,
+        ClientType:         clientType,
+        APIUrl:             apiUrl,
+        APIKey:             apiKey,
+        Enabled:            true,
+        Transformer:        transformer,
+        Model:              model,
+        Remark:             remark,
+        Tags:               tags,
+        ModelPatterns:      modelPatterns,
+        CostPerInputToken:  costPerInputToken,
+        CostPerOutputToken: costPerOutputToken,
+        QuotaLimit:         quotaLimit,
+        QuotaResetCycle:    quotaResetCycle,
+        Priority:           priority,
     }
 
     // Get all endpoints and add the new one
@@ -208,7 +220,8 @@ func (e *EndpointService) RemoveEndpoint(clientType string, index int) error {
 }
 
 // UpdateEndpoint updates an endpoint by index for a specific client type
-func (e *EndpointService) UpdateEndpoint(clientType string, index int, name, apiUrl, apiKey, transformer, model, remark, tags string) error {
+func (e *EndpointService) UpdateEndpoint(clientType string, index int, name, apiUrl, apiKey, transformer, model, remark, tags string,
+    modelPatterns string, costPerInputToken, costPerOutputToken float64, quotaLimit int64, quotaResetCycle string, priority int) error {
     clientType = normalizeClientType(clientType)
 
     endpoints := e.config.GetEndpointsByClient(clientType)
@@ -233,16 +246,27 @@ func (e *EndpointService) UpdateEndpoint(clientType string, index int, name, api
 
     apiUrl = normalizeAPIUrl(apiUrl)
 
+    // 默认优先级
+    if priority <= 0 {
+        priority = 100
+    }
+
     updatedEndpoint := config.Endpoint{
-        Name:        name,
-        ClientType:  clientType,
-        APIUrl:      apiUrl,
-        APIKey:      apiKey,
-        Enabled:     enabled,
-        Transformer: transformer,
-        Model:       model,
-        Remark:      remark,
-        Tags:        tags,
+        Name:               name,
+        ClientType:         clientType,
+        APIUrl:             apiUrl,
+        APIKey:             apiKey,
+        Enabled:            enabled,
+        Transformer:        transformer,
+        Model:              model,
+        Remark:             remark,
+        Tags:               tags,
+        ModelPatterns:      modelPatterns,
+        CostPerInputToken:  costPerInputToken,
+        CostPerOutputToken: costPerOutputToken,
+        QuotaLimit:         quotaLimit,
+        QuotaResetCycle:    quotaResetCycle,
+        Priority:           priority,
     }
 
     // Update in all endpoints
@@ -1085,15 +1109,21 @@ func (e *EndpointService) fetchGeminiModels(apiUrl, apiKey string) ([]string, er
 
 // ExportEndpoint represents an endpoint for export (without sensitive data option)
 type ExportEndpoint struct {
-	Name        string `json:"name"`
-	ClientType  string `json:"clientType,omitempty"`
-	APIUrl      string `json:"apiUrl"`
-	APIKey      string `json:"apiKey,omitempty"`
-	Enabled     bool   `json:"enabled"`
-	Transformer string `json:"transformer,omitempty"`
-	Model       string `json:"model,omitempty"`
-	Remark      string `json:"remark,omitempty"`
-	Tags        string `json:"tags,omitempty"`
+	Name               string  `json:"name"`
+	ClientType         string  `json:"clientType,omitempty"`
+	APIUrl             string  `json:"apiUrl"`
+	APIKey             string  `json:"apiKey,omitempty"`
+	Enabled            bool    `json:"enabled"`
+	Transformer        string  `json:"transformer,omitempty"`
+	Model              string  `json:"model,omitempty"`
+	Remark             string  `json:"remark,omitempty"`
+	Tags               string  `json:"tags,omitempty"`
+	ModelPatterns      string  `json:"modelPatterns,omitempty"`
+	CostPerInputToken  float64 `json:"costPerInputToken,omitempty"`
+	CostPerOutputToken float64 `json:"costPerOutputToken,omitempty"`
+	QuotaLimit         int64   `json:"quotaLimit,omitempty"`
+	QuotaResetCycle    string  `json:"quotaResetCycle,omitempty"`
+	Priority           int     `json:"priority,omitempty"`
 }
 
 // ExportData represents the exported data structure
@@ -1114,14 +1144,20 @@ func (e *EndpointService) ExportEndpoints(clientType string, includeKeys bool) s
 	exportEndpoints := make([]ExportEndpoint, 0, len(endpoints))
 	for _, ep := range endpoints {
 		exportEp := ExportEndpoint{
-			Name:        ep.Name,
-			ClientType:  ep.ClientType,
-			APIUrl:      ep.APIUrl,
-			Enabled:     ep.Enabled,
-			Transformer: ep.Transformer,
-			Model:       ep.Model,
-			Remark:      ep.Remark,
-			Tags:        ep.Tags,
+			Name:               ep.Name,
+			ClientType:         ep.ClientType,
+			APIUrl:             ep.APIUrl,
+			Enabled:            ep.Enabled,
+			Transformer:        ep.Transformer,
+			Model:              ep.Model,
+			Remark:             ep.Remark,
+			Tags:               ep.Tags,
+			ModelPatterns:      ep.ModelPatterns,
+			CostPerInputToken:  ep.CostPerInputToken,
+			CostPerOutputToken: ep.CostPerOutputToken,
+			QuotaLimit:         ep.QuotaLimit,
+			QuotaResetCycle:    ep.QuotaResetCycle,
+			Priority:           ep.Priority,
 		}
 
 		if includeKeys {
@@ -1161,14 +1197,20 @@ func (e *EndpointService) ExportAllEndpoints(includeKeys bool) string {
 	exportEndpoints := make([]ExportEndpoint, 0, len(endpoints))
 	for _, ep := range endpoints {
 		exportEp := ExportEndpoint{
-			Name:        ep.Name,
-			ClientType:  ep.ClientType,
-			APIUrl:      ep.APIUrl,
-			Enabled:     ep.Enabled,
-			Transformer: ep.Transformer,
-			Model:       ep.Model,
-			Remark:      ep.Remark,
-			Tags:        ep.Tags,
+			Name:               ep.Name,
+			ClientType:         ep.ClientType,
+			APIUrl:             ep.APIUrl,
+			Enabled:            ep.Enabled,
+			Transformer:        ep.Transformer,
+			Model:              ep.Model,
+			Remark:             ep.Remark,
+			Tags:               ep.Tags,
+			ModelPatterns:      ep.ModelPatterns,
+			CostPerInputToken:  ep.CostPerInputToken,
+			CostPerOutputToken: ep.CostPerOutputToken,
+			QuotaLimit:         ep.QuotaLimit,
+			QuotaResetCycle:    ep.QuotaResetCycle,
+			Priority:           ep.Priority,
 		}
 
 		if includeKeys {
@@ -1272,7 +1314,8 @@ func (e *EndpointService) ImportEndpoints(jsonData string, mode string) string {
 				skipped++
 				continue
 			case "overwrite":
-				err := e.UpdateEndpoint(clientType, existingIndex, importEp.Name, importEp.APIUrl, importEp.APIKey, transformer, importEp.Model, importEp.Remark, importEp.Tags)
+				err := e.UpdateEndpoint(clientType, existingIndex, importEp.Name, importEp.APIUrl, importEp.APIKey, transformer, importEp.Model, importEp.Remark, importEp.Tags,
+					importEp.ModelPatterns, importEp.CostPerInputToken, importEp.CostPerOutputToken, importEp.QuotaLimit, importEp.QuotaResetCycle, importEp.Priority)
 				if err != nil {
 					errors = append(errors, fmt.Sprintf("Failed to update '%s': %v", importEp.Name, err))
 					skipped++
@@ -1306,7 +1349,8 @@ func (e *EndpointService) ImportEndpoints(jsonData string, mode string) string {
 			}
 		}
 
-		err := e.AddEndpoint(clientType, importEp.Name, importEp.APIUrl, importEp.APIKey, transformer, importEp.Model, importEp.Remark, importEp.Tags)
+		err := e.AddEndpoint(clientType, importEp.Name, importEp.APIUrl, importEp.APIKey, transformer, importEp.Model, importEp.Remark, importEp.Tags,
+			importEp.ModelPatterns, importEp.CostPerInputToken, importEp.CostPerOutputToken, importEp.QuotaLimit, importEp.QuotaResetCycle, importEp.Priority)
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("Failed to add '%s': %v", importEp.Name, err))
 			skipped++

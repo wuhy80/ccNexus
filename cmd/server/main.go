@@ -58,6 +58,9 @@ func main() {
     statsAdapter := storage.NewStatsStorageAdapter(sqliteStorage)
     p := proxy.New(cfg, statsAdapter, deviceID)
 
+    // 初始化智能路由器和配额跟踪器
+    p.SetupRouter(sqliteStorage)
+
     // Initialize health check service
     healthCheck := service.NewHealthCheckService(cfg, p.GetMonitor())
     healthCheck.Start()

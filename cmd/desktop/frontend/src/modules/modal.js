@@ -107,6 +107,17 @@ export function showAddEndpointModal() {
     document.getElementById('endpointModel').value = '';
     document.getElementById('endpointRemark').value = '';
     document.getElementById('endpointTags').value = '';
+    // 重置智能路由字段
+    document.getElementById('endpointModelPatterns').value = '';
+    document.getElementById('endpointCostInput').value = '';
+    document.getElementById('endpointCostOutput').value = '';
+    document.getElementById('endpointQuotaLimit').value = '';
+    document.getElementById('endpointQuotaResetCycle').value = '';
+    document.getElementById('endpointPriority').value = '';
+    // 折叠路由设置面板
+    document.getElementById('routingSettingsPanel').style.display = 'none';
+    document.getElementById('routingSettingsIcon').textContent = '▶';
+    document.querySelector('.form-section-divider')?.classList.remove('expanded');
     handleTransformerChange();
     document.getElementById('endpointModal').classList.add('active');
 }
@@ -131,6 +142,25 @@ export async function editEndpoint(index) {
     document.getElementById('endpointModel').value = ep.model || '';
     document.getElementById('endpointRemark').value = ep.remark || '';
     document.getElementById('endpointTags').value = ep.tags || '';
+    // 填充智能路由字段
+    document.getElementById('endpointModelPatterns').value = ep.modelPatterns || '';
+    document.getElementById('endpointCostInput').value = ep.costPerInputToken || '';
+    document.getElementById('endpointCostOutput').value = ep.costPerOutputToken || '';
+    document.getElementById('endpointQuotaLimit').value = ep.quotaLimit || '';
+    document.getElementById('endpointQuotaResetCycle').value = ep.quotaResetCycle || '';
+    document.getElementById('endpointPriority').value = ep.priority || '';
+    // 如果有路由字段值，展开面板
+    const hasRoutingSettings = ep.modelPatterns || ep.costPerInputToken || ep.costPerOutputToken ||
+                               ep.quotaLimit || ep.quotaResetCycle || (ep.priority && ep.priority !== 100);
+    if (hasRoutingSettings) {
+        document.getElementById('routingSettingsPanel').style.display = 'block';
+        document.getElementById('routingSettingsIcon').textContent = '▼';
+        document.querySelector('.form-section-divider')?.classList.add('expanded');
+    } else {
+        document.getElementById('routingSettingsPanel').style.display = 'none';
+        document.getElementById('routingSettingsIcon').textContent = '▶';
+        document.querySelector('.form-section-divider')?.classList.remove('expanded');
+    }
 
     handleTransformerChange();
     document.getElementById('endpointModal').classList.add('active');
@@ -144,6 +174,14 @@ export async function saveEndpoint() {
     const model = document.getElementById('endpointModel').value.trim();
     const remark = document.getElementById('endpointRemark').value.trim();
     const tags = document.getElementById('endpointTags').value.trim();
+
+    // 收集智能路由字段
+    const modelPatterns = document.getElementById('endpointModelPatterns').value.trim();
+    const costPerInputToken = parseFloat(document.getElementById('endpointCostInput').value) || 0;
+    const costPerOutputToken = parseFloat(document.getElementById('endpointCostOutput').value) || 0;
+    const quotaLimit = parseInt(document.getElementById('endpointQuotaLimit').value) || 0;
+    const quotaResetCycle = document.getElementById('endpointQuotaResetCycle').value;
+    const priority = parseInt(document.getElementById('endpointPriority').value) || 100;
 
     if (!name || !url || !key) {
         showError(t('modal.requiredFields'));
@@ -173,9 +211,11 @@ export async function saveEndpoint() {
 
     try {
         if (currentEditIndex === -1) {
-            await addEndpoint(clientType, name, url, key, transformer, model, remark, tags);
+            await addEndpoint(clientType, name, url, key, transformer, model, remark, tags,
+                modelPatterns, costPerInputToken, costPerOutputToken, quotaLimit, quotaResetCycle, priority);
         } else {
-            await updateEndpoint(clientType, currentEditIndex, name, url, key, transformer, model, remark, tags);
+            await updateEndpoint(clientType, currentEditIndex, name, url, key, transformer, model, remark, tags,
+                modelPatterns, costPerInputToken, costPerOutputToken, quotaLimit, quotaResetCycle, priority);
         }
 
         closeModal();
@@ -210,6 +250,23 @@ export async function deleteEndpoint(index) {
 
 export function closeModal() {
     document.getElementById('endpointModal').classList.remove('active');
+}
+
+// 切换路由设置面板的展开/折叠状态
+export function toggleRoutingSettings() {
+    const panel = document.getElementById('routingSettingsPanel');
+    const icon = document.getElementById('routingSettingsIcon');
+    const divider = document.querySelector('.form-section-divider');
+
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        icon.textContent = '▼';
+        divider?.classList.add('expanded');
+    } else {
+        panel.style.display = 'none';
+        icon.textContent = '▶';
+        divider?.classList.remove('expanded');
+    }
 }
 
 export function handleTransformerChange() {

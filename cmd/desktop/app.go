@@ -60,6 +60,7 @@ type App struct {
 	monitor     *service.MonitorService
 	healthCheck *service.HealthCheckService
 	cost        *service.CostService
+	routing     *service.RoutingService // 智能路由服务
 
 	// Interaction storage
 	interactionStorage *interaction.Storage
@@ -144,6 +145,9 @@ func (a *App) startup(ctx context.Context) {
 	statsAdapter := storage.NewStatsStorageAdapter(sqliteStorage)
 	a.proxy = proxy.New(cfg, statsAdapter, deviceID)
 
+	// 初始化智能路由器和配额跟踪器
+	a.proxy.SetupRouter(sqliteStorage)
+
 	a.proxy.SetOnEndpointSuccess(func(endpointName string, clientType string) {
 		runtime.EventsEmit(ctx, "endpoint:success", map[string]string{
 			"endpointName": endpointName,
@@ -178,6 +182,7 @@ func (a *App) startup(ctx context.Context) {
 	a.healthCheck.SetStorage(sqliteStorage)
 	a.healthCheck.SetDeviceID(deviceID)
 	a.cost = service.NewCostService(a.proxy, a.config)
+	a.routing = service.NewRoutingService(a.config, a.storage, a.proxy)
 
 	// 设置告警回调
 	a.healthCheck.SetAlertCallback(func(event service.AlertEvent) {
@@ -474,14 +479,18 @@ func (a *App) GetTokenTrendData(granularity, period, startTime, endTime string) 
 
 // ========== Endpoint Bindings ==========
 
-func (a *App) AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark, tags string) error {
-	return a.endpoint.AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark, tags)
+func (a *App) AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark, tags string,
+	modelPatterns string, costPerInputToken, costPerOutputToken float64, quotaLimit int64, quotaResetCycle string, priority int) error {
+	return a.endpoint.AddEndpoint(clientType, name, apiUrl, apiKey, transformer, model, remark, tags,
+		modelPatterns, costPerInputToken, costPerOutputToken, quotaLimit, quotaResetCycle, priority)
 }
 func (a *App) RemoveEndpoint(clientType string, index int) error {
 	return a.endpoint.RemoveEndpoint(clientType, index)
 }
-func (a *App) UpdateEndpoint(clientType string, index int, name, apiUrl, apiKey, transformer, model, remark, tags string) error {
-	return a.endpoint.UpdateEndpoint(clientType, index, name, apiUrl, apiKey, transformer, model, remark, tags)
+func (a *App) UpdateEndpoint(clientType string, index int, name, apiUrl, apiKey, transformer, model, remark, tags string,
+	modelPatterns string, costPerInputToken, costPerOutputToken float64, quotaLimit int64, quotaResetCycle string, priority int) error {
+	return a.endpoint.UpdateEndpoint(clientType, index, name, apiUrl, apiKey, transformer, model, remark, tags,
+		modelPatterns, costPerInputToken, costPerOutputToken, quotaLimit, quotaResetCycle, priority)
 }
 func (a *App) ToggleEndpoint(clientType string, index int, enabled bool) error {
 	return a.endpoint.ToggleEndpoint(clientType, index, enabled)
@@ -863,3 +872,46 @@ func (a *App) GetCostTrend(period string) string {
 	return a.cost.GetCostTrend(period)
 }
 func (a *App) GetPricingInfo() string { return a.cost.GetPricingInfo() }
+
+// ========== Routing Bindings ==========
+
+// GetRoutingConfig 获取路由配置
+func (a *App) GetRoutingConfig() string {
+	cfg := a.routing.GetRoutingConfig()
+	data, _ := json.Marshal(cfg)
+	return string(data)
+}
+
+// UpdateRoutingConfig 更新路由配置
+func (a *App) UpdateRoutingConfig(enableModelRouting, enableLoadBalance, enableCostPriority, enableQuotaRouting bool, loadBalanceAlgorithm string) error {
+	cfg := &config.RoutingConfig{
+		EnableModelRouting:   enableModelRouting,
+		EnableLoadBalance:    enableLoadBalance,
+		EnableCostPriority:   enableCostPriority,
+		EnableQuotaRouting:   enableQuotaRouting,
+		LoadBalanceAlgorithm: loadBalanceAlgorithm,
+	}
+	return a.routing.UpdateRoutingConfig(cfg)
+}
+
+// GetQuotaStatuses 获取所有端点的配额状态
+func (a *App) GetQuotaStatuses(clientType string) string {
+	statuses := a.routing.GetQuotaStatuses(clientType)
+	data, _ := json.Marshal(statuses)
+	return string(data)
+}
+
+// GetQuotaStatus 获取单个端点的配额状态
+func (a *App) GetQuotaStatus(endpointName, clientType string) string {
+	status := a.routing.GetQuotaStatus(endpointName, clientType)
+	if status == nil {
+		return "{}"
+	}
+	data, _ := json.Marshal(status)
+	return string(data)
+}
+
+// ResetQuota 重置端点配额
+func (a *App) ResetQuota(endpointName, clientType string) error {
+	return a.routing.ResetQuota(endpointName, clientType)
+}

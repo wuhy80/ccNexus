@@ -31,6 +31,10 @@ var safeConfigKeys = []string{
 	"backup_s3_useSSL", "backup_s3_forcePathStyle",
 	// 更新设置
 	"update_autoCheck", "update_checkInterval",
+	// 路由策略设置
+	"routing_enableModelRouting", "routing_enableLoadBalance",
+	"routing_enableCostPriority", "routing_enableQuotaRouting",
+	"routing_loadBalanceAlgorithm",
 }
 
 type SQLiteStorage struct {
@@ -128,6 +132,14 @@ func (s *SQLiteStorage) initSchema() error {
 	}
 
 	if err := s.migrateHealthHistory(); err != nil {
+		return err
+	}
+
+	if err := s.migrateRoutingFields(); err != nil {
+		return err
+	}
+
+	if err := s.migrateEndpointQuotas(); err != nil {
 		return err
 	}
 
@@ -545,7 +557,7 @@ func (s *SQLiteStorage) GetEndpoints() ([]Endpoint, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, COALESCE(tags, '') as tags, sort_order, created_at, updated_at FROM endpoints ORDER BY client_type, sort_order ASC`)
+	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, COALESCE(tags, '') as tags, sort_order, created_at, updated_at, COALESCE(model_patterns, '') as model_patterns, COALESCE(cost_per_input_token, 0) as cost_per_input_token, COALESCE(cost_per_output_token, 0) as cost_per_output_token, COALESCE(quota_limit, 0) as quota_limit, COALESCE(quota_reset_cycle, '') as quota_reset_cycle, COALESCE(priority, 100) as priority FROM endpoints ORDER BY client_type, sort_order ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -554,7 +566,7 @@ func (s *SQLiteStorage) GetEndpoints() ([]Endpoint, error) {
 	var endpoints []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.Tags, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.Tags, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt, &ep.ModelPatterns, &ep.CostPerInputToken, &ep.CostPerOutputToken, &ep.QuotaLimit, &ep.QuotaResetCycle, &ep.Priority); err != nil {
 			return nil, err
 		}
 		endpoints = append(endpoints, ep)
@@ -568,7 +580,7 @@ func (s *SQLiteStorage) GetEndpointsByClient(clientType string) ([]Endpoint, err
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, COALESCE(tags, '') as tags, sort_order, created_at, updated_at FROM endpoints WHERE COALESCE(client_type, 'claude') = ? ORDER BY sort_order ASC`, clientType)
+	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, COALESCE(tags, '') as tags, sort_order, created_at, updated_at, COALESCE(model_patterns, '') as model_patterns, COALESCE(cost_per_input_token, 0) as cost_per_input_token, COALESCE(cost_per_output_token, 0) as cost_per_output_token, COALESCE(quota_limit, 0) as quota_limit, COALESCE(quota_reset_cycle, '') as quota_reset_cycle, COALESCE(priority, 100) as priority FROM endpoints WHERE COALESCE(client_type, 'claude') = ? ORDER BY sort_order ASC`, clientType)
 	if err != nil {
 		return nil, err
 	}
@@ -577,7 +589,7 @@ func (s *SQLiteStorage) GetEndpointsByClient(clientType string) ([]Endpoint, err
 	var endpoints []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.Tags, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.Tags, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt, &ep.ModelPatterns, &ep.CostPerInputToken, &ep.CostPerOutputToken, &ep.QuotaLimit, &ep.QuotaResetCycle, &ep.Priority); err != nil {
 			return nil, err
 		}
 		endpoints = append(endpoints, ep)
@@ -596,8 +608,14 @@ func (s *SQLiteStorage) SaveEndpoint(ep *Endpoint) error {
 		clientType = "claude"
 	}
 
-	result, err := s.db.Exec(`INSERT INTO endpoints (name, client_type, api_url, api_key, enabled, transformer, model, remark, tags, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		ep.Name, clientType, ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.Tags, ep.SortOrder)
+	// Default priority to 100 if not specified
+	priority := ep.Priority
+	if priority == 0 {
+		priority = 100
+	}
+
+	result, err := s.db.Exec(`INSERT INTO endpoints (name, client_type, api_url, api_key, enabled, transformer, model, remark, tags, sort_order, model_patterns, cost_per_input_token, cost_per_output_token, quota_limit, quota_reset_cycle, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ep.Name, clientType, ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.Tags, ep.SortOrder, ep.ModelPatterns, ep.CostPerInputToken, ep.CostPerOutputToken, ep.QuotaLimit, ep.QuotaResetCycle, priority)
 	if err != nil {
 		return err
 	}
@@ -608,6 +626,7 @@ func (s *SQLiteStorage) SaveEndpoint(ep *Endpoint) error {
 	}
 	ep.ID = id
 	ep.ClientType = clientType
+	ep.Priority = priority
 	return nil
 }
 
@@ -621,8 +640,14 @@ func (s *SQLiteStorage) UpdateEndpoint(ep *Endpoint) error {
 		clientType = "claude"
 	}
 
-	_, err := s.db.Exec(`UPDATE endpoints SET api_url=?, api_key=?, enabled=?, transformer=?, model=?, remark=?, tags=?, sort_order=?, updated_at=CURRENT_TIMESTAMP WHERE name=? AND COALESCE(client_type, 'claude')=?`,
-		ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.Tags, ep.SortOrder, ep.Name, clientType)
+	// Default priority to 100 if not specified
+	priority := ep.Priority
+	if priority == 0 {
+		priority = 100
+	}
+
+	_, err := s.db.Exec(`UPDATE endpoints SET api_url=?, api_key=?, enabled=?, transformer=?, model=?, remark=?, tags=?, sort_order=?, model_patterns=?, cost_per_input_token=?, cost_per_output_token=?, quota_limit=?, quota_reset_cycle=?, priority=?, updated_at=CURRENT_TIMESTAMP WHERE name=? AND COALESCE(client_type, 'claude')=?`,
+		ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.Tags, ep.SortOrder, ep.ModelPatterns, ep.CostPerInputToken, ep.CostPerOutputToken, ep.QuotaLimit, ep.QuotaResetCycle, priority, ep.Name, clientType)
 	return err
 }
 
@@ -1731,4 +1756,212 @@ func (s *SQLiteStorage) GetAllEndpointTags() ([]string, error) {
 	}
 
 	return result, rows.Err()
+}
+
+// migrateRoutingFields adds routing-related columns to endpoints table
+func (s *SQLiteStorage) migrateRoutingFields() error {
+	// 检查并添加 model_patterns 列
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('endpoints') WHERE name='model_patterns'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		if _, err := s.db.Exec(`ALTER TABLE endpoints ADD COLUMN model_patterns TEXT DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+
+	// 检查并添加 cost_per_input_token 列
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('endpoints') WHERE name='cost_per_input_token'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		if _, err := s.db.Exec(`ALTER TABLE endpoints ADD COLUMN cost_per_input_token REAL DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+
+	// 检查并添加 cost_per_output_token 列
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('endpoints') WHERE name='cost_per_output_token'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		if _, err := s.db.Exec(`ALTER TABLE endpoints ADD COLUMN cost_per_output_token REAL DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+
+	// 检查并添加 quota_limit 列
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('endpoints') WHERE name='quota_limit'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		if _, err := s.db.Exec(`ALTER TABLE endpoints ADD COLUMN quota_limit INTEGER DEFAULT 0`); err != nil {
+			return err
+		}
+	}
+
+	// 检查并添加 quota_reset_cycle 列
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('endpoints') WHERE name='quota_reset_cycle'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		if _, err := s.db.Exec(`ALTER TABLE endpoints ADD COLUMN quota_reset_cycle TEXT DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+
+	// 检查并添加 priority 列
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('endpoints') WHERE name='priority'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		if _, err := s.db.Exec(`ALTER TABLE endpoints ADD COLUMN priority INTEGER DEFAULT 100`); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// migrateEndpointQuotas creates the endpoint_quotas table
+func (s *SQLiteStorage) migrateEndpointQuotas() error {
+	// 检查表是否存在
+	var tableName string
+	err := s.db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='endpoint_quotas'`).Scan(&tableName)
+
+	if err == sql.ErrNoRows {
+		schema := `
+		CREATE TABLE IF NOT EXISTS endpoint_quotas (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			endpoint_name TEXT NOT NULL,
+			client_type TEXT DEFAULT 'claude',
+			period_start DATETIME NOT NULL,
+			period_end DATETIME NOT NULL,
+			tokens_used INTEGER DEFAULT 0,
+			quota_limit INTEGER DEFAULT 0,
+			last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(endpoint_name, client_type, period_start)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_endpoint_quotas_name ON endpoint_quotas(endpoint_name, client_type);
+		CREATE INDEX IF NOT EXISTS idx_endpoint_quotas_period ON endpoint_quotas(period_end);
+		`
+
+		if _, err := s.db.Exec(schema); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetEndpointQuota gets the quota record for an endpoint
+func (s *SQLiteStorage) GetEndpointQuota(endpointName, clientType string) (*EndpointQuota, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	var quota EndpointQuota
+	var periodStartStr, periodEndStr, lastUpdatedStr string
+
+	err := s.db.QueryRow(`
+		SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type,
+			   period_start, period_end, tokens_used, quota_limit, last_updated
+		FROM endpoint_quotas
+		WHERE endpoint_name = ? AND COALESCE(client_type, 'claude') = ?
+		ORDER BY period_start DESC
+		LIMIT 1
+	`, endpointName, clientType).Scan(
+		&quota.ID, &quota.EndpointName, &quota.ClientType,
+		&periodStartStr, &periodEndStr, &quota.TokensUsed,
+		&quota.QuotaLimit, &lastUpdatedStr,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// 解析时间
+	formats := []string{
+		"2006-01-02 15:04:05.999999-07:00",
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05Z",
+		time.RFC3339,
+	}
+
+	for _, format := range formats {
+		if t, err := time.Parse(format, periodStartStr); err == nil {
+			quota.PeriodStart = t
+			break
+		}
+	}
+	for _, format := range formats {
+		if t, err := time.Parse(format, periodEndStr); err == nil {
+			quota.PeriodEnd = t
+			break
+		}
+	}
+	for _, format := range formats {
+		if t, err := time.Parse(format, lastUpdatedStr); err == nil {
+			quota.LastUpdated = t
+			break
+		}
+	}
+
+	return &quota, nil
+}
+
+// UpdateEndpointQuota updates or creates a quota record
+func (s *SQLiteStorage) UpdateEndpointQuota(quota *EndpointQuota) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	clientType := quota.ClientType
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	_, err := s.db.Exec(`
+		INSERT INTO endpoint_quotas (endpoint_name, client_type, period_start, period_end, tokens_used, quota_limit, last_updated)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(endpoint_name, client_type, period_start) DO UPDATE SET
+			tokens_used = excluded.tokens_used,
+			quota_limit = excluded.quota_limit,
+			last_updated = excluded.last_updated
+	`, quota.EndpointName, clientType, quota.PeriodStart, quota.PeriodEnd, quota.TokensUsed, quota.QuotaLimit, time.Now())
+
+	return err
+}
+
+// ResetExpiredQuotas resets quotas that have passed their period end
+func (s *SQLiteStorage) ResetExpiredQuotas() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// 删除过期的配额记录（保留最新的一条用于历史参考）
+	_, err := s.db.Exec(`
+		DELETE FROM endpoint_quotas
+		WHERE period_end < datetime('now')
+		AND id NOT IN (
+			SELECT MAX(id) FROM endpoint_quotas
+			GROUP BY endpoint_name, client_type
+		)
+	`)
+
+	return err
 }

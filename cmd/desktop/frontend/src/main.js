@@ -33,6 +33,7 @@ import {
     fetchModels,
     initModelInputEvents,
     toggleModelDropdown,
+    toggleRoutingSettings,
     showEditPortModal,
     savePort,
     closePortModal,
@@ -237,6 +238,7 @@ window.closeModal = closeModal;
 window.handleTransformerChange = handleTransformerChange;
 window.fetchModels = fetchModels;
 window.toggleModelDropdown = toggleModelDropdown;
+window.toggleRoutingSettings = toggleRoutingSettings;
 window.showEditPortModal = showEditPortModal;
 window.savePort = savePort;
 window.closePortModal = closePortModal;

@@ -16,6 +16,14 @@ type Endpoint struct {
 	SortOrder   int       `json:"sortOrder"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+
+	// 智能路由相关字段
+	ModelPatterns      string  `json:"modelPatterns"`      // 模型匹配模式，逗号分隔
+	CostPerInputToken  float64 `json:"costPerInputToken"`  // 每百万输入 Token 成本
+	CostPerOutputToken float64 `json:"costPerOutputToken"` // 每百万输出 Token 成本
+	QuotaLimit         int64   `json:"quotaLimit"`         // Token 配额限制
+	QuotaResetCycle    string  `json:"quotaResetCycle"`    // 配额重置周期
+	Priority           int     `json:"priority"`           // 优先级
 }
 
 type DailyStat struct {
@@ -86,6 +94,18 @@ type HealthHistoryRecord struct {
 	DeviceID     string    `json:"deviceId"`
 }
 
+// EndpointQuota 端点配额跟踪记录
+type EndpointQuota struct {
+	ID           int64     `json:"id"`
+	EndpointName string    `json:"endpointName"`
+	ClientType   string    `json:"clientType"`
+	PeriodStart  time.Time `json:"periodStart"`  // 当前周期开始时间
+	PeriodEnd    time.Time `json:"periodEnd"`    // 当前周期结束时间
+	TokensUsed   int64     `json:"tokensUsed"`   // 已使用 Token
+	QuotaLimit   int64     `json:"quotaLimit"`   // 配额限制
+	LastUpdated  time.Time `json:"lastUpdated"`
+}
+
 type Storage interface {
 	// Endpoints
 	GetEndpoints() ([]Endpoint, error)
@@ -114,6 +134,11 @@ type Storage interface {
 	GetHealthHistory(endpointName, clientType string, startTime, endTime time.Time, limit int) ([]HealthHistoryRecord, error)
 	CleanupOldHealthHistory(daysToKeep int) error
 	GetAllEndpointTags() ([]string, error)
+
+	// Quota（配额跟踪）
+	GetEndpointQuota(endpointName, clientType string) (*EndpointQuota, error)
+	UpdateEndpointQuota(quota *EndpointQuota) error
+	ResetExpiredQuotas() error
 
 	// Config
 	GetConfig(key string) (string, error)

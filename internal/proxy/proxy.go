@@ -18,6 +18,8 @@ import (
 	"github.com/lich0821/ccNexus/internal/interaction"
 	"github.com/lich0821/ccNexus/internal/logger"
 	"github.com/lich0821/ccNexus/internal/ratelimit"
+	"github.com/lich0821/ccNexus/internal/storage"
+	"github.com/lich0821/ccNexus/internal/transformer"
 )
 
 // requestCounter is used to generate unique request IDs for monitoring
@@ -65,6 +67,10 @@ type Proxy struct {
 	onEndpointRotated func(endpointName string, clientType string)   // callback when endpoint rotates
 	interactionStorage *interaction.Storage       // interaction recording storage
 	monitor          *Monitor                     // real-time request monitoring
+
+	// 智能路由相关
+	router           *Router                      // 智能路由选择器
+	quotaTracker     *QuotaTracker                // 配额跟踪器
 }
 
 // New creates a new Proxy instance
@@ -114,6 +120,33 @@ func (p *Proxy) SetOnEndpointRotated(callback func(endpointName string, clientTy
 // SetInteractionStorage sets the interaction storage for recording requests/responses
 func (p *Proxy) SetInteractionStorage(storage *interaction.Storage) {
 	p.interactionStorage = storage
+}
+
+// SetupRouter 初始化智能路由器和配额跟踪器
+// store: 用于配额持久化的存储接口
+func (p *Proxy) SetupRouter(store storage.Storage) {
+	p.quotaTracker = NewQuotaTracker(p.config, store)
+	p.router = NewRouter(p.config, p.monitor)
+}
+
+// GetRouter 获取路由器实例
+func (p *Proxy) GetRouter() *Router {
+	return p.router
+}
+
+// GetQuotaTracker 获取配额跟踪器实例
+func (p *Proxy) GetQuotaTracker() *QuotaTracker {
+	return p.quotaTracker
+}
+
+// UpdateRouterConfig 更新路由器配置（配置变更时调用）
+func (p *Proxy) UpdateRouterConfig(cfg *config.Config) {
+	if p.router != nil {
+		p.router.UpdateConfig(cfg)
+	}
+	if p.quotaTracker != nil {
+		p.quotaTracker.UpdateConfig(cfg)
+	}
 }
 
 // GetMonitor returns the monitor instance for real-time request tracking
@@ -264,6 +297,41 @@ func (p *Proxy) getCurrentEndpointForClient(clientType ClientType) config.Endpoi
 
 	index := p.currentIndexByClient[clientType] % len(endpoints)
 	return endpoints[index]
+}
+
+// selectEndpointForRequest 使用智能路由选择端点
+// 当路由器可用且启用路由策略时使用智能路由，否则回退到传统轮询
+func (p *Proxy) selectEndpointForRequest(clientType ClientType, requestModel string) config.Endpoint {
+	// 检查是否启用智能路由
+	if p.router != nil {
+		routingCfg := p.config.GetRoutingConfig()
+		// 只要启用了任一路由策略，就使用智能路由
+		if routingCfg.EnableModelRouting || routingCfg.EnableLoadBalance ||
+			routingCfg.EnableCostPriority || routingCfg.EnableQuotaRouting {
+			endpoint, err := p.router.SelectEndpoint(clientType, requestModel, p.quotaTracker)
+			if err == nil {
+				logger.Debug("[ROUTER:%s] Selected endpoint: %s (model: %s)", clientType, endpoint.Name, requestModel)
+				return endpoint
+			}
+			logger.Warn("[ROUTER:%s] Selection failed: %v, falling back to legacy", clientType, err)
+		}
+	}
+
+	// 回退到传统轮询逻辑
+	return p.getCurrentEndpointForClient(clientType)
+}
+
+// recordQuotaUsage 记录配额使用量（请求成功后调用）
+func (p *Proxy) recordQuotaUsage(endpointName, clientType string, usage transformer.TokenUsageDetail) {
+	if p.quotaTracker == nil {
+		return
+	}
+
+	// 计算总 Token 数（输入 + 输出）
+	totalTokens := int64(usage.TotalInputTokens() + usage.OutputTokens)
+	if totalTokens > 0 {
+		p.quotaTracker.RecordUsage(endpointName, clientType, totalTokens)
+	}
 }
 
 // markRequestActive marks an endpoint as having active requests
@@ -726,7 +794,8 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		if fixedEndpoint != nil {
 			endpoint = *fixedEndpoint
 		} else {
-			endpoint = p.getCurrentEndpointForClient(clientType)
+			// 使用智能路由选择端点（如果启用）
+			endpoint = p.selectEndpointForRequest(clientType, streamReq.Model)
 		}
 		if endpoint.Name == "" {
 			http.Error(w, fmt.Sprintf("No enabled endpoints available for client type: %s", clientType), http.StatusServiceUnavailable)
@@ -965,6 +1034,8 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 			p.monitor.CompleteRequest(monitorReqID, true, "")
 			p.markRequestInactive(endpoint.Name)
+			// 记录配额使用量（智能路由）
+			p.recordQuotaUsage(endpoint.Name, string(clientType), usage)
 			if p.onEndpointSuccess != nil {
 				p.onEndpointSuccess(endpoint.Name, string(clientType))
 			}
@@ -1034,6 +1105,8 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 				p.monitor.CompleteRequest(monitorReqID, true, "")
 				p.markRequestInactive(endpoint.Name)
+				// 记录配额使用量（智能路由）
+				p.recordQuotaUsage(endpoint.Name, string(clientType), usage)
 				if p.onEndpointSuccess != nil {
 					p.onEndpointSuccess(endpoint.Name, string(clientType))
 				}

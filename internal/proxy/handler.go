@@ -125,6 +125,14 @@ func (p *Proxy) UpdateConfig(cfg *config.Config) error {
 
 	p.config = cfg
 
+	// 更新路由器和配额跟踪器的配置引用
+	if p.router != nil {
+		p.router.UpdateConfig(cfg)
+	}
+	if p.quotaTracker != nil {
+		p.quotaTracker.UpdateConfig(cfg)
+	}
+
 	// Try to find the previous current endpoints in new config for each client type
 	for _, clientType := range []ClientType{ClientTypeClaude, ClientTypeGemini, ClientTypeCodex} {
 		newEndpoints := cfg.GetEnabledEndpointsByClient(string(clientType))

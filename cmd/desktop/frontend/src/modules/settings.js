@@ -424,6 +424,65 @@ async function loadCurrentSettings() {
         if (rateLimitConfig.enabled) {
             refreshRateLimitStats();
         }
+
+        // Load routing config
+        const routingConfigStr = await window.go.main.App.GetRoutingConfig();
+        const routingConfig = JSON.parse(routingConfigStr);
+        const routingEnabledCheckbox = document.getElementById('settingsRoutingEnabled');
+        const routingConfigDetails = document.getElementById('routingConfigDetails');
+        const modelRoutingCheckbox = document.getElementById('settingsModelRouting');
+        const loadBalanceCheckbox = document.getElementById('settingsLoadBalance');
+        const loadBalanceAlgorithmContainer = document.getElementById('loadBalanceAlgorithmContainer');
+        const loadBalanceAlgorithmSelect = document.getElementById('settingsLoadBalanceAlgorithm');
+        const costPriorityCheckbox = document.getElementById('settingsCostPriority');
+        const quotaRoutingCheckbox = document.getElementById('settingsQuotaRouting');
+
+        // 检查是否有任何路由策略启用
+        const hasAnyRouting = routingConfig.enableModelRouting || routingConfig.enableLoadBalance ||
+                              routingConfig.enableCostPriority || routingConfig.enableQuotaRouting;
+
+        if (routingEnabledCheckbox) {
+            routingEnabledCheckbox.checked = hasAnyRouting;
+            if (routingConfigDetails) {
+                routingConfigDetails.style.display = hasAnyRouting ? 'block' : 'none';
+            }
+            routingEnabledCheckbox.onchange = function() {
+                if (routingConfigDetails) {
+                    routingConfigDetails.style.display = this.checked ? 'block' : 'none';
+                }
+                if (this.checked) {
+                    refreshQuotaStatus();
+                }
+            };
+        }
+        if (modelRoutingCheckbox) {
+            modelRoutingCheckbox.checked = routingConfig.enableModelRouting || false;
+        }
+        if (loadBalanceCheckbox) {
+            loadBalanceCheckbox.checked = routingConfig.enableLoadBalance || false;
+            if (loadBalanceAlgorithmContainer) {
+                loadBalanceAlgorithmContainer.style.display = routingConfig.enableLoadBalance ? 'block' : 'none';
+            }
+            loadBalanceCheckbox.onchange = function() {
+                if (loadBalanceAlgorithmContainer) {
+                    loadBalanceAlgorithmContainer.style.display = this.checked ? 'block' : 'none';
+                }
+            };
+        }
+        if (loadBalanceAlgorithmSelect) {
+            loadBalanceAlgorithmSelect.value = routingConfig.loadBalanceAlgorithm || 'fastest';
+        }
+        if (costPriorityCheckbox) {
+            costPriorityCheckbox.checked = routingConfig.enableCostPriority || false;
+        }
+        if (quotaRoutingCheckbox) {
+            quotaRoutingCheckbox.checked = routingConfig.enableQuotaRouting || false;
+        }
+
+        // Load quota status if routing is enabled
+        if (hasAnyRouting) {
+            refreshQuotaStatus();
+        }
     } catch (error) {
         console.error('Failed to load settings:', error);
     }
@@ -581,6 +640,23 @@ export async function saveSettings() {
         const rateLimitGlobal = parseInt(document.getElementById('settingsRateLimitGlobal').value, 10);
         const rateLimitPerEndpoint = parseInt(document.getElementById('settingsRateLimitPerEndpoint').value, 10);
         await window.go.main.App.SetRateLimitConfig(rateLimitEnabled, rateLimitGlobal, rateLimitPerEndpoint);
+
+        // Save routing config
+        const routingEnabled = document.getElementById('settingsRoutingEnabled').checked;
+        const modelRouting = document.getElementById('settingsModelRouting').checked;
+        const loadBalance = document.getElementById('settingsLoadBalance').checked;
+        const loadBalanceAlgorithm = document.getElementById('settingsLoadBalanceAlgorithm').value;
+        const costPriority = document.getElementById('settingsCostPriority').checked;
+        const quotaRouting = document.getElementById('settingsQuotaRouting').checked;
+
+        // 如果路由未启用，则禁用所有策略
+        await window.go.main.App.UpdateRoutingConfig(
+            routingEnabled && modelRouting,
+            routingEnabled && loadBalance,
+            routingEnabled && costPriority,
+            routingEnabled && quotaRouting,
+            loadBalanceAlgorithm
+        );
 
         // Get current config
         const configStr = await window.go.main.App.GetConfig();
@@ -741,3 +817,51 @@ export async function resetRateLimitStats() {
 
 // 导出 resetRateLimitStats 到 window 对象
 window.resetRateLimitStats = resetRateLimitStats;
+
+// 刷新配额状态
+async function refreshQuotaStatus() {
+    try {
+        const clientType = 'claude'; // 默认显示 claude 客户端的配额
+        const statusStr = await window.go.main.App.GetQuotaStatuses(clientType);
+        const statuses = JSON.parse(statusStr);
+
+        const displayEl = document.getElementById('quotaStatusDisplay');
+        if (!displayEl) return;
+
+        if (!statuses || statuses.length === 0) {
+            displayEl.innerHTML = '<p style="color: var(--text-secondary);">' + t('settings.quotaStatusEmpty') + '</p>';
+            return;
+        }
+
+        let html = '';
+        statuses.forEach(status => {
+            const usagePercent = status.usagePercent || 0;
+            const isExhausted = status.isExhausted || false;
+            const barColor = isExhausted ? '#ef4444' : (usagePercent > 80 ? '#f59e0b' : '#10b981');
+
+            html += `
+                <div style="margin-bottom: 12px; padding: 8px; background: var(--bg-primary); border-radius: 6px; border-left: 3px solid ${barColor};">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="font-weight: 500;">${status.endpointName}</span>
+                        <span style="color: ${barColor};">${usagePercent.toFixed(1)}%</span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">
+                        ${status.tokensUsed.toLocaleString()} / ${status.quotaLimit > 0 ? status.quotaLimit.toLocaleString() : '∞'}
+                    </div>
+                    <div style="height: 4px; background: var(--border-color); border-radius: 2px; overflow: hidden;">
+                        <div style="height: 100%; width: ${Math.min(usagePercent, 100)}%; background: ${barColor}; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+            `;
+        });
+
+        displayEl.innerHTML = html;
+    } catch (error) {
+        console.error('Failed to refresh quota status:', error);
+        const displayEl = document.getElementById('quotaStatusDisplay');
+        if (displayEl) {
+            displayEl.innerHTML = '<p style="color: #ef4444;">' + t('settings.quotaStatusError') + '</p>';
+        }
+    }
+}
+
