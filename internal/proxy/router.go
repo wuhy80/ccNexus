@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/lich0821/ccNexus/internal/config"
+	"github.com/lich0821/ccNexus/internal/logger"
 )
 
 // Router 智能路由选择器
@@ -46,14 +47,21 @@ func (r *Router) SelectEndpoint(clientType ClientType, requestModel string, quot
 		return config.Endpoint{}, errors.New("no available endpoints for client type")
 	}
 
+	// 记录初始可用端点
+	r.logEndpointSelection("初始可用端点", endpoints)
+
 	// 步骤1: 模型匹配过滤
 	if routingCfg.EnableModelRouting && requestModel != "" {
+		beforeCount := len(endpoints)
 		endpoints = r.filterByModel(endpoints, requestModel)
+		r.logFilterStep("模型匹配过滤", requestModel, beforeCount, endpoints)
 	}
 
 	// 步骤2: 配额过滤（排除已用尽的）
 	if routingCfg.EnableQuotaRouting && quotaTracker != nil {
+		beforeCount := len(endpoints)
 		endpoints = r.filterByQuota(endpoints, clientType, quotaTracker)
+		r.logFilterStep("配额过滤", "", beforeCount, endpoints)
 	}
 
 	if len(endpoints) == 0 {
@@ -61,15 +69,27 @@ func (r *Router) SelectEndpoint(clientType ClientType, requestModel string, quot
 	}
 
 	// 步骤3: 排序选择
+	var selectedEndpoint config.Endpoint
+	var err error
+	var selectionMethod string
+
 	if routingCfg.EnableCostPriority {
-		return r.selectByCost(endpoints)
-	}
-	if routingCfg.EnableLoadBalance {
-		return r.selectByLoad(endpoints, clientType)
+		selectionMethod = "成本优先"
+		selectedEndpoint, err = r.selectByCost(endpoints)
+	} else if routingCfg.EnableLoadBalance {
+		algorithm := r.config.GetLoadBalanceAlgorithm()
+		selectionMethod = "负载均衡-" + algorithm
+		selectedEndpoint, err = r.selectByLoad(endpoints, clientType)
+	} else {
+		selectionMethod = "优先级"
+		selectedEndpoint, err = r.selectByPriority(endpoints)
 	}
 
-	// 默认：按优先级选择最高优先级
-	return r.selectByPriority(endpoints)
+	if err == nil {
+		r.logFinalSelection(selectionMethod, selectedEndpoint, endpoints)
+	}
+
+	return selectedEndpoint, err
 }
 
 // filterByModel 按模型模式过滤端点
@@ -286,8 +306,11 @@ func (r *Router) selectByPriority(endpoints []config.Endpoint) (config.Endpoint,
 		}
 	}
 
+	logger.Debug("[路由选择] 最高优先级=%d, 该优先级端点数=%d", highestPriority, len(highestPriorityEndpoints))
+
 	// 如果只有一个最高优先级端点，直接返回
 	if len(highestPriorityEndpoints) == 1 {
+		logger.Debug("[路由选择] 唯一最高优先级端点: %s", highestPriorityEndpoints[0].Name)
 		return highestPriorityEndpoints[0], nil
 	}
 
@@ -295,6 +318,12 @@ func (r *Router) selectByPriority(endpoints []config.Endpoint) (config.Endpoint,
 	r.mu.Lock()
 	randomIndex := r.rng.Intn(len(highestPriorityEndpoints))
 	r.mu.Unlock()
+
+	names := make([]string, len(highestPriorityEndpoints))
+	for i, ep := range highestPriorityEndpoints {
+		names[i] = ep.Name
+	}
+	logger.Debug("[路由选择] 相同优先级端点: %v, 随机选择索引=%d", names, randomIndex)
 
 	return highestPriorityEndpoints[randomIndex], nil
 }
@@ -311,4 +340,52 @@ func (r *Router) UpdateConfig(cfg *config.Config) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.config = cfg
+}
+
+// logEndpointSelection 记录初始端点列表
+func (r *Router) logEndpointSelection(stage string, endpoints []config.Endpoint) {
+	names := make([]string, len(endpoints))
+	priorities := make([]int, len(endpoints))
+	for i, ep := range endpoints {
+		names[i] = ep.Name
+		priorities[i] = ep.Priority
+	}
+	logger.Info("[路由选择] %s: 共%d个 [%v] 优先级: %v", stage, len(endpoints), names, priorities)
+}
+
+// logFilterStep 记录过滤步骤
+func (r *Router) logFilterStep(filterName, filterValue string, beforeCount int, afterEndpoints []config.Endpoint) {
+	afterCount := len(afterEndpoints)
+	if filterValue != "" {
+		logger.Info("[路由选择] %s (模型=%s): %d个 → %d个", filterName, filterValue, beforeCount, afterCount)
+	} else {
+		logger.Info("[路由选择] %s: %d个 → %d个", filterName, beforeCount, afterCount)
+	}
+	if afterCount > 0 {
+		names := make([]string, afterCount)
+		for i, ep := range afterEndpoints {
+			names[i] = ep.Name
+		}
+		logger.Info("[路由选择] 剩余端点: %v", names)
+	}
+}
+
+// logFinalSelection 记录最终选择结果
+func (r *Router) logFinalSelection(method string, selected config.Endpoint, candidates []config.Endpoint) {
+	logger.Info("[路由选择] 选择方法: %s", method)
+	logger.Info("[路由选择] ✅ 最终选择: %s (优先级=%d)", selected.Name, selected.Priority)
+
+	// 显示候选端点的详细信息
+	if len(candidates) > 1 {
+		logger.Info("[路由选择] 候选端点详情:")
+		for _, ep := range candidates {
+			marker := "  "
+			if ep.Name == selected.Name {
+				marker = "✅"
+			}
+			logger.Info("[路由选择]   %s %s (优先级=%d, 成本=%.6f)",
+				marker, ep.Name, ep.Priority,
+				ep.CostPerInputToken+ep.CostPerOutputToken)
+		}
+	}
 }

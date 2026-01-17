@@ -315,7 +315,7 @@ func (p *Proxy) getCurrentEndpointForClient(clientType ClientType) config.Endpoi
 }
 
 // selectEndpointForRequest 使用智能路由选择端点（支持会话亲和性）
-// 当路由器可用且启用路由策略时使用智能路由，否则回退到传统轮询
+// 当路由器可用且启用路由策略时使用智能路由，否则回退到优先级选择
 func (p *Proxy) selectEndpointForRequest(clientType ClientType, requestModel string, sessionID string) config.Endpoint {
 	// 1. 检查会话亲和性
 	if p.sessionAffinity != nil && sessionID != "" {
@@ -333,11 +333,11 @@ func (p *Proxy) selectEndpointForRequest(clientType ClientType, requestModel str
 		}
 	}
 
-	// 2. 新会话：检查是否启用智能路由
+	// 2. 新会话：检查是否启用智能路由策略
 	var selectedEndpoint config.Endpoint
 	if p.router != nil {
 		routingCfg := p.config.GetRoutingConfig()
-		// 只要启用了任一路由策略，就使用智能路由
+		// 如果启用了任一高级路由策略，使用智能路由
 		if routingCfg.EnableModelRouting || routingCfg.EnableLoadBalance ||
 			routingCfg.EnableCostPriority || routingCfg.EnableQuotaRouting {
 			endpoint, err := p.router.SelectEndpoint(clientType, requestModel, p.quotaTracker)
@@ -351,11 +351,27 @@ func (p *Proxy) selectEndpointForRequest(clientType ClientType, requestModel str
 				}
 				return selectedEndpoint
 			}
-			logger.Warn("[ROUTER:%s] Selection failed: %v, falling back to legacy", clientType, err)
+			logger.Warn("[ROUTER:%s] Selection failed: %v, falling back to priority", clientType, err)
 		}
 	}
 
-	// 3. 回退到传统轮询逻辑
+	// 3. 回退到优先级选择（默认行为）
+	// 即使没有启用高级路由策略，也应该按优先级选择端点
+	if p.router != nil {
+		endpoint, err := p.router.selectByPriority(p.config.GetAvailableEndpointsByClient(string(clientType)))
+		if err == nil {
+			logger.Debug("[PRIORITY:%s] Selected endpoint: %s", clientType, endpoint.Name)
+			selectedEndpoint = endpoint
+			if p.sessionAffinity != nil && sessionID != "" {
+				p.sessionAffinity.BindSession(sessionID, endpoint.Name, string(clientType))
+				logger.Debug("[SESSION:%s] Bound to priority endpoint: %s", sessionID, endpoint.Name)
+			}
+			return selectedEndpoint
+		}
+		logger.Warn("[PRIORITY:%s] Selection failed: %v, falling back to round-robin", clientType, err)
+	}
+
+	// 4. 最后回退到传统轮询逻辑（仅当优先级选择也失败时）
 	selectedEndpoint = p.getCurrentEndpointForClient(clientType)
 	if p.sessionAffinity != nil && sessionID != "" {
 		p.sessionAffinity.BindSession(sessionID, selectedEndpoint.Name, string(clientType))

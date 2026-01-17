@@ -1037,17 +1037,17 @@ export function initUI() {
                                 </select>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                                <input type="checkbox" id="settingsAlertNotifyOnRecovery" checked>
-                                <span style="font-size: 13px;">${t('settings.alertNotifyOnRecovery')}</span>
+                                <input type="checkbox" id="settingsAlertNotifyOnRecovery" checked style="flex-shrink: 0; width: 16px; height: 16px; margin: 0;">
+                                <span style="font-size: 13px; flex: 1;">${t('settings.alertNotifyOnRecovery')}</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
-                                <input type="checkbox" id="settingsAlertSystemNotification" checked>
-                                <span style="font-size: 13px;">${t('settings.alertSystemNotification')}</span>
+                                <input type="checkbox" id="settingsAlertSystemNotification" checked style="flex-shrink: 0; width: 16px; height: 16px; margin: 0;">
+                                <span style="font-size: 13px; flex: 1;">${t('settings.alertSystemNotification')}</span>
                             </div>
                             <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color);">
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                                    <input type="checkbox" id="settingsPerformanceAlertEnabled">
-                                    <span style="font-size: 13px;">${t('settings.performanceAlertEnabled')}</span>
+                                    <input type="checkbox" id="settingsPerformanceAlertEnabled" style="flex-shrink: 0; width: 16px; height: 16px; margin: 0;">
+                                    <span style="font-size: 13px; flex: 1;">${t('settings.performanceAlertEnabled')}</span>
                                 </div>
                                 <div id="performanceAlertDetails" style="display: none;">
                                     <div style="margin-bottom: 10px;">
@@ -1077,8 +1077,8 @@ export function initUI() {
                             </div>
                             <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color);">
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                                    <input type="checkbox" id="settingsAutoEnableOnRecovery">
-                                    <span style="font-size: 13px;">${t('settings.autoEnableOnRecovery')}</span>
+                                    <input type="checkbox" id="settingsAutoEnableOnRecovery" style="flex-shrink: 0; width: 16px; height: 16px; margin: 0;">
+                                    <span style="font-size: 13px; flex: 1;">${t('settings.autoEnableOnRecovery')}</span>
                                 </div>
                                 <div style="margin-bottom: 10px;">
                                     <label style="font-size: 13px;">${t('settings.autoEnableSuccessThreshold')}</label>
@@ -1258,12 +1258,12 @@ export function initUI() {
                         </div>
                         <div id="routingConfigDetails" style="display: none; padding: 10px; background: var(--bg-secondary); border-radius: 8px;">
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                                <input type="checkbox" id="settingsModelRouting">
-                                <span style="font-size: 13px;">${t('settings.modelRouting')}</span>
+                                <input type="checkbox" id="settingsModelRouting" style="flex-shrink: 0; width: 16px; height: 16px; margin: 0;">
+                                <span style="font-size: 13px; flex: 1;">${t('settings.modelRouting')}</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                                <input type="checkbox" id="settingsLoadBalance">
-                                <span style="font-size: 13px;">${t('settings.loadBalance')}</span>
+                                <input type="checkbox" id="settingsLoadBalance" style="flex-shrink: 0; width: 16px; height: 16px; margin: 0;">
+                                <span style="font-size: 13px; flex: 1;">${t('settings.loadBalance')}</span>
                             </div>
                             <div id="loadBalanceAlgorithmContainer" style="margin-left: 24px; margin-bottom: 10px; display: none;">
                                 <label style="font-size: 12px;">${t('settings.loadBalanceAlgorithm')}</label>
@@ -1274,12 +1274,12 @@ export function initUI() {
                                 </select>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                                <input type="checkbox" id="settingsCostPriority">
-                                <span style="font-size: 13px;">${t('settings.costPriority')}</span>
+                                <input type="checkbox" id="settingsCostPriority" style="flex-shrink: 0; width: 16px; height: 16px; margin: 0;">
+                                <span style="font-size: 13px; flex: 1;">${t('settings.costPriority')}</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                                <input type="checkbox" id="settingsQuotaRouting">
-                                <span style="font-size: 13px;">${t('settings.quotaRouting')}</span>
+                                <input type="checkbox" id="settingsQuotaRouting" style="flex-shrink: 0; width: 16px; height: 16px; margin: 0;">
+                                <span style="font-size: 13px; flex: 1;">${t('settings.quotaRouting')}</span>
                             </div>
                             <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color);">
                                 <label style="font-size: 13px; margin-bottom: 8px; display: block;">${t('settings.quotaStatus')}</label>
