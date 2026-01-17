@@ -71,6 +71,7 @@ type Proxy struct {
 	// 智能路由相关
 	router           *Router                      // 智能路由选择器
 	quotaTracker     *QuotaTracker                // 配额跟踪器
+	sessionAffinity  *SessionAffinityManager      // 会话亲和性管理器
 }
 
 // New creates a new Proxy instance
@@ -127,6 +128,13 @@ func (p *Proxy) SetInteractionStorage(storage *interaction.Storage) {
 func (p *Proxy) SetupRouter(store storage.Storage) {
 	p.quotaTracker = NewQuotaTracker(p.config, store)
 	p.router = NewRouter(p.config, p.monitor)
+
+	// 初始化会话亲和性管理器
+	if p.config.SessionAffinity != nil && p.config.SessionAffinity.Enabled {
+		p.sessionAffinity = NewSessionAffinityManager(p.config)
+		p.sessionAffinity.Start()
+		logger.Info("Session affinity enabled")
+	}
 }
 
 // GetRouter 获取路由器实例
@@ -137,6 +145,11 @@ func (p *Proxy) GetRouter() *Router {
 // GetQuotaTracker 获取配额跟踪器实例
 func (p *Proxy) GetQuotaTracker() *QuotaTracker {
 	return p.quotaTracker
+}
+
+// GetSessionAffinity 获取会话亲和性管理器实例
+func (p *Proxy) GetSessionAffinity() *SessionAffinityManager {
+	return p.sessionAffinity
 }
 
 // UpdateRouterConfig 更新路由器配置（配置变更时调用）
@@ -299,10 +312,27 @@ func (p *Proxy) getCurrentEndpointForClient(clientType ClientType) config.Endpoi
 	return endpoints[index]
 }
 
-// selectEndpointForRequest 使用智能路由选择端点
+// selectEndpointForRequest 使用智能路由选择端点（支持会话亲和性）
 // 当路由器可用且启用路由策略时使用智能路由，否则回退到传统轮询
-func (p *Proxy) selectEndpointForRequest(clientType ClientType, requestModel string) config.Endpoint {
-	// 检查是否启用智能路由
+func (p *Proxy) selectEndpointForRequest(clientType ClientType, requestModel string, sessionID string) config.Endpoint {
+	// 1. 检查会话亲和性
+	if p.sessionAffinity != nil && sessionID != "" {
+		if endpointName, exists := p.sessionAffinity.GetEndpointForSession(sessionID, string(clientType)); exists {
+			// 验证端点仍然可用
+			endpoint := p.config.GetEndpointByName(endpointName, string(clientType))
+			if endpoint != nil && endpoint.Enabled {
+				logger.Debug("[SESSION:%s] Using bound endpoint: %s", sessionID, endpointName)
+				return *endpoint
+			} else {
+				// 端点不可用，解除绑定
+				p.sessionAffinity.UnbindSession(sessionID)
+				logger.Debug("[SESSION:%s] Endpoint %s unavailable, unbinding", sessionID, endpointName)
+			}
+		}
+	}
+
+	// 2. 新会话：检查是否启用智能路由
+	var selectedEndpoint config.Endpoint
 	if p.router != nil {
 		routingCfg := p.config.GetRoutingConfig()
 		// 只要启用了任一路由策略，就使用智能路由
@@ -311,14 +341,25 @@ func (p *Proxy) selectEndpointForRequest(clientType ClientType, requestModel str
 			endpoint, err := p.router.SelectEndpoint(clientType, requestModel, p.quotaTracker)
 			if err == nil {
 				logger.Debug("[ROUTER:%s] Selected endpoint: %s (model: %s)", clientType, endpoint.Name, requestModel)
-				return endpoint
+				selectedEndpoint = endpoint
+				// 绑定会话到选中的端点
+				if p.sessionAffinity != nil && sessionID != "" {
+					p.sessionAffinity.BindSession(sessionID, endpoint.Name, string(clientType))
+					logger.Debug("[SESSION:%s] Bound to new endpoint: %s", sessionID, endpoint.Name)
+				}
+				return selectedEndpoint
 			}
 			logger.Warn("[ROUTER:%s] Selection failed: %v, falling back to legacy", clientType, err)
 		}
 	}
 
-	// 回退到传统轮询逻辑
-	return p.getCurrentEndpointForClient(clientType)
+	// 3. 回退到传统轮询逻辑
+	selectedEndpoint = p.getCurrentEndpointForClient(clientType)
+	if p.sessionAffinity != nil && sessionID != "" {
+		p.sessionAffinity.BindSession(sessionID, selectedEndpoint.Name, string(clientType))
+		logger.Debug("[SESSION:%s] Bound to round-robin endpoint: %s", sessionID, selectedEndpoint.Name)
+	}
+	return selectedEndpoint
 }
 
 // recordQuotaUsage 记录配额使用量（请求成功后调用）
@@ -669,6 +710,13 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 	// Extract client IP address
 	clientIP := getClientIP(r)
 
+	// 提取会话ID（用于会话亲和性）
+	var sessionID string
+	if p.sessionAffinity != nil {
+		sessionID = p.sessionAffinity.ExtractSessionID(r)
+		logger.Debug("[REQUEST] Session ID: %s", sessionID)
+	}
+
 	logger.DebugLog("=== Proxy Request ===")
 	logger.DebugLog("Method: %s, Path: %s, ClientType: %s, ClientFormat: %s", r.Method, r.URL.Path, clientType, clientFormat)
 	logger.DebugLog("Request Body: %s", string(bodyBytes))
@@ -794,8 +842,8 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		if fixedEndpoint != nil {
 			endpoint = *fixedEndpoint
 		} else {
-			// 使用智能路由选择端点（如果启用）
-			endpoint = p.selectEndpointForRequest(clientType, streamReq.Model)
+			// 使用智能路由选择端点（如果启用），传递会话ID
+			endpoint = p.selectEndpointForRequest(clientType, streamReq.Model, sessionID)
 		}
 		if endpoint.Name == "" {
 			http.Error(w, fmt.Sprintf("No enabled endpoints available for client type: %s", clientType), http.StatusServiceUnavailable)

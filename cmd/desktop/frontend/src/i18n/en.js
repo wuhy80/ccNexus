@@ -348,7 +348,17 @@ export default {
         save: 'Save',
         cancel: 'Cancel',
         saveSuccess: 'Settings saved successfully',
-        saveFailed: 'Failed to save settings'
+        saveFailed: 'Failed to save settings',
+        autoEnableOnRecovery: 'Auto-enable recovered endpoints',
+        autoEnableSuccessThreshold: 'Consecutive success threshold',
+        autoEnableHelp: 'Automatically enable endpoint after consecutive successful health checks',
+        sessionAffinityConfig: 'Session Affinity',
+        sessionAffinityEnabled: 'Enable session affinity',
+        sessionAffinityTimeout: 'Session timeout',
+        sessionAffinityTimeoutHours: 'hours',
+        sessionAffinityMaxConcurrent: 'Max concurrent sessions per endpoint',
+        sessionAffinityMaxConcurrentHelp: '0 means unlimited',
+        sessionAffinityHelp: 'Same session uses same endpoint, new sessions prefer high-priority endpoints'
     },
     statistics: {
         title: 'Statistics',
@@ -402,7 +412,20 @@ export default {
         inputSpeed: 'Input',
         streamingRatio: 'Streaming',
         streaming: 'Stream',
-        nonStreaming: 'Non-stream'
+        nonStreaming: 'Non-stream',
+        sessionStats: 'Session Stats',
+        sessionStatsTitle: 'Session Affinity Statistics',
+        totalSessions: 'Active Sessions',
+        sessionBindings: 'Session Bindings',
+        sessionId: 'Session ID',
+        boundEndpoint: 'Bound Endpoint',
+        lastAccess: 'Last Access',
+        requestCount: 'Requests',
+        unbind: 'Unbind',
+        sessionStatsDisabled: 'Session affinity not enabled',
+        sessionStatsEmpty: 'No active sessions',
+        unbindSuccess: 'Unbind successful',
+        unbindFailed: 'Unbind failed'
     },
     cost: {
         title: 'Cost Statistics',
@@ -691,7 +714,13 @@ export default {
         delete: 'Delete',
         confirmDeleteTitle: 'Confirm Deletion',
         close: 'Close',
-        retry: 'Retry'
+        retry: 'Retry',
+        refresh: 'Refresh',
+        actions: 'Actions',
+        justNow: 'Just now',
+        minutesAgo: 'minutes ago',
+        hoursAgo: 'hours ago',
+        daysAgo: 'days ago'
     },
     interactions: {
         title: 'Interaction Records',

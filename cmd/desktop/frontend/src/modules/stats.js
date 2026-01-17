@@ -377,3 +377,137 @@ export async function switchStatsPeriod(period) {
         // Chart module may not be loaded yet, this is not critical
     }
 }
+
+// Refresh session statistics
+export async function refreshSessionStats() {
+    try {
+        const statsStr = await window.go.main.App.GetSessionStats();
+        const stats = JSON.parse(statsStr);
+
+        const card = document.getElementById('sessionStatsCard');
+        const content = document.getElementById('sessionStatsContent');
+
+        if (!stats.enabled) {
+            card.style.display = 'none';
+            return;
+        }
+
+        card.style.display = 'block';
+
+        if (!stats.sessionBindings || stats.sessionBindings.length === 0) {
+            content.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: var(--text-secondary);">
+                    ${window.t('statistics.sessionStatsEmpty')}
+                </div>
+            `;
+            return;
+        }
+
+        // Build session bindings table
+        let html = `
+            <div style="margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="font-weight: 500;">${window.t('statistics.totalSessions')}: ${stats.totalSessions}</span>
+                </div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border-color);">
+                            <th style="padding: 10px; text-align: left; font-size: 13px;">${window.t('statistics.sessionId')}</th>
+                            <th style="padding: 10px; text-align: left; font-size: 13px;">${window.t('statistics.boundEndpoint')}</th>
+                            <th style="padding: 10px; text-align: center; font-size: 13px;">${window.t('statistics.requestCount')}</th>
+                            <th style="padding: 10px; text-align: center; font-size: 13px;">${window.t('statistics.lastAccess')}</th>
+                            <th style="padding: 10px; text-align: center; font-size: 13px;">${window.t('common.actions')}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        stats.sessionBindings.forEach(binding => {
+            const lastAccessDate = new Date(binding.lastAccess * 1000);
+            const now = new Date();
+            const diffMs = now - lastAccessDate;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMins / 60);
+
+            let timeAgo;
+            if (diffMins < 1) {
+                timeAgo = window.t('common.justNow') || '刚刚';
+            } else if (diffMins < 60) {
+                timeAgo = `${diffMins} ${window.t('common.minutesAgo') || '分钟前'}`;
+            } else if (diffHours < 24) {
+                timeAgo = `${diffHours} ${window.t('common.hoursAgo') || '小时前'}`;
+            } else {
+                const diffDays = Math.floor(diffHours / 24);
+                timeAgo = `${diffDays} ${window.t('common.daysAgo') || '天前'}`;
+            }
+
+            html += `
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <td style="padding: 10px; font-family: monospace; font-size: 12px;">${binding.sessionId.substring(0, 16)}...</td>
+                    <td style="padding: 10px; font-size: 13px;">${binding.endpointName}</td>
+                    <td style="padding: 10px; text-align: center; font-size: 13px;">${binding.requestCount}</td>
+                    <td style="padding: 10px; text-align: center; font-size: 12px; color: var(--text-secondary);">${timeAgo}</td>
+                    <td style="padding: 10px; text-align: center;">
+                        <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" onclick="window.unbindSession('${binding.sessionId}')">
+                            ${window.t('statistics.unbind')}
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        content.innerHTML = html;
+    } catch (error) {
+        console.error('Failed to refresh session stats:', error);
+    }
+}
+
+// Unbind session
+export async function unbindSession(sessionId) {
+    try {
+        await window.go.main.App.UnbindSession(sessionId);
+        showNotification(window.t('statistics.unbindSuccess'), 'success');
+        await refreshSessionStats();
+    } catch (error) {
+        console.error('Failed to unbind session:', error);
+        showNotification(window.t('statistics.unbindFailed') + ': ' + error, 'error');
+    }
+}
+
+// Show notification
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 10000;
+        animation: slideInRight 0.3s ease-out;
+    `;
+
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+        notification.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// Export to window for onclick handlers
+window.refreshSessionStats = refreshSessionStats;
+window.unbindSession = unbindSession;

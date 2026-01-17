@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -618,7 +619,7 @@ func (a *App) GetAlertConfig() string {
 }
 
 // SetAlertConfig 设置告警配置
-func (a *App) SetAlertConfig(enabled bool, consecutiveFailures int, notifyOnRecovery bool, systemNotification bool, cooldownMinutes int, performanceAlertEnabled bool, latencyThresholdMs int, latencyIncreasePercent int) error {
+func (a *App) SetAlertConfig(enabled bool, consecutiveFailures int, notifyOnRecovery bool, systemNotification bool, cooldownMinutes int, performanceAlertEnabled bool, latencyThresholdMs int, latencyIncreasePercent int, autoEnableOnRecovery bool, autoEnableSuccessThreshold int) error {
 	alertConfig := &config.AlertConfig{
 		Enabled:                   enabled,
 		ConsecutiveFailures:       consecutiveFailures,
@@ -628,6 +629,8 @@ func (a *App) SetAlertConfig(enabled bool, consecutiveFailures int, notifyOnReco
 		PerformanceAlertEnabled:   performanceAlertEnabled,
 		LatencyThresholdMs:        latencyThresholdMs,
 		LatencyIncreasePercent:    latencyIncreasePercent,
+		AutoEnableOnRecovery:      autoEnableOnRecovery,
+		AutoEnableSuccessThreshold: autoEnableSuccessThreshold,
 	}
 	a.config.UpdateAlert(alertConfig)
 	// Save to storage
@@ -914,4 +917,65 @@ func (a *App) GetQuotaStatus(endpointName, clientType string) string {
 // ResetQuota 重置端点配额
 func (a *App) ResetQuota(endpointName, clientType string) error {
 	return a.routing.ResetQuota(endpointName, clientType)
+}
+
+// ========== Session Affinity Bindings ==========
+
+// GetSessionStats 获取会话统计信息
+func (a *App) GetSessionStats() string {
+	if a.proxy.GetSessionAffinity() == nil {
+		return `{"enabled":false}`
+	}
+	stats := a.proxy.GetSessionAffinity().GetStats()
+	data, _ := json.Marshal(stats)
+	return string(data)
+}
+
+// UnbindSession 手动解除会话绑定
+func (a *App) UnbindSession(sessionID string) error {
+	if a.proxy.GetSessionAffinity() == nil {
+		return fmt.Errorf("session affinity not enabled")
+	}
+	a.proxy.GetSessionAffinity().UnbindSession(sessionID)
+	return nil
+}
+
+// GetSessionAffinityConfig 获取会话亲和性配置
+func (a *App) GetSessionAffinityConfig() string {
+	cfg := a.config.GetSessionAffinity()
+	data, _ := json.Marshal(cfg)
+	return string(data)
+}
+
+// UpdateSessionAffinityConfig 更新会话亲和性配置
+func (a *App) UpdateSessionAffinityConfig(enabled bool, sessionTimeoutHours, maxConcurrentPerEndpoint int) error {
+	cfg := &config.SessionAffinityConfig{
+		Enabled:              enabled,
+		SessionTimeoutHours:  sessionTimeoutHours,
+		MaxConcurrentPerEndpoint: maxConcurrentPerEndpoint,
+	}
+	a.config.UpdateSessionAffinity(cfg)
+
+	// 持久化到存储
+	configAdapter := storage.NewConfigStorageAdapter(a.storage)
+	if err := a.config.SaveToStorage(configAdapter); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	// 重新初始化会话亲和性管理器
+	if enabled {
+		// 停止旧的管理器
+		if a.proxy.GetSessionAffinity() != nil {
+			a.proxy.GetSessionAffinity().Stop()
+		}
+		// 重新设置路由器（会初始化新的会话亲和性管理器）
+		a.proxy.SetupRouter(a.storage)
+	} else {
+		// 禁用时停止管理器
+		if a.proxy.GetSessionAffinity() != nil {
+			a.proxy.GetSessionAffinity().Stop()
+		}
+	}
+
+	return nil
 }

@@ -325,6 +325,16 @@ async function loadCurrentSettings() {
             alertSystemNotificationCheckbox.checked = alertConfig.systemNotification !== false;
         }
 
+        // Load auto-enable config
+        const autoEnableCheckbox = document.getElementById('settingsAutoEnableOnRecovery');
+        const autoEnableThresholdSelect = document.getElementById('settingsAutoEnableSuccessThreshold');
+        if (autoEnableCheckbox) {
+            autoEnableCheckbox.checked = alertConfig.autoEnableOnRecovery || false;
+        }
+        if (autoEnableThresholdSelect) {
+            autoEnableThresholdSelect.value = (alertConfig.autoEnableSuccessThreshold || 3).toString();
+        }
+
         // Load performance alert config
         const performanceAlertEnabledCheckbox = document.getElementById('settingsPerformanceAlertEnabled');
         const performanceAlertDetails = document.getElementById('performanceAlertDetails');
@@ -349,6 +359,34 @@ async function loadCurrentSettings() {
         }
         if (latencyIncreaseSelect) {
             latencyIncreaseSelect.value = (alertConfig.latencyIncreasePercent || 200).toString();
+        }
+
+        // Load session affinity config
+        const sessionAffinityConfigStr = await window.go.main.App.GetSessionAffinityConfig();
+        const sessionAffinityConfig = sessionAffinityConfigStr ? JSON.parse(sessionAffinityConfigStr) : null;
+        const sessionAffinityEnabledCheckbox = document.getElementById('settingsSessionAffinityEnabled');
+        const sessionAffinityConfigDetails = document.getElementById('sessionAffinityConfigDetails');
+        const sessionAffinityTimeoutSelect = document.getElementById('settingsSessionAffinityTimeout');
+        const sessionAffinityMaxConcurrentSelect = document.getElementById('settingsSessionAffinityMaxConcurrent');
+
+        if (sessionAffinityEnabledCheckbox) {
+            sessionAffinityEnabledCheckbox.checked = sessionAffinityConfig ? sessionAffinityConfig.enabled : false;
+            // Show/hide details based on enabled state
+            if (sessionAffinityConfigDetails) {
+                sessionAffinityConfigDetails.style.display = (sessionAffinityConfig && sessionAffinityConfig.enabled) ? 'block' : 'none';
+            }
+            // Add event listener for toggle
+            sessionAffinityEnabledCheckbox.onchange = function() {
+                if (sessionAffinityConfigDetails) {
+                    sessionAffinityConfigDetails.style.display = this.checked ? 'block' : 'none';
+                }
+            };
+        }
+        if (sessionAffinityTimeoutSelect) {
+            sessionAffinityTimeoutSelect.value = (sessionAffinityConfig ? (sessionAffinityConfig.sessionTimeoutHours || 24) : 24).toString();
+        }
+        if (sessionAffinityMaxConcurrentSelect) {
+            sessionAffinityMaxConcurrentSelect.value = (sessionAffinityConfig ? (sessionAffinityConfig.maxConcurrentPerEndpoint || 0) : 0).toString();
         }
 
         // Load cache config
@@ -618,6 +656,8 @@ export async function saveSettings() {
         const performanceAlertEnabled = document.getElementById('settingsPerformanceAlertEnabled').checked;
         const latencyThreshold = parseInt(document.getElementById('settingsLatencyThreshold').value, 10);
         const latencyIncrease = parseInt(document.getElementById('settingsLatencyIncrease').value, 10);
+        const autoEnableOnRecovery = document.getElementById('settingsAutoEnableOnRecovery').checked;
+        const autoEnableSuccessThreshold = parseInt(document.getElementById('settingsAutoEnableSuccessThreshold').value, 10);
         await window.go.main.App.SetAlertConfig(
             alertEnabled,
             alertConsecutiveFailures,
@@ -626,8 +666,16 @@ export async function saveSettings() {
             alertCooldown,
             performanceAlertEnabled,
             latencyThreshold,
-            latencyIncrease
+            latencyIncrease,
+            autoEnableOnRecovery,
+            autoEnableSuccessThreshold
         );
+
+        // Save session affinity config
+        const sessionAffinityEnabled = document.getElementById('settingsSessionAffinityEnabled').checked;
+        const sessionAffinityTimeout = parseInt(document.getElementById('settingsSessionAffinityTimeout').value, 10);
+        const sessionAffinityMaxConcurrent = parseInt(document.getElementById('settingsSessionAffinityMaxConcurrent').value, 10);
+        await window.go.main.App.UpdateSessionAffinityConfig(sessionAffinityEnabled, sessionAffinityTimeout, sessionAffinityMaxConcurrent);
 
         // Save cache config
         const cacheEnabled = document.getElementById('settingsCacheEnabled').checked;

@@ -4,7 +4,7 @@ import '../wailsjs/runtime/runtime.js'
 import { setLanguage } from './i18n/index.js'
 import { initUI, changeLanguage } from './modules/ui.js'
 import { loadConfig } from './modules/config.js'
-import { loadStats, switchStatsPeriod, loadStatsByPeriod, getCurrentPeriod } from './modules/stats.js'
+import { loadStats, switchStatsPeriod, loadStatsByPeriod, getCurrentPeriod, refreshSessionStats } from './modules/stats.js'
 import { initTokenChart } from './modules/chart.js'
 import { renderEndpoints, toggleEndpointPanel, initEndpointSuccessListener, checkAllEndpointsOnStartup, switchEndpointViewMode, initEndpointViewMode, isDropdownOpen, initCurrentClientType, renderClientTypeSelector, renderTagFilter } from './modules/endpoints.js'
 import { loadLogs, toggleLogPanel, changeLogLevel, copyLogs, clearLogs } from './modules/logs.js'
@@ -99,6 +99,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Load initial data
     await loadConfigAndRender();
     await loadStatsByPeriod('daily'); // Load today's stats by default
+    await refreshSessionStats(); // Load session statistics
 
     // Initialize token chart (delayed to allow data loading)
     setTimeout(() => {

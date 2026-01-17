@@ -262,6 +262,14 @@ export function GetRoutingConfig() {
   return window['go']['main']['App']['GetRoutingConfig']();
 }
 
+export function GetSessionAffinityConfig() {
+  return window['go']['main']['App']['GetSessionAffinityConfig']();
+}
+
+export function GetSessionStats() {
+  return window['go']['main']['App']['GetSessionStats']();
+}
+
 export function GetStats() {
   return window['go']['main']['App']['GetStats']();
 }
@@ -366,8 +374,8 @@ export function RestoreFromWebDAV(arg1, arg2) {
   return window['go']['main']['App']['RestoreFromWebDAV'](arg1, arg2);
 }
 
-export function SetAlertConfig(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
-  return window['go']['main']['App']['SetAlertConfig'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+export function SetAlertConfig(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
+  return window['go']['main']['App']['SetAlertConfig'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
 }
 
 export function SetAutoDarkTheme(arg1) {
@@ -466,6 +474,10 @@ export function ToggleEndpoint(arg1, arg2, arg3) {
   return window['go']['main']['App']['ToggleEndpoint'](arg1, arg2, arg3);
 }
 
+export function UnbindSession(arg1) {
+  return window['go']['main']['App']['UnbindSession'](arg1);
+}
+
 export function UpdateBackupProvider(arg1) {
   return window['go']['main']['App']['UpdateBackupProvider'](arg1);
 }
@@ -492,6 +504,10 @@ export function UpdateRoutingConfig(arg1, arg2, arg3, arg4, arg5) {
 
 export function UpdateS3BackupConfig(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
   return window['go']['main']['App']['UpdateS3BackupConfig'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
+}
+
+export function UpdateSessionAffinityConfig(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UpdateSessionAffinityConfig'](arg1, arg2, arg3);
 }
 
 export function UpdateWebDAVConfig(arg1, arg2, arg3) {

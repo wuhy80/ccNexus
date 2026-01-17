@@ -290,6 +290,21 @@ export function initUI() {
                 </div>
             </div>
 
+            <!-- Session Affinity Statistics -->
+            <div class="card" id="sessionStatsCard" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 style="margin: 0;">🔗 ${t('statistics.sessionStatsTitle')}</h2>
+                    <button class="btn btn-secondary" onclick="window.refreshSessionStats()" style="padding: 6px 12px;">
+                        🔄 ${t('common.refresh')}
+                    </button>
+                </div>
+                <div id="sessionStatsContent">
+                    <div style="text-align: center; padding: 20px; color: var(--text-secondary);">
+                        ${t('statistics.sessionStatsDisabled')}
+                    </div>
+                </div>
+            </div>
+
             <!-- Active Requests Monitor -->
             <div class="card monitor-section">
                 <div class="monitor-header">
@@ -1060,9 +1075,65 @@ export function initUI() {
                                     ${t('settings.performanceAlertHelp')}
                                 </p>
                             </div>
+                            <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color);">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                                    <input type="checkbox" id="settingsAutoEnableOnRecovery">
+                                    <span style="font-size: 13px;">${t('settings.autoEnableOnRecovery')}</span>
+                                </div>
+                                <div style="margin-bottom: 10px;">
+                                    <label style="font-size: 13px;">${t('settings.autoEnableSuccessThreshold')}</label>
+                                    <select id="settingsAutoEnableSuccessThreshold" style="width: 100%; margin-top: 5px;">
+                                        <option value="1">1 ${t('settings.alertTimes')}</option>
+                                        <option value="2">2 ${t('settings.alertTimes')}</option>
+                                        <option value="3">3 ${t('settings.alertTimes')}</option>
+                                        <option value="5">5 ${t('settings.alertTimes')}</option>
+                                        <option value="10">10 ${t('settings.alertTimes')}</option>
+                                    </select>
+                                </div>
+                                <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                                    ${t('settings.autoEnableHelp')}
+                                </p>
+                            </div>
                         </div>
                         <p style="color: #666; font-size: 12px; margin-top: 5px;">
                             ${t('settings.alertConfigHelp')}
+                        </p>
+                    </div>
+                    <div class="form-group">
+                        <label>${t('settings.sessionAffinityConfig')}</label>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                            <span style="font-size: 13px; color: var(--text-secondary);">${t('settings.sessionAffinityEnabled')}</span>
+                            <label class="toggle-switch" style="width: 40px; height: 20px; margin-top: 7px;">
+                                <input type="checkbox" id="settingsSessionAffinityEnabled">
+                                <span class="toggle-slider" style="border-radius: 20px;"></span>
+                            </label>
+                        </div>
+                        <div id="sessionAffinityConfigDetails" style="display: none; padding: 10px; background: var(--bg-secondary); border-radius: 8px;">
+                            <div style="margin-bottom: 10px;">
+                                <label style="font-size: 13px;">${t('settings.sessionAffinityTimeout')}</label>
+                                <select id="settingsSessionAffinityTimeout" style="width: 100%; margin-top: 5px;">
+                                    <option value="1">1 ${t('settings.sessionAffinityTimeoutHours')}</option>
+                                    <option value="6">6 ${t('settings.sessionAffinityTimeoutHours')}</option>
+                                    <option value="12">12 ${t('settings.sessionAffinityTimeoutHours')}</option>
+                                    <option value="24">24 ${t('settings.sessionAffinityTimeoutHours')}</option>
+                                    <option value="48">48 ${t('settings.sessionAffinityTimeoutHours')}</option>
+                                    <option value="72">72 ${t('settings.sessionAffinityTimeoutHours')}</option>
+                                </select>
+                            </div>
+                            <div style="margin-bottom: 10px;">
+                                <label style="font-size: 13px;">${t('settings.sessionAffinityMaxConcurrent')}</label>
+                                <select id="settingsSessionAffinityMaxConcurrent" style="width: 100%; margin-top: 5px;">
+                                    <option value="0">0 (${t('settings.sessionAffinityMaxConcurrentHelp')})</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="5">5</option>
+                                    <option value="10">10</option>
+                                </select>
+                            </div>
+                        </div>
+                        <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                            ${t('settings.sessionAffinityHelp')}
                         </p>
                     </div>
                     <div class="form-group">

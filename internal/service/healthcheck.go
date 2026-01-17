@@ -28,9 +28,10 @@ type AlertCallback func(event AlertEvent)
 
 // endpointAlertState 端点告警状态
 type endpointAlertState struct {
-	consecutiveFailures int         // 连续失败次数
-	lastAlertTime       time.Time   // 上次告警时间
-	wasHealthy          bool        // 上次检测是否健康
+	consecutiveFailures  int         // 连续失败次数
+	consecutiveSuccesses int         // 连续成功次数（用于自动启用）
+	lastAlertTime        time.Time   // 上次告警时间
+	wasHealthy           bool        // 上次检测是否健康
 	// 性能告警相关
 	latencyHistory      []float64   // 延迟历史记录（最近10次）
 	lastPerfAlertTime   time.Time   // 上次性能告警时间
@@ -205,6 +206,11 @@ func (h *HealthCheckService) checkEndpoint(endpoint config.Endpoint) {
 		logger.Debug("Health check OK for %s: %.0fms", endpoint.Name, latencyMs)
 		status = "healthy"
 		isHealthy = true
+
+		// 自动启用端点（如果当前是禁用状态）
+		if !endpoint.Enabled {
+			h.autoEnableEndpoint(endpoint.Name, clientType)
+		}
 	} else if statusCode == 401 || statusCode == 403 {
 		// Auth error - still record latency but log warning
 		h.monitor.RecordHealthCheckLatency(endpoint.Name, latencyMs)
@@ -233,6 +239,13 @@ func (h *HealthCheckService) checkEndpoint(endpoint config.Endpoint) {
 	// 处理性能告警逻辑（仅在健康时检查）
 	if isHealthy {
 		h.processPerformanceAlert(endpoint.Name, clientType, latencyMs)
+	} else {
+		// 失败时重置连续成功计数
+		h.alertStatesMu.Lock()
+		if state := h.alertStates[endpoint.Name]; state != nil {
+			state.consecutiveSuccesses = 0
+		}
+		h.alertStatesMu.Unlock()
 	}
 }
 
@@ -568,5 +581,57 @@ func (h *HealthCheckService) processPerformanceAlert(endpointName, clientType st
 	state.latencyHistory = append(state.latencyHistory, latencyMs)
 	if len(state.latencyHistory) > 10 {
 		state.latencyHistory = state.latencyHistory[1:]
+	}
+}
+
+// autoEnableEndpoint 自动启用端点（连续成功达到阈值后）
+func (h *HealthCheckService) autoEnableEndpoint(endpointName, clientType string) {
+	alertConfig := h.config.GetAlert()
+	if alertConfig == nil || !alertConfig.AutoEnableOnRecovery {
+		return
+	}
+
+	h.alertStatesMu.Lock()
+	defer h.alertStatesMu.Unlock()
+
+	// 获取或创建端点告警状态
+	state, exists := h.alertStates[endpointName]
+	if !exists {
+		state = &endpointAlertState{
+			wasHealthy: true,
+		}
+		h.alertStates[endpointName] = state
+	}
+
+	// 连续成功次数加1
+	state.consecutiveSuccesses++
+
+	// 获取阈值（默认3次）
+	threshold := alertConfig.AutoEnableSuccessThreshold
+	if threshold <= 0 {
+		threshold = 3
+	}
+
+	// 达到阈值，自动启用端点
+	if state.consecutiveSuccesses >= threshold {
+		if err := h.config.EnableEndpoint(endpointName, clientType); err != nil {
+			logger.Warn("Failed to auto-enable endpoint %s: %v", endpointName, err)
+		} else {
+			logger.Info("Auto-enabled endpoint %s after %d consecutive successful checks", endpointName, state.consecutiveSuccesses)
+
+			// 触发告警回调通知前端
+			if h.alertCallback != nil {
+				event := AlertEvent{
+					EndpointName: endpointName,
+					ClientType:   clientType,
+					AlertType:    "auto-enabled",
+					Message:      fmt.Sprintf("端点 %s 已自动启用（连续 %d 次检测成功）", endpointName, state.consecutiveSuccesses),
+					Timestamp:    time.Now(),
+				}
+				h.alertCallback(event)
+			}
+		}
+		// 重置计数
+		state.consecutiveSuccesses = 0
 	}
 }

@@ -348,7 +348,17 @@ export default {
         save: '保存',
         cancel: '取消',
         saveSuccess: '设置保存成功',
-        saveFailed: '设置保存失败'
+        saveFailed: '设置保存失败',
+        autoEnableOnRecovery: '自动启用恢复的端点',
+        autoEnableSuccessThreshold: '连续成功阈值',
+        autoEnableHelp: '当端点健康检查连续成功达到阈值后，自动启用该端点',
+        sessionAffinityConfig: '会话亲和性',
+        sessionAffinityEnabled: '启用会话亲和性',
+        sessionAffinityTimeout: '会话超时',
+        sessionAffinityTimeoutHours: '小时',
+        sessionAffinityMaxConcurrent: '每端点最大并发会话',
+        sessionAffinityMaxConcurrentHelp: '0 表示无限制',
+        sessionAffinityHelp: '同一会话使用相同端点，新会话优先使用高优先级端点'
     },
     statistics: {
         title: '统计信息',
@@ -402,7 +412,20 @@ export default {
         inputSpeed: '输入',
         streamingRatio: '流式占比',
         streaming: '流式',
-        nonStreaming: '非流式'
+        nonStreaming: '非流式',
+        sessionStats: '会话统计',
+        sessionStatsTitle: '会话亲和性统计',
+        totalSessions: '活跃会话数',
+        sessionBindings: '会话绑定',
+        sessionId: '会话ID',
+        boundEndpoint: '绑定端点',
+        lastAccess: '最后访问',
+        requestCount: '请求次数',
+        unbind: '解除绑定',
+        sessionStatsDisabled: '会话亲和性未启用',
+        sessionStatsEmpty: '暂无活跃会话',
+        unbindSuccess: '解除绑定成功',
+        unbindFailed: '解除绑定失败'
     },
     cost: {
         title: '成本统计',
@@ -691,7 +714,13 @@ export default {
         delete: '删除',
         confirmDeleteTitle: '确认删除',
         close: '关闭',
-        retry: '重试'
+        retry: '重试',
+        refresh: '刷新',
+        actions: '操作',
+        justNow: '刚刚',
+        minutesAgo: '分钟前',
+        hoursAgo: '小时前',
+        daysAgo: '天前'
     },
     interactions: {
         title: '交互记录',

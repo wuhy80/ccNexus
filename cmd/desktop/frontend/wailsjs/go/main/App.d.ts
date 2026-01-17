@@ -131,6 +131,10 @@ export function GetRequestTimeout():Promise<number>;
 
 export function GetRoutingConfig():Promise<string>;
 
+export function GetSessionAffinityConfig():Promise<string>;
+
+export function GetSessionStats():Promise<string>;
+
 export function GetStats():Promise<string>;
 
 export function GetStatsDaily():Promise<string>;
@@ -183,7 +187,7 @@ export function RestoreFromProvider(arg1:string,arg2:string,arg3:string):Promise
 
 export function RestoreFromWebDAV(arg1:string,arg2:string):Promise<void>;
 
-export function SetAlertConfig(arg1:boolean,arg2:number,arg3:boolean,arg4:boolean,arg5:number,arg6:boolean,arg7:number,arg8:number):Promise<void>;
+export function SetAlertConfig(arg1:boolean,arg2:number,arg3:boolean,arg4:boolean,arg5:number,arg6:boolean,arg7:number,arg8:number,arg9:boolean,arg10:number):Promise<void>;
 
 export function SetAutoDarkTheme(arg1:string):Promise<void>;
 
@@ -233,6 +237,8 @@ export function TestWebDAVConnection(arg1:string,arg2:string,arg3:string):Promis
 
 export function ToggleEndpoint(arg1:string,arg2:number,arg3:boolean):Promise<void>;
 
+export function UnbindSession(arg1:string):Promise<void>;
+
 export function UpdateBackupProvider(arg1:string):Promise<void>;
 
 export function UpdateConfig(arg1:string):Promise<void>;
@@ -246,5 +252,7 @@ export function UpdatePort(arg1:number):Promise<void>;
 export function UpdateRoutingConfig(arg1:boolean,arg2:boolean,arg3:boolean,arg4:boolean,arg5:string):Promise<void>;
 
 export function UpdateS3BackupConfig(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:string,arg8:boolean,arg9:boolean):Promise<void>;
+
+export function UpdateSessionAffinityConfig(arg1:boolean,arg2:number,arg3:number):Promise<void>;
 
 export function UpdateWebDAVConfig(arg1:string,arg2:string,arg3:string):Promise<void>;

@@ -77,6 +77,9 @@ type AlertConfig struct {
 	PerformanceAlertEnabled   bool `json:"performanceAlertEnabled"`   // 是否启用性能异常告警
 	LatencyThresholdMs        int  `json:"latencyThresholdMs"`        // 延迟阈值（毫秒），超过此值触发告警，默认5000ms
 	LatencyIncreasePercent    int  `json:"latencyIncreasePercent"`    // 延迟增加百分比，相比平均值增加此比例触发告警，默认200%
+	// 自动启用配置
+	AutoEnableOnRecovery      bool `json:"autoEnableOnRecovery"`      // 是否自动启用恢复的端点
+	AutoEnableSuccessThreshold int  `json:"autoEnableSuccessThreshold"` // 连续成功次数阈值，默认3次
 }
 
 // CacheConfig 请求缓存配置
@@ -91,6 +94,13 @@ type RateLimitConfig struct {
 	Enabled          bool `json:"enabled"`          // 是否启用速率限制
 	GlobalLimit      int  `json:"globalLimit"`      // 全局每分钟最大请求数，默认60
 	PerEndpointLimit int  `json:"perEndpointLimit"` // 每端点每分钟最大请求数，默认30
+}
+
+// SessionAffinityConfig 会话亲和性配置
+type SessionAffinityConfig struct {
+	Enabled              bool `json:"enabled"`              // 是否启用会话亲和性
+	SessionTimeoutHours  int  `json:"sessionTimeoutHours"`  // 会话超时时间（小时），默认24
+	MaxConcurrentPerEndpoint int `json:"maxConcurrentPerEndpoint"` // 每端点最大并发会话数，0表示无限制
 }
 
 // Config represents the application configuration
@@ -114,6 +124,7 @@ type Config struct {
 	Cache                      *CacheConfig     `json:"cache,omitempty"`               // 请求缓存配置
 	RateLimit                  *RateLimitConfig `json:"rateLimit,omitempty"`           // 速率限制配置
 	Routing                    *RoutingConfig   `json:"routing,omitempty"`             // 智能路由配置
+	SessionAffinity            *SessionAffinityConfig `json:"sessionAffinity,omitempty"` // 会话亲和性配置
 	WebDAV                     *WebDAVConfig    `json:"webdav,omitempty"`              // WebDAV synchronization config
 	Backup                     *BackupConfig    `json:"backup,omitempty"`              // Backup/sync configuration
 	Proxy                      *ProxyConfig     `json:"proxy,omitempty"`               // HTTP proxy config
@@ -231,6 +242,16 @@ func (c *Config) CopyFrom(other *Config) {
 		}
 	} else {
 		c.Routing = nil
+	}
+
+	if other.SessionAffinity != nil {
+		c.SessionAffinity = &SessionAffinityConfig{
+			Enabled:              other.SessionAffinity.Enabled,
+			SessionTimeoutHours:  other.SessionAffinity.SessionTimeoutHours,
+			MaxConcurrentPerEndpoint: other.SessionAffinity.MaxConcurrentPerEndpoint,
+		}
+	} else {
+		c.SessionAffinity = nil
 	}
 }
 
@@ -391,6 +412,52 @@ func (c *Config) SetEndpointEnabled(clientType string, index int, enabled bool) 
 			currentIndex++
 		}
 	}
+}
+
+// EnableEndpoint 启用指定名称和客户端类型的端点
+func (c *Config) EnableEndpoint(endpointName, clientType string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	for i := range c.Endpoints {
+		epClientType := c.Endpoints[i].ClientType
+		if epClientType == "" {
+			epClientType = "claude"
+		}
+		if c.Endpoints[i].Name == endpointName && epClientType == clientType {
+			c.Endpoints[i].Enabled = true
+			return nil
+		}
+	}
+
+	return fmt.Errorf("endpoint not found: %s (client: %s)", endpointName, clientType)
+}
+
+// GetEndpointByName 根据名称和客户端类型获取端点
+func (c *Config) GetEndpointByName(endpointName, clientType string) *Endpoint {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	for i := range c.Endpoints {
+		epClientType := c.Endpoints[i].ClientType
+		if epClientType == "" {
+			epClientType = "claude"
+		}
+		if c.Endpoints[i].Name == endpointName && epClientType == clientType {
+			ep := c.Endpoints[i]
+			return &ep
+		}
+	}
+
+	return nil
 }
 
 // MoveEndpoint 将指定客户端类型下的端点从 fromIndex 移动到 toIndex
@@ -681,6 +748,8 @@ func (c *Config) GetAlert() *AlertConfig {
 			PerformanceAlertEnabled:   false,
 			LatencyThresholdMs:        5000,
 			LatencyIncreasePercent:    200,
+			AutoEnableOnRecovery:      false,
+			AutoEnableSuccessThreshold: 3,
 		}
 	}
 	return c.Alert
@@ -735,6 +804,28 @@ func (c *Config) UpdateRateLimit(rateLimit *RateLimitConfig) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.RateLimit = rateLimit
+}
+
+// GetSessionAffinity returns the session affinity configuration (thread-safe)
+// Returns default config if not set
+func (c *Config) GetSessionAffinity() *SessionAffinityConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.SessionAffinity == nil {
+		return &SessionAffinityConfig{
+			Enabled:              false,
+			SessionTimeoutHours:  24,
+			MaxConcurrentPerEndpoint: 0,
+		}
+	}
+	return c.SessionAffinity
+}
+
+// UpdateSessionAffinity updates the session affinity configuration (thread-safe)
+func (c *Config) UpdateSessionAffinity(sessionAffinity *SessionAffinityConfig) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SessionAffinity = sessionAffinity
 }
 
 // StorageAdapter defines the interface needed for loading/saving config
@@ -989,6 +1080,8 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 			NotifyOnRecovery:     true,
 			SystemNotification:   true,
 			AlertCooldownMinutes: 5,
+			AutoEnableOnRecovery: false,
+			AutoEnableSuccessThreshold: 3,
 		}
 		if consecutiveStr, err := storage.GetConfig("alert_consecutiveFailures"); err == nil && consecutiveStr != "" {
 			if consecutive, err := strconv.Atoi(consecutiveStr); err == nil {
@@ -1004,6 +1097,14 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 		if cooldownStr, err := storage.GetConfig("alert_cooldownMinutes"); err == nil && cooldownStr != "" {
 			if cooldown, err := strconv.Atoi(cooldownStr); err == nil {
 				config.Alert.AlertCooldownMinutes = cooldown
+			}
+		}
+		if autoEnable, err := storage.GetConfig("alert_autoEnableOnRecovery"); err == nil && autoEnable != "" {
+			config.Alert.AutoEnableOnRecovery = autoEnable == "true"
+		}
+		if thresholdStr, err := storage.GetConfig("alert_autoEnableSuccessThreshold"); err == nil && thresholdStr != "" {
+			if threshold, err := strconv.Atoi(thresholdStr); err == nil {
+				config.Alert.AutoEnableSuccessThreshold = threshold
 			}
 		}
 	}
@@ -1024,6 +1125,25 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 		}
 		if loadBalanceAlgorithm, err := storage.GetConfig("routing_loadBalanceAlgorithm"); err == nil && loadBalanceAlgorithm != "" {
 			config.Routing.LoadBalanceAlgorithm = loadBalanceAlgorithm
+		}
+	}
+
+	// Load session affinity config
+	if sessionAffinityEnabled, err := storage.GetConfig("sessionAffinity_enabled"); err == nil && sessionAffinityEnabled != "" {
+		config.SessionAffinity = &SessionAffinityConfig{
+			Enabled:              sessionAffinityEnabled == "true",
+			SessionTimeoutHours:  24,
+			MaxConcurrentPerEndpoint: 0,
+		}
+		if timeoutStr, err := storage.GetConfig("sessionAffinity_timeoutHours"); err == nil && timeoutStr != "" {
+			if timeout, err := strconv.Atoi(timeoutStr); err == nil {
+				config.SessionAffinity.SessionTimeoutHours = timeout
+			}
+		}
+		if maxConcurrentStr, err := storage.GetConfig("sessionAffinity_maxConcurrentPerEndpoint"); err == nil && maxConcurrentStr != "" {
+			if maxConcurrent, err := strconv.Atoi(maxConcurrentStr); err == nil {
+				config.SessionAffinity.MaxConcurrentPerEndpoint = maxConcurrent
+			}
 		}
 	}
 
@@ -1163,6 +1283,8 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 		storage.SetConfig("alert_notifyOnRecovery", strconv.FormatBool(c.Alert.NotifyOnRecovery))
 		storage.SetConfig("alert_systemNotification", strconv.FormatBool(c.Alert.SystemNotification))
 		storage.SetConfig("alert_cooldownMinutes", strconv.Itoa(c.Alert.AlertCooldownMinutes))
+		storage.SetConfig("alert_autoEnableOnRecovery", strconv.FormatBool(c.Alert.AutoEnableOnRecovery))
+		storage.SetConfig("alert_autoEnableSuccessThreshold", strconv.Itoa(c.Alert.AutoEnableSuccessThreshold))
 	}
 
 	// Save routing config
@@ -1172,6 +1294,13 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 		storage.SetConfig("routing_enableCostPriority", strconv.FormatBool(c.Routing.EnableCostPriority))
 		storage.SetConfig("routing_enableQuotaRouting", strconv.FormatBool(c.Routing.EnableQuotaRouting))
 		storage.SetConfig("routing_loadBalanceAlgorithm", c.Routing.LoadBalanceAlgorithm)
+	}
+
+	// Save session affinity config
+	if c.SessionAffinity != nil {
+		storage.SetConfig("sessionAffinity_enabled", strconv.FormatBool(c.SessionAffinity.Enabled))
+		storage.SetConfig("sessionAffinity_timeoutHours", strconv.Itoa(c.SessionAffinity.SessionTimeoutHours))
+		storage.SetConfig("sessionAffinity_maxConcurrentPerEndpoint", strconv.Itoa(c.SessionAffinity.MaxConcurrentPerEndpoint))
 	}
 
 	return nil
