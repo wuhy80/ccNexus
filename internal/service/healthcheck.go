@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -317,8 +318,146 @@ func (h *HealthCheckService) testMinimalRequest(apiUrl, apiKey, transformer, mod
 	}
 	defer resp.Body.Close()
 
+	// 读取响应体
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, fmt.Errorf("failed to read response: %v", err)
+	}
+
+	// 检查 HTTP 状态码
 	if resp.StatusCode != http.StatusOK {
+		// 尝试解析错误信息
+		var errorMsg string
+		var errorData map[string]interface{}
+		if json.Unmarshal(respBody, &errorData) == nil {
+			if errObj, ok := errorData["error"]; ok {
+				if errMap, ok := errObj.(map[string]interface{}); ok {
+					if msg, ok := errMap["message"].(string); ok {
+						errorMsg = msg
+					}
+				} else if errStr, ok := errObj.(string); ok {
+					errorMsg = errStr
+				}
+			}
+		}
+		if errorMsg != "" {
+			return resp.StatusCode, fmt.Errorf("HTTP %d: %s", resp.StatusCode, errorMsg)
+		}
 		return resp.StatusCode, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	// 验证响应内容是否有效（检查是否包含错误）
+	var respData map[string]interface{}
+	if err := json.Unmarshal(respBody, &respData); err != nil {
+		return resp.StatusCode, fmt.Errorf("invalid JSON response: %v", err)
+	}
+
+	// 检查响应中是否包含错误字段
+	if errorField, hasError := respData["error"]; hasError {
+		var errorMsg string
+		if errMap, ok := errorField.(map[string]interface{}); ok {
+			if msg, ok := errMap["message"].(string); ok {
+				errorMsg = msg
+			} else if msgType, ok := errMap["type"].(string); ok {
+				errorMsg = msgType
+			}
+		} else if errStr, ok := errorField.(string); ok {
+			errorMsg = errStr
+		}
+		if errorMsg != "" {
+			return resp.StatusCode, fmt.Errorf("API error: %s", errorMsg)
+		}
+		return resp.StatusCode, fmt.Errorf("API returned error")
+	}
+
+	// 验证响应包含预期的内容字段，并检查内容是否有效
+	switch transformer {
+	case "claude":
+		// Claude 应该返回 content 字段
+		content, hasContent := respData["content"]
+		if !hasContent {
+			return resp.StatusCode, fmt.Errorf("invalid response: missing 'content' field")
+		}
+		// 检查 content 是否为空数组
+		if contentArray, ok := content.([]interface{}); ok {
+			if len(contentArray) == 0 {
+				return resp.StatusCode, fmt.Errorf("invalid response: empty content array")
+			}
+		}
+		// 检查 stop_reason 是否异常
+		if stopReason, ok := respData["stop_reason"].(string); ok {
+			if stopReason == "error" {
+				return resp.StatusCode, fmt.Errorf("API error: stop_reason is 'error'")
+			}
+		}
+
+	case "openai", "openai2":
+		// OpenAI 应该返回 choices 字段
+		choices, hasChoices := respData["choices"]
+		if !hasChoices {
+			return resp.StatusCode, fmt.Errorf("invalid response: missing 'choices' field")
+		}
+		// 检查 choices 是否为空数组
+		if choicesArray, ok := choices.([]interface{}); ok {
+			if len(choicesArray) == 0 {
+				return resp.StatusCode, fmt.Errorf("invalid response: empty choices array")
+			}
+			// 检查第一个 choice 的 finish_reason
+			if len(choicesArray) > 0 {
+				if choice, ok := choicesArray[0].(map[string]interface{}); ok {
+					if finishReason, ok := choice["finish_reason"].(string); ok {
+						// content_filter 表示内容被过滤
+						if finishReason == "content_filter" {
+							return resp.StatusCode, fmt.Errorf("content filtered by safety system")
+						}
+					}
+					// 检查 message 是否存在且有内容
+					if message, ok := choice["message"].(map[string]interface{}); ok {
+						if content, ok := message["content"].(string); ok {
+							if content == "" {
+								return resp.StatusCode, fmt.Errorf("invalid response: empty message content")
+							}
+						}
+					}
+				}
+			}
+		}
+
+	case "gemini":
+		// Gemini 应该返回 candidates 字段
+		candidates, hasCandidates := respData["candidates"]
+		if !hasCandidates {
+			return resp.StatusCode, fmt.Errorf("invalid response: missing 'candidates' field")
+		}
+		// 检查 candidates 是否为空数组
+		if candidatesArray, ok := candidates.([]interface{}); ok {
+			if len(candidatesArray) == 0 {
+				return resp.StatusCode, fmt.Errorf("invalid response: empty candidates array")
+			}
+			// 检查第一个 candidate 的 finishReason
+			if len(candidatesArray) > 0 {
+				if candidate, ok := candidatesArray[0].(map[string]interface{}); ok {
+					if finishReason, ok := candidate["finishReason"].(string); ok {
+						// SAFETY 表示被安全过滤器拦截
+						if finishReason == "SAFETY" {
+							return resp.StatusCode, fmt.Errorf("content blocked by safety filters")
+						}
+						// RECITATION 表示可能包含受版权保护的内容
+						if finishReason == "RECITATION" {
+							return resp.StatusCode, fmt.Errorf("content blocked due to recitation")
+						}
+					}
+					// 检查 content 是否存在且有 parts
+					if content, ok := candidate["content"].(map[string]interface{}); ok {
+						if parts, ok := content["parts"].([]interface{}); ok {
+							if len(parts) == 0 {
+								return resp.StatusCode, fmt.Errorf("invalid response: empty content parts")
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	return resp.StatusCode, nil
