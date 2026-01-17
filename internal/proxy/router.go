@@ -37,12 +37,13 @@ func NewRouter(cfg *config.Config, monitor *Monitor) *Router {
 
 // SelectEndpoint 选择端点（组合策略）
 // 1. 模型匹配过滤 → 2. 配额过滤 → 3. 按成本/负载/优先级排序选择
+// 注意：只从可用状态(available)的端点中选择
 func (r *Router) SelectEndpoint(clientType ClientType, requestModel string, quotaTracker *QuotaTracker) (config.Endpoint, error) {
 	routingCfg := r.config.GetRoutingConfig()
-	endpoints := r.config.GetEnabledEndpointsByClient(string(clientType))
+	endpoints := r.config.GetAvailableEndpointsByClient(string(clientType))
 
 	if len(endpoints) == 0 {
-		return config.Endpoint{}, errors.New("no enabled endpoints for client type")
+		return config.Endpoint{}, errors.New("no available endpoints for client type")
 	}
 
 	// 步骤1: 模型匹配过滤
@@ -259,7 +260,7 @@ func (r *Router) selectRoundRobin(endpoints []config.Endpoint, clientType Client
 	return endpoints[index], nil
 }
 
-// selectByPriority 按优先级选择（优先级数字越小越优先）
+// selectByPriority 按优先级选择端点（相同优先级随机选择）
 func (r *Router) selectByPriority(endpoints []config.Endpoint) (config.Endpoint, error) {
 	if len(endpoints) == 0 {
 		return config.Endpoint{}, errors.New("no endpoints")
@@ -269,11 +270,33 @@ func (r *Router) selectByPriority(endpoints []config.Endpoint) (config.Endpoint,
 	sorted := make([]config.Endpoint, len(endpoints))
 	copy(sorted, endpoints)
 
+	// 按优先级排序（数字越小优先级越高）
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Priority < sorted[j].Priority
 	})
 
-	return sorted[0], nil
+	// 找出所有具有最高优先级的端点
+	highestPriority := sorted[0].Priority
+	var highestPriorityEndpoints []config.Endpoint
+	for _, ep := range sorted {
+		if ep.Priority == highestPriority {
+			highestPriorityEndpoints = append(highestPriorityEndpoints, ep)
+		} else {
+			break // 已排序，后面的优先级更低
+		}
+	}
+
+	// 如果只有一个最高优先级端点，直接返回
+	if len(highestPriorityEndpoints) == 1 {
+		return highestPriorityEndpoints[0], nil
+	}
+
+	// 多个相同优先级的端点，随机选择一个
+	r.mu.Lock()
+	randomIndex := r.rng.Intn(len(highestPriorityEndpoints))
+	r.mu.Unlock()
+
+	return highestPriorityEndpoints[randomIndex], nil
 }
 
 // ResetRoundRobinIndex 重置轮询索引

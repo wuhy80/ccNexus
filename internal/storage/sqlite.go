@@ -143,6 +143,11 @@ func (s *SQLiteStorage) initSchema() error {
 		return err
 	}
 
+	// 迁移端点状态字段
+	if err := s.migrateEndpointStatus(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -557,7 +562,7 @@ func (s *SQLiteStorage) GetEndpoints() ([]Endpoint, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, COALESCE(tags, '') as tags, sort_order, created_at, updated_at, COALESCE(model_patterns, '') as model_patterns, COALESCE(cost_per_input_token, 0) as cost_per_input_token, COALESCE(cost_per_output_token, 0) as cost_per_output_token, COALESCE(quota_limit, 0) as quota_limit, COALESCE(quota_reset_cycle, '') as quota_reset_cycle, COALESCE(priority, 100) as priority FROM endpoints ORDER BY client_type, sort_order ASC`)
+	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, COALESCE(status, '') as status, transformer, model, remark, COALESCE(tags, '') as tags, sort_order, created_at, updated_at, COALESCE(model_patterns, '') as model_patterns, COALESCE(cost_per_input_token, 0) as cost_per_input_token, COALESCE(cost_per_output_token, 0) as cost_per_output_token, COALESCE(quota_limit, 0) as quota_limit, COALESCE(quota_reset_cycle, '') as quota_reset_cycle, COALESCE(priority, 100) as priority FROM endpoints ORDER BY client_type, sort_order ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -566,8 +571,19 @@ func (s *SQLiteStorage) GetEndpoints() ([]Endpoint, error) {
 	var endpoints []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.Tags, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt, &ep.ModelPatterns, &ep.CostPerInputToken, &ep.CostPerOutputToken, &ep.QuotaLimit, &ep.QuotaResetCycle, &ep.Priority); err != nil {
+		var status string
+		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &status, &ep.Transformer, &ep.Model, &ep.Remark, &ep.Tags, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt, &ep.ModelPatterns, &ep.CostPerInputToken, &ep.CostPerOutputToken, &ep.QuotaLimit, &ep.QuotaResetCycle, &ep.Priority); err != nil {
 			return nil, err
+		}
+		// 设置状态字段，如果为空则从 enabled 推断
+		if status != "" {
+			ep.Status = status
+		} else {
+			if ep.Enabled {
+				ep.Status = "available"
+			} else {
+				ep.Status = "disabled"
+			}
 		}
 		endpoints = append(endpoints, ep)
 	}
@@ -580,7 +596,7 @@ func (s *SQLiteStorage) GetEndpointsByClient(clientType string) ([]Endpoint, err
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, transformer, model, remark, COALESCE(tags, '') as tags, sort_order, created_at, updated_at, COALESCE(model_patterns, '') as model_patterns, COALESCE(cost_per_input_token, 0) as cost_per_input_token, COALESCE(cost_per_output_token, 0) as cost_per_output_token, COALESCE(quota_limit, 0) as quota_limit, COALESCE(quota_reset_cycle, '') as quota_reset_cycle, COALESCE(priority, 100) as priority FROM endpoints WHERE COALESCE(client_type, 'claude') = ? ORDER BY sort_order ASC`, clientType)
+	rows, err := s.db.Query(`SELECT id, name, COALESCE(client_type, 'claude') as client_type, api_url, api_key, enabled, COALESCE(status, '') as status, transformer, model, remark, COALESCE(tags, '') as tags, sort_order, created_at, updated_at, COALESCE(model_patterns, '') as model_patterns, COALESCE(cost_per_input_token, 0) as cost_per_input_token, COALESCE(cost_per_output_token, 0) as cost_per_output_token, COALESCE(quota_limit, 0) as quota_limit, COALESCE(quota_reset_cycle, '') as quota_reset_cycle, COALESCE(priority, 100) as priority FROM endpoints WHERE COALESCE(client_type, 'claude') = ? ORDER BY sort_order ASC`, clientType)
 	if err != nil {
 		return nil, err
 	}
@@ -589,8 +605,19 @@ func (s *SQLiteStorage) GetEndpointsByClient(clientType string) ([]Endpoint, err
 	var endpoints []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.Tags, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt, &ep.ModelPatterns, &ep.CostPerInputToken, &ep.CostPerOutputToken, &ep.QuotaLimit, &ep.QuotaResetCycle, &ep.Priority); err != nil {
+		var status string
+		if err := rows.Scan(&ep.ID, &ep.Name, &ep.ClientType, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &status, &ep.Transformer, &ep.Model, &ep.Remark, &ep.Tags, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt, &ep.ModelPatterns, &ep.CostPerInputToken, &ep.CostPerOutputToken, &ep.QuotaLimit, &ep.QuotaResetCycle, &ep.Priority); err != nil {
 			return nil, err
+		}
+		// 设置状态字段，如果为空则从 enabled 推断
+		if status != "" {
+			ep.Status = status
+		} else {
+			if ep.Enabled {
+				ep.Status = "available"
+			} else {
+				ep.Status = "disabled"
+			}
 		}
 		endpoints = append(endpoints, ep)
 	}
@@ -614,8 +641,8 @@ func (s *SQLiteStorage) SaveEndpoint(ep *Endpoint) error {
 		priority = 100
 	}
 
-	result, err := s.db.Exec(`INSERT INTO endpoints (name, client_type, api_url, api_key, enabled, transformer, model, remark, tags, sort_order, model_patterns, cost_per_input_token, cost_per_output_token, quota_limit, quota_reset_cycle, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		ep.Name, clientType, ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.Tags, ep.SortOrder, ep.ModelPatterns, ep.CostPerInputToken, ep.CostPerOutputToken, ep.QuotaLimit, ep.QuotaResetCycle, priority)
+	result, err := s.db.Exec(`INSERT INTO endpoints (name, client_type, api_url, api_key, enabled, status, transformer, model, remark, tags, sort_order, model_patterns, cost_per_input_token, cost_per_output_token, quota_limit, quota_reset_cycle, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ep.Name, clientType, ep.APIUrl, ep.APIKey, ep.Enabled, ep.Status, ep.Transformer, ep.Model, ep.Remark, ep.Tags, ep.SortOrder, ep.ModelPatterns, ep.CostPerInputToken, ep.CostPerOutputToken, ep.QuotaLimit, ep.QuotaResetCycle, priority)
 	if err != nil {
 		return err
 	}
@@ -646,8 +673,8 @@ func (s *SQLiteStorage) UpdateEndpoint(ep *Endpoint) error {
 		priority = 100
 	}
 
-	_, err := s.db.Exec(`UPDATE endpoints SET api_url=?, api_key=?, enabled=?, transformer=?, model=?, remark=?, tags=?, sort_order=?, model_patterns=?, cost_per_input_token=?, cost_per_output_token=?, quota_limit=?, quota_reset_cycle=?, priority=?, updated_at=CURRENT_TIMESTAMP WHERE name=? AND COALESCE(client_type, 'claude')=?`,
-		ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.Tags, ep.SortOrder, ep.ModelPatterns, ep.CostPerInputToken, ep.CostPerOutputToken, ep.QuotaLimit, ep.QuotaResetCycle, priority, ep.Name, clientType)
+	_, err := s.db.Exec(`UPDATE endpoints SET api_url=?, api_key=?, enabled=?, status=?, transformer=?, model=?, remark=?, tags=?, sort_order=?, model_patterns=?, cost_per_input_token=?, cost_per_output_token=?, quota_limit=?, quota_reset_cycle=?, priority=?, updated_at=CURRENT_TIMESTAMP WHERE name=? AND COALESCE(client_type, 'claude')=?`,
+		ep.APIUrl, ep.APIKey, ep.Enabled, ep.Status, ep.Transformer, ep.Model, ep.Remark, ep.Tags, ep.SortOrder, ep.ModelPatterns, ep.CostPerInputToken, ep.CostPerOutputToken, ep.QuotaLimit, ep.QuotaResetCycle, priority, ep.Name, clientType)
 	return err
 }
 
@@ -1858,6 +1885,43 @@ func (s *SQLiteStorage) migrateEndpointQuotas() error {
 			return err
 		}
 	} else if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// migrateEndpointStatus 添加端点状态字段并迁移现有数据
+func (s *SQLiteStorage) migrateEndpointStatus() error {
+	// 检查 status 列是否存在
+	var count int
+	err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM pragma_table_info('endpoints')
+		WHERE name='status'
+	`).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count > 0 {
+		return nil // 已迁移
+	}
+
+	// 添加 status 列
+	_, err = s.db.Exec(`ALTER TABLE endpoints ADD COLUMN status TEXT DEFAULT 'available'`)
+	if err != nil {
+		return err
+	}
+
+	// 迁移现有数据: enabled=true → available, enabled=false → disabled
+	_, err = s.db.Exec(`
+		UPDATE endpoints
+		SET status = CASE
+			WHEN enabled = 1 THEN 'available'
+			ELSE 'disabled'
+		END
+	`)
+	if err != nil {
 		return err
 	}
 

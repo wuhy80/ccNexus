@@ -311,7 +311,8 @@ func (e *EndpointService) UpdateEndpoint(clientType string, index int, name, api
     return nil
 }
 
-// ToggleEndpoint toggles the enabled state of an endpoint for a specific client type
+// ToggleEndpoint toggles the enabled/disabled state of an endpoint for a specific client type
+// 注意：启用时设置为 unavailable 状态，等待健康检查；禁用时设置为 disabled 状态
 func (e *EndpointService) ToggleEndpoint(clientType string, index int, enabled bool) error {
     clientType = normalizeClientType(clientType)
 
@@ -323,20 +324,27 @@ func (e *EndpointService) ToggleEndpoint(clientType string, index int, enabled b
 
     endpointName := endpoints[index].Name
 
-    // Update in all endpoints
-    allEndpoints := e.config.GetEndpoints()
-    for i, ep := range allEndpoints {
-        if ep.Name == endpointName && ep.ClientType == clientType {
-            allEndpoints[i].Enabled = enabled
-            break
-        }
+    // 根据 enabled 参数设置状态
+    var newStatus config.EndpointStatus
+    if enabled {
+        // 启用：设置为不可用，等待健康检查
+        newStatus = config.EndpointStatusUnavailable
+    } else {
+        // 禁用
+        newStatus = config.EndpointStatusDisabled
     }
-    e.config.UpdateEndpoints(allEndpoints)
 
+    // 更新状态
+    if err := e.config.SetEndpointStatus(endpointName, clientType, newStatus); err != nil {
+        return err
+    }
+
+    // 更新代理配置
     if err := e.proxy.UpdateConfig(e.config); err != nil {
         return err
     }
 
+    // 保存到数据库
     if e.storage != nil {
         configAdapter := storage.NewConfigStorageAdapter(e.storage)
         if err := e.config.SaveToStorage(configAdapter); err != nil {
@@ -345,7 +353,7 @@ func (e *EndpointService) ToggleEndpoint(clientType string, index int, enabled b
     }
 
     if enabled {
-        logger.Info("Endpoint enabled: %s (client: %s)", endpointName, clientType)
+        logger.Info("Endpoint enabled: %s (client: %s), waiting for health check", endpointName, clientType)
     } else {
         logger.Info("Endpoint disabled: %s (client: %s)", endpointName, clientType)
     }
@@ -1574,15 +1582,22 @@ func (e *EndpointService) TestAllEndpointsAndOptimize(clientType string) string 
 		}
 	}
 
-	// 应用更改：调整端点状态
-	// 1. 先处理启用/禁用
-	for i, r := range results {
-		if r.success && !r.endpoint.Enabled {
-			// 启用之前禁用的端点
-			e.config.SetEndpointEnabled(clientType, i, true)
-		} else if !r.success && r.endpoint.Enabled {
-			// 禁用检测失败的端点
-			e.config.SetEndpointEnabled(clientType, i, false)
+	// 应用更改：根据检测结果设置状态
+	// 注意：跳过禁用状态的端点，不自动启用
+	for _, r := range results {
+		// 跳过禁用状态的端点
+		if r.endpoint.Status == config.EndpointStatusDisabled {
+			continue
+		}
+
+		if r.success {
+			// 检测成功：设置为可用
+			e.config.SetEndpointStatus(r.endpoint.Name, clientType, config.EndpointStatusAvailable)
+		} else {
+			// 检测失败：设置为不可用（如果之前是可用的）
+			if r.endpoint.Status == config.EndpointStatusAvailable {
+				e.config.SetEndpointStatus(r.endpoint.Name, clientType, config.EndpointStatusUnavailable)
+			}
 		}
 	}
 

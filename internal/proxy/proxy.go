@@ -266,21 +266,23 @@ func (p *Proxy) Stop() error {
 	return nil
 }
 
-// getEnabledEndpoints returns only the enabled endpoints
+// getEnabledEndpoints returns available endpoints (only endpoints with status=available)
+// 注意：此方法已改为只返回可用状态的端点，不再返回所有启用的端点
 func (p *Proxy) getEnabledEndpoints() []config.Endpoint {
 	allEndpoints := p.config.GetEndpoints()
-	enabled := make([]config.Endpoint, 0)
+	available := make([]config.Endpoint, 0)
 	for _, ep := range allEndpoints {
-		if ep.Enabled {
-			enabled = append(enabled, ep)
+		if ep.Status == config.EndpointStatusAvailable {
+			available = append(available, ep)
 		}
 	}
-	return enabled
+	return available
 }
 
-// getEnabledEndpointsForClient returns enabled endpoints for a specific client type
+// getEnabledEndpointsForClient returns available endpoints for a specific client type
+// 注意：此方法已改为只返回可用状态的端点
 func (p *Proxy) getEnabledEndpointsForClient(clientType ClientType) []config.Endpoint {
-	return p.config.GetEnabledEndpointsByClient(string(clientType))
+	return p.config.GetAvailableEndpointsByClient(string(clientType))
 }
 
 // getCurrentEndpoint returns the current endpoint (thread-safe) - legacy for backward compatibility
@@ -318,9 +320,9 @@ func (p *Proxy) selectEndpointForRequest(clientType ClientType, requestModel str
 	// 1. 检查会话亲和性
 	if p.sessionAffinity != nil && sessionID != "" {
 		if endpointName, exists := p.sessionAffinity.GetEndpointForSession(sessionID, string(clientType)); exists {
-			// 验证端点仍然可用
+			// 验证端点仍然可用（必须是 available 状态）
 			endpoint := p.config.GetEndpointByName(endpointName, string(clientType))
-			if endpoint != nil && endpoint.Enabled {
+			if endpoint != nil && endpoint.Status == config.EndpointStatusAvailable {
 				logger.Debug("[SESSION:%s] Using bound endpoint: %s", sessionID, endpointName)
 				return *endpoint
 			} else {

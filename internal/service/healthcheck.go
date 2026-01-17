@@ -159,13 +159,14 @@ func (h *HealthCheckService) run() {
 	}
 }
 
-// checkAllEndpoints checks all enabled endpoints
+// checkAllEndpoints checks all non-disabled endpoints
 func (h *HealthCheckService) checkAllEndpoints() {
 	endpoints := h.config.GetEndpoints()
 
 	var wg sync.WaitGroup
 	for _, ep := range endpoints {
-		if !ep.Enabled {
+		// 跳过禁用的端点
+		if ep.Status == config.EndpointStatusDisabled {
 			continue
 		}
 
@@ -207,9 +208,9 @@ func (h *HealthCheckService) checkEndpoint(endpoint config.Endpoint) {
 		status = "healthy"
 		isHealthy = true
 
-		// 自动启用端点（如果当前是禁用状态）
-		if !endpoint.Enabled {
-			h.autoEnableEndpoint(endpoint.Name, clientType)
+		// 自动设置为可用状态
+		if endpoint.Status != config.EndpointStatusAvailable {
+			h.setEndpointAvailable(endpoint.Name, clientType)
 		}
 	} else if statusCode == 401 || statusCode == 403 {
 		// Auth error - still record latency but log warning
@@ -224,6 +225,11 @@ func (h *HealthCheckService) checkEndpoint(endpoint config.Endpoint) {
 		status = "error"
 		if err != nil {
 			errorMsg = err.Error()
+		}
+
+		// 自动设置为不可用状态
+		if endpoint.Status == config.EndpointStatusAvailable {
+			h.setEndpointUnavailable(endpoint.Name, clientType)
 		}
 	}
 
@@ -584,7 +590,41 @@ func (h *HealthCheckService) processPerformanceAlert(endpointName, clientType st
 	}
 }
 
+// setEndpointAvailable 设置端点为可用状态
+func (h *HealthCheckService) setEndpointAvailable(endpointName, clientType string) {
+	if err := h.config.SetEndpointStatus(endpointName, clientType, config.EndpointStatusAvailable); err != nil {
+		logger.Warn("Failed to set endpoint %s to available: %v", endpointName, err)
+		return
+	}
+
+	logger.Info("Endpoint %s (client: %s) is now AVAILABLE", endpointName, clientType)
+
+	// 触发恢复通知
+	alertConfig := h.config.GetAlert()
+	if alertConfig != nil && alertConfig.NotifyOnRecovery && h.alertCallback != nil {
+		event := AlertEvent{
+			EndpointName: endpointName,
+			ClientType:   clientType,
+			AlertType:    "recovery",
+			Message:      fmt.Sprintf("端点 %s 已恢复可用", endpointName),
+			Timestamp:    time.Now(),
+		}
+		h.alertCallback(event)
+	}
+}
+
+// setEndpointUnavailable 设置端点为不可用状态
+func (h *HealthCheckService) setEndpointUnavailable(endpointName, clientType string) {
+	if err := h.config.SetEndpointStatus(endpointName, clientType, config.EndpointStatusUnavailable); err != nil {
+		logger.Warn("Failed to set endpoint %s to unavailable: %v", endpointName, err)
+		return
+	}
+
+	logger.Warn("Endpoint %s (client: %s) is now UNAVAILABLE", endpointName, clientType)
+}
+
 // autoEnableEndpoint 自动启用端点（连续成功达到阈值后）
+// 已废弃：三状态系统中不再需要此功能
 func (h *HealthCheckService) autoEnableEndpoint(endpointName, clientType string) {
 	alertConfig := h.config.GetAlert()
 	if alertConfig == nil || !alertConfig.AutoEnableOnRecovery {

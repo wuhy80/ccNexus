@@ -311,6 +311,7 @@ export async function renderEndpoints(endpoints) {
         const totalInputWithCache = (stats.inputTokens || 0) + (stats.cacheCreationTokens || 0) + (stats.cacheReadTokens || 0);
         const totalTokens = totalInputWithCache + (stats.outputTokens || 0);
         const enabled = ep.enabled !== undefined ? ep.enabled : true;
+        const status = ep.status || (enabled ? 'available' : 'disabled');
         const transformer = ep.transformer || 'claude';
         const model = ep.model || '';
         const isCurrentEndpoint = ep.name === currentEndpointName;
@@ -332,12 +333,22 @@ export async function renderEndpoints(endpoints) {
             testStatusTip = t('endpoints.testTipFailed');
         }
 
+        // 确定状态显示
+        let statusBadge = '';
+        if (status === 'available') {
+            statusBadge = '<span class="status-badge status-available">' + t('endpoints.statusAvailable') + '</span>';
+        } else if (status === 'unavailable') {
+            statusBadge = '<span class="status-badge status-unavailable">' + t('endpoints.statusUnavailable') + '</span>';
+        } else if (status === 'disabled') {
+            statusBadge = '<span class="status-badge status-disabled">' + t('endpoints.statusDisabled') + '</span>';
+        }
+
         item.innerHTML = `
             <div class="endpoint-info">
                 <h3>
                     <span title="${testStatusTip}" style="cursor: help">${testStatusIcon}</span>
                     ${ep.name}
-                    ${!enabled ? '<span class="disabled-badge">' + t('endpoints.disabled') + '</span>' : ''}
+                    ${statusBadge}
                     ${isCurrentEndpoint ? '<span class="current-badge">' + t('endpoints.current') + '</span>' : ''}
                     ${enabled && !isCurrentEndpoint ? '<button class="btn btn-switch" data-action="switch" data-name="' + ep.name + '">' + t('endpoints.switchTo') + '</button>' : ''}
                 </h3>
@@ -635,6 +646,7 @@ export async function checkAllEndpointsOnStartup() {
 function renderCompactView(sortedEndpoints, container, currentEndpointName) {
     sortedEndpoints.forEach(({ endpoint: ep, originalIndex: index, stats }) => {
         const enabled = ep.enabled !== undefined ? ep.enabled : true;
+        const status = ep.status || (enabled ? 'available' : 'disabled');
         const transformer = ep.transformer || 'claude';
         const model = ep.model || '';
         const isCurrentEndpoint = ep.name === currentEndpointName;
@@ -649,6 +661,16 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
         } else if (testStatus === false) {
             testStatusIcon = '❌';
             testStatusTip = t('endpoints.testTipFailed');
+        }
+
+        // 确定状态显示
+        let statusBadge = '';
+        if (status === 'available') {
+            statusBadge = '<span class="status-badge status-available">' + t('endpoints.statusAvailable') + '</span>';
+        } else if (status === 'unavailable') {
+            statusBadge = '<span class="status-badge status-unavailable">' + t('endpoints.statusUnavailable') + '</span>';
+        } else if (status === 'disabled') {
+            statusBadge = '<span class="status-badge status-disabled">' + t('endpoints.statusDisabled') + '</span>';
         }
 
         const item = document.createElement('div');
@@ -685,8 +707,9 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
             </div>
             <span class="compact-status" title="${testStatusTip}" style="cursor: help">${testStatusIcon}</span>
             <span class="compact-name" title="${ep.name}">${ep.name}</span>
+            ${statusBadge}
             ${tagsHtml ? `<span class="compact-tags">${tagsHtml}</span>` : ''}
-            ${isCurrentEndpoint ? '<span class="btn btn-primary compact-badge-btn">' + t('endpoints.current') + '</span>' : (enabled ? '<button class="btn btn-primary compact-badge-btn" data-action="switch" data-name="' + ep.name + '">' + t('endpoints.switchTo') + '</button>' : '<span class="btn btn-primary compact-badge-btn compact-badge-disabled">' + t('endpoints.disabled') + '</span>')}
+            ${isCurrentEndpoint ? '<span class="btn btn-primary compact-badge-btn">' + t('endpoints.current') + '</span>' : (status === 'available' ? '<button class="btn btn-primary compact-badge-btn" data-action="switch" data-name="' + ep.name + '">' + t('endpoints.switchTo') + '</button>' : '')}
             <span class="compact-url" title="${ep.apiUrl}"><span class="compact-url-icon">🌐</span>${displayUrl}</span>
             <span class="compact-transformer">🔄 ${transformer}</span>
             <span class="compact-stats" title="${statsTooltip}">📊 ${stats.requests} | 🎯 ${formatTokens(totalTokens)}</span>

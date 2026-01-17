@@ -8,7 +8,8 @@ type Endpoint struct {
 	ClientType  string    `json:"clientType"` // 客户端类型: claude, gemini, codex
 	APIUrl      string    `json:"apiUrl"`
 	APIKey      string    `json:"apiKey"`
-	Enabled     bool      `json:"enabled"`
+	Status      string    `json:"status"`     // 端点状态: available, unavailable, disabled
+	Enabled     bool      `json:"enabled"`    // 向后兼容字段
 	Transformer string    `json:"transformer"`
 	Model       string    `json:"model"`
 	Remark      string    `json:"remark"`

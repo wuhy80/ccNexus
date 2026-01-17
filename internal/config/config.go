@@ -6,17 +6,27 @@ import (
 	"sync"
 )
 
+// EndpointStatus 端点状态类型
+type EndpointStatus string
+
+const (
+	EndpointStatusAvailable   EndpointStatus = "available"   // 可用 - 健康检查通过，可接收请求
+	EndpointStatusUnavailable EndpointStatus = "unavailable" // 不可用 - 健康检查失败，不接收请求但继续检查
+	EndpointStatusDisabled    EndpointStatus = "disabled"    // 禁用 - 用户手动禁用，停止所有检查和请求
+)
+
 // Endpoint represents a single API endpoint configuration
 type Endpoint struct {
-	Name        string `json:"name"`
-	ClientType  string `json:"clientType,omitempty"`  // Client type: claude, gemini, codex (default: claude)
-	APIUrl      string `json:"apiUrl"`
-	APIKey      string `json:"apiKey"`
-	Enabled     bool   `json:"enabled"`
-	Transformer string `json:"transformer,omitempty"` // Transformer type: claude, openai, gemini, deepseek
-	Model       string `json:"model,omitempty"`       // Target model name for non-Claude APIs
-	Remark      string `json:"remark,omitempty"`      // Optional remark for the endpoint
-	Tags        string `json:"tags,omitempty"`        // Comma-separated tags for grouping/filtering
+	Name        string         `json:"name"`
+	ClientType  string         `json:"clientType,omitempty"`  // Client type: claude, gemini, codex (default: claude)
+	APIUrl      string         `json:"apiUrl"`
+	APIKey      string         `json:"apiKey"`
+	Status      EndpointStatus `json:"status"`                // 端点状态：available, unavailable, disabled
+	Enabled     bool           `json:"enabled"`               // 向后兼容字段，从 Status 派生
+	Transformer string         `json:"transformer,omitempty"` // Transformer type: claude, openai, gemini, deepseek
+	Model       string         `json:"model,omitempty"`       // Target model name for non-Claude APIs
+	Remark      string         `json:"remark,omitempty"`      // Optional remark for the endpoint
+	Tags        string         `json:"tags,omitempty"`        // Comma-separated tags for grouping/filtering
 
 	// 智能路由相关字段
 	ModelPatterns      string  `json:"modelPatterns,omitempty"`      // 模型匹配模式，逗号分隔，支持通配符如 claude-*,gpt-4*
@@ -25,6 +35,40 @@ type Endpoint struct {
 	QuotaLimit         int64   `json:"quotaLimit,omitempty"`         // Token 配额限制，0 表示无限制
 	QuotaResetCycle    string  `json:"quotaResetCycle,omitempty"`    // 配额重置周期：daily/weekly/monthly/never
 	Priority           int     `json:"priority,omitempty"`           // 优先级，数字越小优先级越高，默认100
+}
+
+// IsEnabled 返回端点是否启用（非禁用状态）
+func (e *Endpoint) IsEnabled() bool {
+	return e.Status != EndpointStatusDisabled
+}
+
+// IsAvailable 返回端点是否可用（可接收请求）
+func (e *Endpoint) IsAvailable() bool {
+	return e.Status == EndpointStatusAvailable
+}
+
+// SetDisabled 设置为禁用状态
+func (e *Endpoint) SetDisabled() {
+	e.Status = EndpointStatusDisabled
+	e.Enabled = false
+}
+
+// SetEnabled 设置为启用状态（初始为不可用，等待健康检查）
+func (e *Endpoint) SetEnabled() {
+	e.Status = EndpointStatusUnavailable
+	e.Enabled = true
+}
+
+// SetAvailable 设置为可用状态（健康检查成功）
+func (e *Endpoint) SetAvailable() {
+	e.Status = EndpointStatusAvailable
+	e.Enabled = true
+}
+
+// SetUnavailable 设置为不可用状态（健康检查失败）
+func (e *Endpoint) SetUnavailable() {
+	e.Status = EndpointStatusUnavailable
+	e.Enabled = true
 }
 
 // WebDAVConfig represents WebDAV synchronization configuration
@@ -269,6 +313,7 @@ func DefaultConfig() *Config {
 				ClientType:  "claude",
 				APIUrl:      "api.anthropic.com",
 				APIKey:      "your-api-key-here",
+				Status:      EndpointStatusAvailable, // 默认为可用状态
 				Enabled:     true,
 				Transformer: "claude",
 			},
@@ -345,6 +390,7 @@ func (c *Config) GetEndpointsByClient(clientType string) []Endpoint {
 }
 
 // GetEnabledEndpointsByClient returns enabled endpoints filtered by client type (thread-safe)
+// 返回非禁用的端点（可用+不可用）
 func (c *Config) GetEnabledEndpointsByClient(clientType string) []Endpoint {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -360,11 +406,33 @@ func (c *Config) GetEnabledEndpointsByClient(clientType string) []Endpoint {
 		if epClientType == "" {
 			epClientType = "claude"
 		}
-		if epClientType == clientType && ep.Enabled {
+		if epClientType == clientType && ep.Status != EndpointStatusDisabled {
 			filtered = append(filtered, ep)
 		}
 	}
 	return filtered
+}
+
+// GetAvailableEndpointsByClient 返回可用状态的端点（只包含健康检查通过的端点）
+func (c *Config) GetAvailableEndpointsByClient(clientType string) []Endpoint {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	var available []Endpoint
+	for _, ep := range c.Endpoints {
+		epClientType := ep.ClientType
+		if epClientType == "" {
+			epClientType = "claude"
+		}
+		if epClientType == clientType && ep.Status == EndpointStatusAvailable {
+			available = append(available, ep)
+		}
+	}
+	return available
 }
 
 // GetPort returns the configured port (thread-safe)
@@ -406,7 +474,11 @@ func (c *Config) SetEndpointEnabled(clientType string, index int, enabled bool) 
 		}
 		if epClientType == clientType {
 			if currentIndex == index {
-				c.Endpoints[i].Enabled = enabled
+				if enabled {
+					c.Endpoints[i].SetEnabled() // 启用时设置为不可用，等待健康检查
+				} else {
+					c.Endpoints[i].SetDisabled() // 禁用
+				}
 				return
 			}
 			currentIndex++
@@ -414,8 +486,8 @@ func (c *Config) SetEndpointEnabled(clientType string, index int, enabled bool) 
 	}
 }
 
-// EnableEndpoint 启用指定名称和客户端类型的端点
-func (c *Config) EnableEndpoint(endpointName, clientType string) error {
+// SetEndpointStatus 设置端点状态
+func (c *Config) SetEndpointStatus(endpointName, clientType string, status EndpointStatus) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -429,12 +501,28 @@ func (c *Config) EnableEndpoint(endpointName, clientType string) error {
 			epClientType = "claude"
 		}
 		if c.Endpoints[i].Name == endpointName && epClientType == clientType {
-			c.Endpoints[i].Enabled = true
+			c.Endpoints[i].Status = status
+			c.Endpoints[i].Enabled = (status != EndpointStatusDisabled)
 			return nil
 		}
 	}
 
 	return fmt.Errorf("endpoint not found: %s (client: %s)", endpointName, clientType)
+}
+
+// SetEndpointDisabled 禁用端点（用户操作）
+func (c *Config) SetEndpointDisabled(endpointName, clientType string) error {
+	return c.SetEndpointStatus(endpointName, clientType, EndpointStatusDisabled)
+}
+
+// SetEndpointEnabledByName 启用端点（用户操作，初始为不可用）
+func (c *Config) SetEndpointEnabledByName(endpointName, clientType string) error {
+	return c.SetEndpointStatus(endpointName, clientType, EndpointStatusUnavailable)
+}
+
+// EnableEndpoint 启用指定名称和客户端类型的端点（改为调用 SetEndpointEnabledByName）
+func (c *Config) EnableEndpoint(endpointName, clientType string) error {
+	return c.SetEndpointEnabledByName(endpointName, clientType)
 }
 
 // GetEndpointByName 根据名称和客户端类型获取端点
@@ -845,7 +933,8 @@ type StorageEndpoint struct {
 	ClientType  string
 	APIUrl      string
 	APIKey      string
-	Enabled     bool
+	Status      EndpointStatus // 端点状态
+	Enabled     bool           // 向后兼容字段
 	Transformer string
 	Model       string
 	Remark      string
@@ -883,6 +972,7 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 			ClientType:         clientType,
 			APIUrl:             ep.APIUrl,
 			APIKey:             ep.APIKey,
+			Status:             ep.Status, // 加载状态字段
 			Enabled:            ep.Enabled,
 			Transformer:        ep.Transformer,
 			Model:              ep.Model,
@@ -895,6 +985,19 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 			QuotaResetCycle:    ep.QuotaResetCycle,
 			Priority:           ep.Priority,
 		}
+
+		// 兼容处理：如果 status 为空，从 enabled 推断
+		if endpoint.Status == "" {
+			if endpoint.Enabled {
+				endpoint.Status = EndpointStatusAvailable
+			} else {
+				endpoint.Status = EndpointStatusDisabled
+			}
+		}
+
+		// 确保 Enabled 字段与 Status 一致
+		endpoint.Enabled = endpoint.IsEnabled()
+
 		if endpoint.Transformer == "" {
 			endpoint.Transformer = "claude"
 		}
@@ -1183,7 +1286,8 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 			ClientType:         clientType,
 			APIUrl:             ep.APIUrl,
 			APIKey:             ep.APIKey,
-			Enabled:            ep.Enabled,
+			Status:             ep.Status,  // 保存状态字段
+			Enabled:            ep.Enabled, // 保持向后兼容
 			Transformer:        ep.Transformer,
 			Model:              ep.Model,
 			Remark:             ep.Remark,
