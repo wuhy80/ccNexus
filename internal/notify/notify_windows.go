@@ -26,7 +26,8 @@ func (n *WindowsNotifier) Send(title, message, notifyType string) error {
 	// 这是 Windows 10/11 原生支持的方式
 	script := buildToastScript(n.appName, title, message)
 
-	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script)
+	// 使用 -WindowStyle Hidden 隐藏 PowerShell 窗口，避免黑框闪现
+	cmd := exec.Command("powershell", "-WindowStyle", "Hidden", "-NoProfile", "-NonInteractive", "-Command", script)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		logger.Warn("Failed to send Windows notification: %v, output: %s", err, string(output))
