@@ -2063,3 +2063,49 @@ func (s *SQLiteStorage) ResetExpiredQuotas() error {
 
 	return err
 }
+
+// GetRecentRequestsByEndpoint 查询指定端点最近N次请求记录
+func (s *SQLiteStorage) GetRecentRequestsByEndpoint(endpointName string, clientType string, limit int) ([]RequestStat, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Default client_type to 'claude' if not specified
+	if clientType == "" {
+		clientType = "claude"
+	}
+
+	query := `
+		SELECT id, endpoint_name, COALESCE(client_type, 'claude') as client_type, COALESCE(client_ip, '') as client_ip,
+			request_id, timestamp, date,
+			input_tokens, cache_creation_tokens, cache_read_tokens, output_tokens,
+			model, is_streaming, success, device_id, COALESCE(duration_ms, 0) as duration_ms,
+			COALESCE(error_message, '') as error_message
+		FROM request_stats
+		WHERE endpoint_name=? AND COALESCE(client_type, 'claude')=?
+		ORDER BY timestamp DESC
+		LIMIT ?
+	`
+
+	rows, err := s.db.Query(query, endpointName, clientType, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []RequestStat
+	for rows.Next() {
+		var stat RequestStat
+		if err := rows.Scan(
+			&stat.ID, &stat.EndpointName, &stat.ClientType, &stat.ClientIP,
+			&stat.RequestID, &stat.Timestamp, &stat.Date,
+			&stat.InputTokens, &stat.CacheCreationTokens, &stat.CacheReadTokens, &stat.OutputTokens,
+			&stat.Model, &stat.IsStreaming, &stat.Success, &stat.DeviceID, &stat.DurationMs,
+			&stat.ErrorMessage,
+		); err != nil {
+			return nil, err
+		}
+		stats = append(stats, stat)
+	}
+
+	return stats, rows.Err()
+}

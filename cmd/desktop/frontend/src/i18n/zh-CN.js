@@ -46,6 +46,7 @@ export default {
         moreActions: '更多操作',
         disabled: '已禁用',
         statusAvailable: '可用',
+        statusWarning: '警告',
         statusUnavailable: '不可用',
         statusDisabled: '禁用',
         clientType: '客户端',
@@ -886,6 +887,9 @@ export default {
         healthCheckFailed: '健康检查失败',
         notTested: '未测试',
         errorNotAvailable: '错误信息不可用',
+        recentRequestsAllSuccess: '最近{count}次请求都成功',
+        recentRequestsPartialSuccess: '最近{total}次请求中{success}次成功',
+        recentRequestsAllFailed: '最近{count}次请求都失败',
         phase: {
             waiting: '等待中',
             connecting: '连接中',

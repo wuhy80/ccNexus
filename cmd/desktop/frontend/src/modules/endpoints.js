@@ -351,6 +351,8 @@ export async function renderEndpoints(endpoints) {
         let statusBadge = '';
         if (status === 'available') {
             statusBadge = '<span class="status-badge status-available" title="' + t('endpoints.statusAvailable') + '">●</span>';
+        } else if (status === 'warning') {
+            statusBadge = '<span class="status-badge status-warning" title="' + t('endpoints.statusWarning') + '">●</span>';
         } else if (status === 'unavailable') {
             statusBadge = '<span class="status-badge status-unavailable" title="' + t('endpoints.statusUnavailable') + '">●</span>';
         } else if (status === 'disabled') {
@@ -690,6 +692,8 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
         let statusBadge = '';
         if (status === 'available') {
             statusBadge = '<span class="status-badge status-available" title="' + t('endpoints.statusAvailable') + '">●</span>';
+        } else if (status === 'warning') {
+            statusBadge = '<span class="status-badge status-warning" title="' + t('endpoints.statusWarning') + '">●</span>';
         } else if (status === 'unavailable') {
             statusBadge = '<span class="status-badge status-unavailable" title="' + t('endpoints.statusUnavailable') + '">●</span>';
         } else if (status === 'disabled') {

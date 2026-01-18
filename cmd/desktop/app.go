@@ -988,3 +988,22 @@ func (a *App) UpdateSessionAffinityConfig(enabled bool, sessionTimeoutHours, max
 
 	return nil
 }
+
+// GetRecentRequestsByEndpoint 查询指定端点最近N次请求记录
+func (a *App) GetRecentRequestsByEndpoint(endpointName string, clientType string, limit int) string {
+	stats, err := a.storage.GetRecentRequestsByEndpoint(endpointName, clientType, limit)
+	if err != nil {
+		logger.Error("Failed to get recent requests: %v", err)
+		return "[]"
+	}
+
+	// 转换为 JSON
+	data, err := json.Marshal(stats)
+	if err != nil {
+		logger.Error("Failed to marshal recent requests: %v", err)
+		return "[]"
+	}
+
+	return string(data)
+}
+

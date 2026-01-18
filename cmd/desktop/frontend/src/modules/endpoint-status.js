@@ -55,8 +55,9 @@ export async function refreshEndpointStatus() {
             // 更新缓存
             endpointStatusCache.clear();
 
+            // 串行处理每个端点（因为 calculateEndpointStatus 现在是 async）
             for (const ep of config.endpoints) {
-                const statusInfo = calculateEndpointStatus(ep, checkResults);
+                const statusInfo = await calculateEndpointStatus(ep, checkResults);
                 endpointStatusCache.set(ep.name, statusInfo);
             }
 
@@ -74,8 +75,8 @@ export async function refreshEndpointStatus() {
 }
 
 // 计算单个端点状态
-function calculateEndpointStatus(endpoint, checkResults) {
-    // 1. 检查是否禁用
+async function calculateEndpointStatus(endpoint, checkResults) {
+    // 1. 检查是否禁用（最高优先级）
     if (endpoint.status === 'disabled') {
         return {
             status: 'disabled',
@@ -85,7 +86,51 @@ function calculateEndpointStatus(endpoint, checkResults) {
         };
     }
 
-    // 2. 检查后端健康检查结果（优先级最高）
+    // 2. 查询最近3次请求记录（新增：基于实际请求成功率）
+    try {
+        const recentRequestsStr = await window.go.main.App.GetRecentRequestsByEndpoint(
+            endpoint.name,
+            endpoint.clientType || 'claude',
+            3
+        );
+        const recentRequests = JSON.parse(recentRequestsStr);
+
+        if (recentRequests && recentRequests.length > 0) {
+            // 计算成功次数
+            const successCount = recentRequests.filter(r => r.success).length;
+            const totalCount = recentRequests.length;
+
+            if (successCount === totalCount && totalCount >= 3) {
+                // 最近3次都成功 → 绿色
+                return {
+                    status: 'available',
+                    source: 'recent_requests',
+                    testIcon: '✅',
+                    testTip: `${t('monitor.recentRequestsAllSuccess', { count: totalCount })}`
+                };
+            } else if (successCount > 0) {
+                // 至少1次成功 → 黄色（警告）
+                return {
+                    status: 'warning',
+                    source: 'recent_requests',
+                    testIcon: '⚠️',
+                    testTip: `${t('monitor.recentRequestsPartialSuccess', { success: successCount, total: totalCount })}`
+                };
+            } else {
+                // 0次成功 → 红色
+                return {
+                    status: 'unavailable',
+                    source: 'recent_requests',
+                    testIcon: '❌',
+                    testTip: `${t('monitor.recentRequestsAllFailed', { count: totalCount })}`
+                };
+            }
+        }
+    } catch (error) {
+        console.error('Failed to get recent requests:', error);
+    }
+
+    // 3. 降级到健康检查结果
     const checkResult = checkResults[endpoint.name];
     if (checkResult && checkResult.lastCheckAt) {
         const lastCheckAt = new Date(checkResult.lastCheckAt);
@@ -106,7 +151,7 @@ function calculateEndpointStatus(endpoint, checkResults) {
         }
     }
 
-    // 3. 检查手动测试结果（localStorage）
+    // 4. 检查手动测试结果（localStorage）
     const testStatus = getEndpointTestStatus(endpoint.name);
     const testTime = getEndpointTestTime(endpoint.name);
     // 排除 'unknown' 字符串，只处理布尔值
@@ -120,7 +165,7 @@ function calculateEndpointStatus(endpoint, checkResults) {
         };
     }
 
-    // 4. 使用配置文件状态（兜底）
+    // 5. 使用配置文件状态（兜底）
     return {
         status: endpoint.status || 'unknown',
         source: 'config',

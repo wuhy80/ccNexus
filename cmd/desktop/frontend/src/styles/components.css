@@ -717,8 +717,12 @@
     color: #10b981;
 }
 
-.status-unavailable {
+.status-warning {
     color: #f59e0b;
+}
+
+.status-unavailable {
+    color: #ef4444;
 }
 
 .status-disabled {

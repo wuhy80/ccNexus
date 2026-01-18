@@ -128,6 +128,7 @@ type Storage interface {
 	RecordRequestStat(stat *RequestStat) error
 	GetRequestStats(endpointName string, clientType string, startDate, endDate string, limit, offset int) ([]RequestStat, error)
 	GetRequestStatsCount(endpointName string, clientType string, startDate, endDate string) (int, error)
+	GetRecentRequestsByEndpoint(endpointName string, clientType string, limit int) ([]RequestStat, error)
 	CleanupOldRequestStats(daysToKeep int) error
 	GetConnectedClients(hoursAgo int) ([]ClientStats, error)
 

@@ -46,6 +46,7 @@ export default {
         moreActions: 'More Actions',
         disabled: 'Off',
         statusAvailable: 'Available',
+        statusWarning: 'Warning',
         statusUnavailable: 'Unavailable',
         statusDisabled: 'Disabled',
         clientType: 'Client',
@@ -875,6 +876,9 @@ export default {
         healthCheckFailed: 'Health check failed',
         notTested: 'Not tested',
         errorNotAvailable: 'Error details not available',
+        recentRequestsAllSuccess: 'Last {count} requests all succeeded',
+        recentRequestsPartialSuccess: '{success} of last {total} requests succeeded',
+        recentRequestsAllFailed: 'Last {count} requests all failed',
         phase: {
             waiting: 'Waiting',
             connecting: 'Connecting',
