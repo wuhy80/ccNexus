@@ -795,12 +795,6 @@ function renderHealthHistoryPanel() {
                     <span>${t('monitor.selectEndpointToView')}</span>
                 </div>
             </div>
-            <div class="health-history-legend">
-                <div class="legend-item"><span class="legend-dot healthy"></span> ${t('monitor.statusHealthy')}</div>
-                <div class="legend-item"><span class="legend-dot warning"></span> ${t('monitor.statusWarning')}</div>
-                <div class="legend-item"><span class="legend-dot error"></span> ${t('monitor.statusError')}</div>
-                <div class="legend-item"><span class="legend-dot unknown"></span> ${t('monitor.statusUnknown')}</div>
-            </div>
         </div>
     `;
 
@@ -1012,50 +1006,88 @@ function processHealthHistoryData(data, hours) {
 function renderLatencyChart(latencyData) {
     if (!latencyData || latencyData.length < 2) return '';
 
-    const width = 100; // percentage
-    const height = 60;
+    const width = 100;
+    const height = 120;
     const padding = 5;
 
+    // Filter data points to reduce density - keep only significant changes
+    // We'll keep at most 30 points, sampling evenly across the data
+    const maxPoints = 30;
+    let filteredData = latencyData;
+    if (latencyData.length > maxPoints) {
+        const step = Math.ceil(latencyData.length / maxPoints);
+        filteredData = latencyData.filter((_, i) => i % step === 0);
+        // Always include the last point
+        if (filteredData[filteredData.length - 1] !== latencyData[latencyData.length - 1]) {
+            filteredData.push(latencyData[latencyData.length - 1]);
+        }
+    }
+
     // Get min/max values
-    const latencies = latencyData.map(d => d.latencyMs);
+    const latencies = filteredData.map(d => d.latencyMs);
     const maxLatency = Math.max(...latencies);
     const minLatency = Math.min(...latencies);
     const range = maxLatency - minLatency || 1;
 
     // Calculate points
-    const points = latencyData.map((d, i) => {
-        const x = (i / (latencyData.length - 1)) * (100 - padding * 2) + padding;
+    const points = filteredData.map((d, i) => {
+        const x = (i / (filteredData.length - 1)) * (100 - padding * 2) + padding;
         const y = height - padding - ((d.latencyMs - minLatency) / range) * (height - padding * 2);
         return { x, y, latency: d.latencyMs, time: d.timestamp };
     });
 
-    // Create SVG path
+    // Create SVG path (straight lines only)
     const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
-    // Create area path (for gradient fill)
-    const areaD = pathD + ` L ${points[points.length - 1].x} ${height - padding} L ${points[0].x} ${height - padding} Z`;
+    // Get start and end times for axis labels
+    const startTime = new Date(filteredData[0].timestamp);
+    const endTime = new Date(filteredData[filteredData.length - 1].timestamp);
+    const timeFormat = (date) => {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
 
     return `
-        <div class="latency-chart">
-            <svg class="latency-chart-svg" viewBox="0 0 100 ${height}" preserveAspectRatio="none">
-                <defs>
-                    <linearGradient id="latencyGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" style="stop-color:var(--primary-color);stop-opacity:0.3" />
-                        <stop offset="100%" style="stop-color:var(--primary-color);stop-opacity:0.05" />
-                    </linearGradient>
-                </defs>
-                <path class="latency-area" d="${areaD}" />
-                <path class="latency-line" d="${pathD}" />
-                ${points.map(p => `
-                    <circle class="latency-point" cx="${p.x}" cy="${p.y}" r="2">
-                        <title>${new Date(p.time).toLocaleTimeString()} - ${Math.round(p.latency)}ms</title>
-                    </circle>
-                `).join('')}
-            </svg>
-            <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-tertiary); margin-top: 4px;">
-                <span>${Math.round(minLatency)}ms</span>
-                <span>${t('monitor.latencyTrend')}</span>
-                <span>${Math.round(maxLatency)}ms</span>
+        <div style="display: flex; gap: 8px; align-items: stretch; margin-top: 6px;">
+            <!-- 左侧：图例 -->
+            <div class="latency-legend">
+                <div class="legend-item-vertical">
+                    <span class="legend-dot healthy"></span>
+                    <span>${t('monitor.statusHealthy')}</span>
+                </div>
+                <div class="legend-item-vertical">
+                    <span class="legend-dot warning"></span>
+                    <span>${t('monitor.statusWarning')}</span>
+                </div>
+                <div class="legend-item-vertical">
+                    <span class="legend-dot error"></span>
+                    <span>${t('monitor.statusError')}</span>
+                </div>
+                <div class="legend-item-vertical">
+                    <span class="legend-dot unknown"></span>
+                    <span>${t('monitor.statusUnknown')}</span>
+                </div>
+            </div>
+
+            <!-- 右侧：延迟趋势图 -->
+            <div class="latency-chart" style="flex: 1; min-width: 0;">
+                <svg class="latency-chart-svg" viewBox="0 0 100 ${height}" preserveAspectRatio="none">
+                    <!-- Latency line -->
+                    <path class="latency-line" d="${pathD}" />
+
+                    <!-- Data points -->
+                    ${points.map((p, i) => `
+                        <circle class="latency-point" cx="${p.x}" cy="${p.y}" r="${i % 3 === 0 ? '2.5' : '1.5'}">
+                            <title>${new Date(p.time).toLocaleTimeString()} - ${Math.round(p.latency)}ms</title>
+                        </circle>
+                    `).join('')}
+                </svg>
+
+                <!-- Time and value axis -->
+                <div style="display: flex; justify-content: space-between; font-size: 9px; color: var(--text-tertiary); margin-top: 2px;">
+                    <span>${timeFormat(startTime)}</span>
+                    <span>${Math.round(minLatency)}-${Math.round(maxLatency)}ms</span>
+                    <span>${timeFormat(endTime)}</span>
+                </div>
             </div>
         </div>
     `;
