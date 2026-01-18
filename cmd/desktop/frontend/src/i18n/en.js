@@ -38,6 +38,8 @@ export default {
         testTipSuccess: 'Connection test passed',
         testTipFailed: 'Connection test failed or endpoint does not support API testing',
         testTipUnknown: 'Not tested or test result unknown',
+        manualTestPassed: 'Manual test passed',
+        manualTestFailed: 'Manual test failed',
         viewDetail: 'Default Mode',
         viewCompact: 'List Mode',
         dragToReorder: 'Drag to Reorder',
@@ -864,6 +866,14 @@ export default {
         actionDisabled: 'Disabled',
         priority: 'Priority',
         recent5min: 'Last 5 min',
+        // Data source related
+        sourceHealthCheck: 'Source: Health Check',
+        sourceManualTest: 'Source: Manual Test',
+        sourceConfig: 'Source: Config File',
+        sourceUnknown: 'Source: Unknown',
+        healthCheckPassed: 'Health check passed',
+        healthCheckFailed: 'Health check failed',
+        notTested: 'Not tested',
         phase: {
             waiting: 'Waiting',
             connecting: 'Connecting',

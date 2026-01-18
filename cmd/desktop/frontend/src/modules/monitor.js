@@ -1,5 +1,6 @@
 import { t } from '../i18n/index.js';
 import { getCurrentClientType, refreshEndpoints } from './endpoints.js';
+import { refreshEndpointStatus, getEndpointStatus } from './endpoint-status.js';
 
 // State
 let activeRequests = new Map(); // requestId -> request data
@@ -17,6 +18,7 @@ let throughputStats = {            // Throughput statistics
 let durationUpdateInterval = null;
 let throughputUpdateInterval = null;
 let checkTimeUpdateInterval = null; // 检测时间更新定时器
+let healthRefreshInterval = null; // 健康数据刷新定时器
 let isMonitorVisible = true;
 let isTestingAllEndpoints = false; // 是否正在进行一键检测
 
@@ -352,6 +354,9 @@ async function loadRecentRequests() {
 // Load endpoint health status from backend
 async function loadEndpointHealth() {
     try {
+        // 首先刷新统一状态管理
+        await refreshEndpointStatus();
+
         const resultStr = await window.go.main.App.GetEndpointHealth();
         const healthList = JSON.parse(resultStr);
 
@@ -644,6 +649,34 @@ function renderRecentRequests() {
     container.innerHTML = html;
 }
 
+// 获取数据源标签
+function getSourceLabel(source) {
+    switch (source) {
+        case 'health_check':
+            return '🔄'; // 健康检查
+        case 'manual_test':
+            return '🧪'; // 手动测试
+        case 'config':
+            return '📝'; // 配置文件
+        default:
+            return '⚠️'; // 未知
+    }
+}
+
+// 获取数据源标题
+function getSourceTitle(source) {
+    switch (source) {
+        case 'health_check':
+            return t('monitor.sourceHealthCheck') || '数据来源：健康检查';
+        case 'manual_test':
+            return t('monitor.sourceManualTest') || '数据来源：手动测试';
+        case 'config':
+            return t('monitor.sourceConfig') || '数据来源：配置文件';
+        default:
+            return t('monitor.sourceUnknown') || '数据来源：未知';
+    }
+}
+
 // Render endpoint health status
 function renderEndpointHealth() {
     const container = document.getElementById('endpointHealthList');
@@ -701,12 +734,18 @@ function renderEndpointHealth() {
         const recentFailure = health.recentFailure || 0;
         const recentTotal = recentSuccess + recentFailure;
 
+        // 获取统一状态管理的数据源信息
+        const statusInfo = getEndpointStatus(name);
+        const sourceIcon = statusInfo ? getSourceLabel(statusInfo.source) : '';
+        const sourceTitle = statusInfo ? getSourceTitle(statusInfo.source) : '';
+
         html += `
             <div class="endpoint-health-item ${statusClass}" data-endpoint-name="${escapeHtml(name)}">
                 <div class="health-status-indicator"></div>
                 <div class="health-main-info">
                     <div class="health-header">
                         <span class="health-endpoint-name">${escapeHtml(name)}</span>
+                        ${sourceIcon ? `<span class="health-source-icon" title="${sourceTitle}">${sourceIcon}</span>` : ''}
                         <span class="health-priority ${priorityClass}" title="${t('monitor.priority')}: ${priority}">P${priority}</span>
                     </div>
                     <div class="health-stats-row">
@@ -1107,7 +1146,11 @@ async function loadMultipleEndpointsHealthHistory() {
         const promises = selectedEndpoints.map(endpointName =>
             window.go.main.App.GetHealthHistory(endpointName, clientType, selectedHistoryHours)
                 .then(data => ({ endpointName, data, error: null }))
-                .catch(error => ({ endpointName, data: [], error: error.message || 'Unknown error' }))
+                .catch(error => ({
+                    endpointName,
+                    data: [],
+                    error: error?.message || String(error) || 'Unknown error'
+                }))
         );
 
         const results = await Promise.all(promises);
@@ -1353,6 +1396,11 @@ function renderLatencyChart(latencyData) {
         }
     }
 
+    // 边界检查：至少需要2个数据点才能绘制图表
+    if (filteredData.length < 2) {
+        return '<div style="padding: 10px; text-align: center; color: #888;">数据点不足，无法绘制图表</div>';
+    }
+
     // Get min/max values
     const latencies = filteredData.map(d => d.latencyMs);
     const maxLatency = Math.max(...latencies);
@@ -1500,6 +1548,11 @@ function renderLatencyChartForMultipleEndpoints() {
             }
         }
 
+        // 边界检查：至少需要2个数据点
+        if (filteredData.length < 2) {
+            return; // 使用 return 而不是 continue
+        }
+
         // 计算点坐标
         const points = filteredData.map((d, i) => {
             const x = (i / (filteredData.length - 1)) * (width - padding * 2) + padding;
@@ -1583,6 +1636,9 @@ function startCheckTimeUpdates() {
     if (checkTimeUpdateInterval) {
         clearInterval(checkTimeUpdateInterval);
     }
+    if (healthRefreshInterval) {
+        clearInterval(healthRefreshInterval);
+    }
 
     // 每秒更新检测时间显示
     checkTimeUpdateInterval = setInterval(() => {
@@ -1592,7 +1648,7 @@ function startCheckTimeUpdates() {
     }, 1000);
 
     // 每 10 秒刷新一次健康数据和检测结果
-    setInterval(() => {
+    healthRefreshInterval = setInterval(() => {
         if (isMonitorVisible) {
             loadEndpointHealth().catch(console.error);
         }

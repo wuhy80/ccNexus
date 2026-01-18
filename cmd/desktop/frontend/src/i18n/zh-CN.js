@@ -38,6 +38,8 @@ export default {
         testTipSuccess: '已测试连接成功',
         testTipFailed: '测试连接失败或当前端点不支持接口测试',
         testTipUnknown: '未测试或测试结果未知',
+        manualTestPassed: '手动测试通过',
+        manualTestFailed: '手动测试失败',
         viewDetail: '默认视图',
         viewCompact: '列表视图',
         dragToReorder: '拖拽排序',
@@ -875,6 +877,14 @@ export default {
         actionDisabled: '已禁用',
         priority: '优先级',
         recent5min: '最近5分钟',
+        // 数据源相关
+        sourceHealthCheck: '数据来源：健康检查',
+        sourceManualTest: '数据来源：手动测试',
+        sourceConfig: '数据来源：配置文件',
+        sourceUnknown: '数据来源：未知',
+        healthCheckPassed: '健康检查通过',
+        healthCheckFailed: '健康检查失败',
+        notTested: '未测试',
         phase: {
             waiting: '等待中',
             connecting: '连接中',

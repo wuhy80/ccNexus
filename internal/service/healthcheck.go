@@ -254,6 +254,17 @@ func (h *HealthCheckService) checkEndpoint(endpoint config.Endpoint) {
 		}
 		h.alertStatesMu.Unlock()
 	}
+
+	// 发送健康检查完成事件
+	if h.alertCallback != nil {
+		h.alertCallback(AlertEvent{
+			EndpointName: endpoint.Name,
+			ClientType:   clientType,
+			AlertType:    "health_check_completed",
+			Message:      "",
+			Timestamp:    time.Now(),
+		})
+	}
 }
 
 // testMinimalRequest sends a minimal request to test if the LLM service is available

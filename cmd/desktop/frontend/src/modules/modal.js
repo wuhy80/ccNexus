@@ -2,6 +2,7 @@ import { t } from '../i18n/index.js';
 import { escapeHtml } from '../utils/format.js';
 import { addEndpoint, updateEndpoint, removeEndpoint, testEndpoint, testEndpointLight, updatePort } from './config.js';
 import { setTestState, clearTestState, saveEndpointTestStatus, getCurrentClientType } from './endpoints.js';
+import { updateEndpointStatus } from './endpoint-status.js';
 
 let currentEditIndex = -1;
 
@@ -577,9 +578,11 @@ export async function testEndpointHandler(index, buttonElement) {
                 </div>
                 <div style="padding: 15px; background: #f8f9fa; border-radius: 5px; font-family: monospace; white-space: pre-line; word-break: break-all;">${escapeHtml(result.message)} (${result.method})</div>
             `;
-            // 保存测试成功状态
+            // 保存测试成功状态（兼容旧代码）
             if (endpointName) {
                 saveEndpointTestStatus(endpointName, true);
+                // 更新统一状态管理
+                await updateEndpointStatus(endpointName, true, result.latencyMs || 0, null);
             }
         } else if (result.status === 'unknown') {
             // 无法确定状态（如三方站限制测试）
@@ -603,9 +606,11 @@ export async function testEndpointHandler(index, buttonElement) {
                 </div>
                 <div style="padding: 15px; background: #f8f9fa; border-radius: 5px; font-family: monospace; white-space: pre-line; word-break: break-all;"><strong>Error:</strong><br>${escapeHtml(result.message)}</div>
             `;
-            // 保存测试失败状态
+            // 保存测试失败状态（兼容旧代码）
             if (endpointName) {
                 saveEndpointTestStatus(endpointName, false);
+                // 更新统一状态管理
+                await updateEndpointStatus(endpointName, false, 0, result.message || 'Test failed');
             }
         }
 
@@ -632,6 +637,8 @@ export async function testEndpointHandler(index, buttonElement) {
         // 保存测试失败状态（异常情况）
         if (endpointName) {
             saveEndpointTestStatus(endpointName, false);
+            // 更新统一状态管理
+            await updateEndpointStatus(endpointName, false, 0, error.toString());
         }
 
         document.getElementById('testResultModal').classList.add('active');

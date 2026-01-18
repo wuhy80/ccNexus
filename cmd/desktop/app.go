@@ -192,6 +192,7 @@ func (a *App) startup(ctx context.Context) {
 		ctx := a.ctx
 		a.ctxMutex.RUnlock()
 		if ctx != nil {
+			// 发送告警事件
 			runtime.EventsEmit(ctx, "endpoint:alert", map[string]interface{}{
 				"endpointName": event.EndpointName,
 				"clientType":   event.ClientType,
@@ -199,9 +200,17 @@ func (a *App) startup(ctx context.Context) {
 				"message":      event.Message,
 				"timestamp":    event.Timestamp.Unix(),
 			})
+
+			// 如果是健康检查完成事件，额外发送专门的事件
+			if event.AlertType == "health_check_completed" {
+				runtime.EventsEmit(ctx, "health:check:completed", map[string]interface{}{
+					"endpointName": event.EndpointName,
+					"clientType":   event.ClientType,
+				})
+			}
 		}
 
-		// 发送系统通知
+		// 发送系统通知（仅针对故障和恢复）
 		alertConfig := a.config.GetAlert()
 		if alertConfig != nil && alertConfig.SystemNotification {
 			title := "ccNexus"

@@ -2,6 +2,12 @@ import { t } from '../i18n/index.js';
 import { formatTokens, maskApiKey } from '../utils/format.js';
 import { getEndpointStats } from './stats.js';
 import { toggleEndpoint, testAllEndpointsZeroCost } from './config.js';
+import {
+    initEndpointStatus,
+    refreshEndpointStatus,
+    getEndpointStatus,
+    updateEndpointStatus
+} from './endpoint-status.js';
 
 const ENDPOINT_TEST_STATUS_KEY = 'ccNexus_endpointTestStatus';
 const ENDPOINT_VIEW_MODE_KEY = 'ccNexus_endpointViewMode';
@@ -108,6 +114,12 @@ export function initCurrentClientType() {
     }
 }
 
+// 初始化端点模块（包括状态管理）
+export async function initEndpoints() {
+    initCurrentClientType();
+    await initEndpointStatus();
+}
+
 // 渲染客户端类型选择器
 export function renderClientTypeSelector(containerId = 'clientTypeSelector') {
     const container = document.getElementById(containerId);
@@ -189,6 +201,8 @@ export function switchEndpointViewMode(mode) {
 
     // 更新列表样式
     const container = document.getElementById('endpointList');
+    if (!container) return; // 添加空值检查
+
     if (mode === 'compact') {
         container.classList.add('compact-view');
     } else {
@@ -254,6 +268,7 @@ export function setTestState(button, index) {
 
 export async function renderEndpoints(endpoints) {
     const container = document.getElementById('endpointList');
+    if (!container) return; // 添加空值检查
 
     // Filter endpoints by current client type
     let filteredEndpoints = endpoints.filter(ep =>
@@ -311,7 +326,6 @@ export async function renderEndpoints(endpoints) {
         const totalInputWithCache = (stats.inputTokens || 0) + (stats.cacheCreationTokens || 0) + (stats.cacheReadTokens || 0);
         const totalTokens = totalInputWithCache + (stats.outputTokens || 0);
         const enabled = ep.enabled !== undefined ? ep.enabled : true;
-        const status = ep.status || (enabled ? 'available' : 'disabled');
         const transformer = ep.transformer || 'claude';
         const model = ep.model || '';
         const isCurrentEndpoint = ep.name === currentEndpointName;
@@ -321,17 +335,17 @@ export async function renderEndpoints(endpoints) {
         item.draggable = true;
         item.dataset.name = ep.name;
         item.dataset.index = index;
-        // 获取测试状态：true=成功显示✅，false=失败显示❌，undefined/unknown=未测试/未知显示⚠️
-        const testStatus = getEndpointTestStatus(ep.name);
-        let testStatusIcon = '⚠️';
-        let testStatusTip = t('endpoints.testTipUnknown');
-        if (testStatus === true) {
-            testStatusIcon = '✅';
-            testStatusTip = t('endpoints.testTipSuccess');
-        } else if (testStatus === false) {
-            testStatusIcon = '❌';
-            testStatusTip = t('endpoints.testTipFailed');
-        }
+
+        // 使用统一状态管理获取状态
+        const statusInfo = getEndpointStatus(ep.name) || {
+            status: ep.status || (enabled ? 'available' : 'disabled'),
+            testIcon: '⚠️',
+            testTip: t('endpoints.testTipUnknown')
+        };
+
+        const status = statusInfo.status;
+        const testStatusIcon = statusInfo.testIcon;
+        const testStatusTip = statusInfo.testTip || t('endpoints.testTipUnknown');
 
         // 确定状态显示(只显示图标,鼠标悬停显示文字)
         let statusBadge = '';
@@ -400,6 +414,7 @@ export async function renderEndpoints(endpoints) {
             const newEnabled = e.target.checked;
             try {
                 await toggleEndpoint(currentClientType, idx, newEnabled);
+                await refreshEndpointStatus(); // 刷新状态缓存
                 window.loadConfig();
             } catch (error) {
                 console.error('Failed to toggle endpoint:', error);
@@ -606,6 +621,16 @@ export function initEndpointSuccessListener() {
                 window.loadConfig();
             }
         });
+
+        // 监听健康检查完成事件
+        window.runtime.EventsOn('health:check:completed', async (data) => {
+            // 健康检查完成后刷新统一状态
+            await refreshEndpointStatus();
+            // 刷新端点列表显示
+            if (window.loadConfig) {
+                window.loadConfig();
+            }
+        });
     }
 }
 
@@ -646,22 +671,20 @@ export async function checkAllEndpointsOnStartup() {
 function renderCompactView(sortedEndpoints, container, currentEndpointName) {
     sortedEndpoints.forEach(({ endpoint: ep, originalIndex: index, stats }) => {
         const enabled = ep.enabled !== undefined ? ep.enabled : true;
-        const status = ep.status || (enabled ? 'available' : 'disabled');
         const transformer = ep.transformer || 'claude';
         const model = ep.model || '';
         const isCurrentEndpoint = ep.name === currentEndpointName;
 
-        // 获取测试状态
-        const testStatus = getEndpointTestStatus(ep.name);
-        let testStatusIcon = '⚠️';
-        let testStatusTip = t('endpoints.testTipUnknown');
-        if (testStatus === true) {
-            testStatusIcon = '✅';
-            testStatusTip = t('endpoints.testTipSuccess');
-        } else if (testStatus === false) {
-            testStatusIcon = '❌';
-            testStatusTip = t('endpoints.testTipFailed');
-        }
+        // 使用统一状态管理获取状态
+        const statusInfo = getEndpointStatus(ep.name) || {
+            status: ep.status || (enabled ? 'available' : 'disabled'),
+            testIcon: '⚠️',
+            testTip: t('endpoints.testTipUnknown')
+        };
+
+        const status = statusInfo.status;
+        const testStatusIcon = statusInfo.testIcon;
+        const testStatusTip = statusInfo.testTip || t('endpoints.testTipUnknown');
 
         // 确定状态显示(只显示图标,鼠标悬停显示文字)
         let statusBadge = '';
@@ -1031,21 +1054,21 @@ async function handleContainerDrop(e) {
         const draggedName = draggedElement.dataset.name;
         const allItems = Array.from(container.querySelectorAll('.endpoint-item-compact'));
         const currentOrder = allItems.map(el => el.dataset.name);
+
+        // 简化逻辑：直接计算占位符前有多少个端点元素
         const allChildren = Array.from(container.children);
         const placeholderIndex = allChildren.indexOf(dragPlaceholder);
 
+        // 计算目标位置（占位符之前的端点数量）
         let targetIndex = 0;
         for (let i = 0; i < placeholderIndex; i++) {
-            if (allChildren[i].classList.contains('endpoint-item-compact')) {
+            if (allChildren[i].classList && allChildren[i].classList.contains('endpoint-item-compact')) {
                 targetIndex++;
             }
         }
 
+        // 构建新顺序
         const draggedIndex = currentOrder.indexOf(draggedName);
-        if (draggedIndex < targetIndex) {
-            targetIndex--;
-        }
-
         const newOrder = [...currentOrder];
         newOrder.splice(draggedIndex, 1);
         newOrder.splice(targetIndex, 0, draggedName);

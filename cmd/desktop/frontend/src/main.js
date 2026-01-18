@@ -6,7 +6,7 @@ import { initUI, changeLanguage } from './modules/ui.js'
 import { loadConfig } from './modules/config.js'
 import { loadStats, switchStatsPeriod, loadStatsByPeriod, getCurrentPeriod, refreshSessionStats } from './modules/stats.js'
 import { initTokenChart } from './modules/chart.js'
-import { renderEndpoints, toggleEndpointPanel, initEndpointSuccessListener, checkAllEndpointsOnStartup, switchEndpointViewMode, initEndpointViewMode, isDropdownOpen, initCurrentClientType, renderClientTypeSelector, renderTagFilter } from './modules/endpoints.js'
+import { renderEndpoints, toggleEndpointPanel, initEndpointSuccessListener, checkAllEndpointsOnStartup, switchEndpointViewMode, initEndpointViewMode, isDropdownOpen, initEndpoints, renderClientTypeSelector, renderTagFilter } from './modules/endpoints.js'
 import { loadLogs, toggleLogPanel, changeLogLevel, copyLogs, clearLogs } from './modules/logs.js'
 import { showDataSyncDialog } from './modules/webdav.js'
 import { initTips } from './modules/tips.js'
@@ -81,8 +81,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Initialize endpoint view mode
     initEndpointViewMode();
 
-    // Initialize client type
-    initCurrentClientType();
+    // Initialize endpoints (包括客户端类型和统一状态管理)
+    await initEndpoints();
     renderClientTypeSelector();
 
     // Initialize model input events

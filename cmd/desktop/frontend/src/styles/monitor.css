@@ -461,6 +461,13 @@
     gap: 8px;
 }
 
+.health-source-icon {
+    font-size: 14px;
+    margin-left: 4px;
+    opacity: 0.7;
+    cursor: help;
+}
+
 .health-priority {
     font-size: 10px;
     font-weight: 600;
