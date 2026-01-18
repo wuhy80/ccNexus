@@ -648,6 +648,15 @@
     color: #ef4444;
 }
 
+/* Failed badge with error message tooltip */
+.status-badge.failed[title] {
+    cursor: help;
+}
+
+.status-badge.failed[title]:hover {
+    opacity: 0.8;
+}
+
 /* Dark theme adjustments for new components */
 [data-theme="dark"] .endpoint-health-item,
 [data-theme="dark"] .recent-request-item {

@@ -885,6 +885,7 @@ export default {
         healthCheckPassed: '健康检查通过',
         healthCheckFailed: '健康检查失败',
         notTested: '未测试',
+        errorNotAvailable: '错误信息不可用',
         phase: {
             waiting: '等待中',
             connecting: '连接中',

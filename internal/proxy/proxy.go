@@ -1017,6 +1017,13 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 				logger.Warn("[%s] 流式传输异常结束: %v", endpoint.Name, streamErr)
 				p.stats.RecordError(endpoint.Name, string(clientType))
 				durationMs := time.Since(requestStartTime).Milliseconds()
+
+				// Limit error message to 500 characters
+				errorMsg := streamErr.Error()
+				if len(errorMsg) > 500 {
+					errorMsg = errorMsg[:500]
+				}
+
 				p.stats.RecordRequestStat(&RequestStatRecord{
 					EndpointName:        endpoint.Name,
 					ClientType:          string(clientType),
@@ -1030,6 +1037,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 					IsStreaming:         true,
 					Success:             false,
 					DurationMs:          durationMs,
+					ErrorMessage:        errorMsg,
 				})
 
 				// Save interaction record (with error)

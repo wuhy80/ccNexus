@@ -874,6 +874,7 @@ export default {
         healthCheckPassed: 'Health check passed',
         healthCheckFailed: 'Health check failed',
         notTested: 'Not tested',
+        errorNotAvailable: 'Error details not available',
         phase: {
             waiting: 'Waiting',
             connecting: 'Connecting',

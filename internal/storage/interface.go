@@ -69,6 +69,7 @@ type RequestStat struct {
 	Success             bool      `json:"success"`
 	DeviceID            string    `json:"deviceId"`
 	DurationMs          int64     `json:"durationMs"` // 请求时长（毫秒）
+	ErrorMessage        string    `json:"errorMessage"` // 错误消息（失败时记录）
 }
 
 // ClientStats 连接客户端统计信息

@@ -640,7 +640,7 @@ function renderRecentRequests() {
                     <span class="recent-tokens">${formatTokens(req.inputTokens)} / ${formatTokens(req.outputTokens)}</span>
                 </div>
                 <div class="recent-request-status">
-                    <span class="status-badge ${req.success ? 'success' : 'failed'}">${statusIcon}</span>
+                    <span class="status-badge ${req.success ? 'success' : 'failed'}"${!req.success ? ` title="${escapeHtml(req.errorMessage || t('monitor.errorNotAvailable'))}"` : ''}>${statusIcon}</span>
                 </div>
             </div>
         `;

@@ -72,6 +72,7 @@ type RequestStatRecord struct {
 	Success             bool
 	DeviceID            string
 	DurationMs          int64 // 请求时长（毫秒）
+	ErrorMessage        string // 错误消息
 }
 
 // StatsData represents aggregated stats data
