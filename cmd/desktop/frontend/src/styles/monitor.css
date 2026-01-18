@@ -1137,4 +1137,171 @@
     transform: scale(1.2);
 }
 
+/* ========== 多端点选择器样式 ========== */
+.endpoint-selector-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.endpoint-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-height: 120px;
+    overflow-y: auto;
+    padding: 8px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.endpoint-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--bg-primary);
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.endpoint-checkbox-item:hover {
+    background: var(--hover-bg);
+    border-color: var(--primary-color);
+}
+
+.endpoint-checkbox-item input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.endpoint-selector-actions {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    color: var(--primary-color);
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.btn-link:hover {
+    color: var(--primary-color-dark);
+}
+
+/* ========== 时间范围和延迟图表控件样式 ========== */
+.time-range-group,
+.latency-toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.control-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.control-label input[type="checkbox"] {
+    cursor: pointer;
+}
+
+/* ========== 多时间轴容器样式 ========== */
+.health-timelines-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.timeline-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.timeline-label {
+    min-width: 100px;
+    max-width: 100px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ========== 延迟图表容器样式 ========== */
+.latency-chart-container {
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.multi-latency-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.latency-legend-horizontal {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 8px;
+    background: var(--bg-primary);
+    border-radius: 4px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.latency-chart-svg {
+    width: 100%;
+    height: 120px;
+}
+
+.latency-line {
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.health-history-empty-text {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+    padding: 20px;
+}
+
 

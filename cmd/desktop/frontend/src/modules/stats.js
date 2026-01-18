@@ -376,6 +376,11 @@ export async function switchStatsPeriod(period) {
         console.error('Failed to sync chart:', error);
         // Chart module may not be loaded yet, this is not critical
     }
+
+    // 触发事件通知健康历史面板
+    window.dispatchEvent(new CustomEvent('statsPeriodChanged', {
+        detail: { period: period }
+    }));
 }
 
 // Refresh session statistics

@@ -845,6 +845,17 @@ export default {
         statusWarning: '警告',
         statusError: '错误',
         statusUnknown: '未知',
+        // 多端点选择
+        selectEndpoints: '选择端点',
+        selectAll: '全选',
+        deselectAll: '取消全选',
+        maxEndpointsWarning: '最多只能同时选择{max}个端点',
+        noEndpointSelected: '请至少选择一个端点',
+        // 时间同步
+        syncWithStats: '同步统计周期',
+        // 延迟图表
+        showLatencyChart: '显示延迟图表',
+        latencyChartTitle: '延迟趋势对比',
         // 一键检测相关
         testAllEndpoints: '一键检测',
         testing: '检测中...',

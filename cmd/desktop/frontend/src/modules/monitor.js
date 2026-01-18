@@ -759,12 +759,21 @@ function formatNumber(num) {
 
 // State for health history
 let healthHistoryData = [];
-let selectedHistoryEndpoint = '';
+let healthHistoryDataMap = new Map(); // 存储多个端点数据
+let selectedHistoryEndpoint = ''; // 保留兼容性
+let selectedHistoryEndpoints = []; // 选中的端点列表
 let selectedHistoryHours = 24;
+let syncWithStatsPeriod = true; // 是否同步统计周期
+let showLatencyChart = true; // 是否显示延迟图表
 
 // Initialize health history panel
 export function initHealthHistoryPanel() {
     renderHealthHistoryPanel();
+
+    // 监听统计周期变化事件
+    window.addEventListener('statsPeriodChanged', (e) => {
+        syncHealthHistoryWithStatsPeriod(e.detail.period);
+    });
 }
 
 // Render the health history panel HTML
@@ -777,22 +786,41 @@ function renderHealthHistoryPanel() {
             <div class="health-history-header">
                 <h4><span class="section-icon">📈</span> ${t('monitor.healthHistory')}</h4>
                 <div class="health-history-controls">
-                    <select id="healthHistoryEndpoint">
-                        <option value="">${t('monitor.selectEndpoint')}</option>
-                    </select>
-                    <select id="healthHistoryHours">
-                        <option value="6">6 ${t('monitor.hours')}</option>
-                        <option value="12">12 ${t('monitor.hours')}</option>
-                        <option value="24" selected>24 ${t('monitor.hours')}</option>
-                        <option value="48">48 ${t('monitor.hours')}</option>
-                        <option value="168">7 ${t('monitor.days')}</option>
-                    </select>
+                    <div class="endpoint-selector-group">
+                        <label class="control-label">${t('monitor.selectEndpoints')}：</label>
+                        <div class="endpoint-checkboxes" id="healthHistoryEndpoints">
+                            <!-- 动态生成复选框 -->
+                        </div>
+                        <div class="endpoint-selector-actions">
+                            <button class="btn-link" onclick="window.selectAllEndpoints()">${t('monitor.selectAll')}</button>
+                            <button class="btn-link" onclick="window.deselectAllEndpoints()">${t('monitor.deselectAll')}</button>
+                        </div>
+                    </div>
+                    <div class="time-range-group">
+                        <label class="control-label">
+                            <input type="checkbox" id="syncWithStats" checked />
+                            ${t('monitor.syncWithStats')}
+                        </label>
+                        <select id="healthHistoryHours">
+                            <option value="6">6 ${t('monitor.hours')}</option>
+                            <option value="12">12 ${t('monitor.hours')}</option>
+                            <option value="24" selected>24 ${t('monitor.hours')}</option>
+                            <option value="48">48 ${t('monitor.hours')}</option>
+                            <option value="168">7 ${t('monitor.days')}</option>
+                        </select>
+                    </div>
+                    <div class="latency-toggle-group">
+                        <label class="control-label">
+                            <input type="checkbox" id="showLatencyChart" checked />
+                            ${t('monitor.showLatencyChart')}
+                        </label>
+                    </div>
                 </div>
             </div>
             <div id="healthHistoryChart" class="health-history-chart">
                 <div class="health-history-empty">
                     <span class="health-history-empty-icon">📊</span>
-                    <span>${t('monitor.selectEndpointToView')}</span>
+                    <span>${t('monitor.noEndpointSelected')}</span>
                 </div>
             </div>
         </div>
@@ -802,28 +830,65 @@ function renderHealthHistoryPanel() {
     populateHealthHistoryEndpoints();
 
     // Add event listeners
-    const endpointSelect = document.getElementById('healthHistoryEndpoint');
+    const syncCheckbox = document.getElementById('syncWithStats');
     const hoursSelect = document.getElementById('healthHistoryHours');
+    const latencyCheckbox = document.getElementById('showLatencyChart');
 
-    if (endpointSelect) {
-        endpointSelect.addEventListener('change', (e) => {
-            selectedHistoryEndpoint = e.target.value;
-            loadHealthHistory();
+    if (syncCheckbox) {
+        syncCheckbox.addEventListener('change', (e) => {
+            syncWithStatsPeriod = e.target.checked;
+            if (hoursSelect) {
+                hoursSelect.disabled = syncWithStatsPeriod;
+            }
+            if (!syncWithStatsPeriod) {
+                // 手动模式，保存当前选择
+                localStorage.setItem('healthHistory_syncWithStats', 'false');
+            } else {
+                localStorage.setItem('healthHistory_syncWithStats', 'true');
+            }
         });
     }
 
     if (hoursSelect) {
         hoursSelect.addEventListener('change', (e) => {
             selectedHistoryHours = parseInt(e.target.value);
-            loadHealthHistory();
+            loadMultipleEndpointsHealthHistory();
         });
+    }
+
+    if (latencyCheckbox) {
+        latencyCheckbox.addEventListener('change', (e) => {
+            showLatencyChart = e.target.checked;
+            localStorage.setItem('healthHistory_showLatencyChart', showLatencyChart);
+            const container = document.getElementById('latencyChartContainer');
+            if (container) {
+                container.style.display = showLatencyChart ? 'block' : 'none';
+            }
+            if (showLatencyChart && getSelectedEndpoints().length > 0) {
+                renderLatencyChartForMultipleEndpoints();
+            }
+        });
+    }
+
+    // 恢复保存的状态
+    const savedSync = localStorage.getItem('healthHistory_syncWithStats');
+    if (savedSync !== null) {
+        syncWithStatsPeriod = savedSync === 'true';
+        if (syncCheckbox) syncCheckbox.checked = syncWithStatsPeriod;
+        if (hoursSelect) hoursSelect.disabled = syncWithStatsPeriod;
+    }
+
+    const savedShowLatency = localStorage.getItem('healthHistory_showLatencyChart');
+    if (savedShowLatency !== null) {
+        showLatencyChart = savedShowLatency === 'true';
+        if (latencyCheckbox) latencyCheckbox.checked = showLatencyChart;
     }
 }
 
-// Populate endpoint dropdown with available endpoints
+// Populate endpoint checkboxes with available endpoints
 async function populateHealthHistoryEndpoints() {
-    const select = document.getElementById('healthHistoryEndpoint');
-    if (!select) return;
+    const container = document.getElementById('healthHistoryEndpoints');
+    if (!container) return;
 
     // Get endpoints from health status
     const endpoints = Array.from(endpointHealth.keys());
@@ -845,13 +910,155 @@ async function populateHealthHistoryEndpoints() {
         }
     }
 
-    // Build options
-    let html = `<option value="">${t('monitor.selectEndpoint')}</option>`;
+    // Build checkboxes
+    let html = '';
     for (const name of endpoints) {
-        html += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+        const escapedName = escapeHtml(name);
+        html += `
+            <label class="endpoint-checkbox-item">
+                <input type="checkbox" value="${escapedName}" onchange="window.handleEndpointCheckboxChange(this)" />
+                <span>${escapedName}</span>
+            </label>
+        `;
     }
 
-    select.innerHTML = html;
+    if (html === '') {
+        html = '<div class="health-history-empty-text">' + t('monitor.noEndpoints') + '</div>';
+    }
+
+    container.innerHTML = html;
+
+    // 恢复之前保存的选中状态
+    loadSelectedEndpoints();
+}
+
+// 获取选中的端点列表
+function getSelectedEndpoints() {
+    const checkboxes = document.querySelectorAll('#healthHistoryEndpoints input[type="checkbox"]:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+// 保存选中状态到 localStorage
+function saveSelectedEndpoints() {
+    const selected = getSelectedEndpoints();
+    localStorage.setItem('healthHistory_selectedEndpoints', JSON.stringify(selected));
+}
+
+// 从 localStorage 恢复选中状态
+function loadSelectedEndpoints() {
+    try {
+        const saved = localStorage.getItem('healthHistory_selectedEndpoints');
+        if (saved) {
+            const selectedNames = JSON.parse(saved);
+            selectedHistoryEndpoints = selectedNames;
+
+            // 设置复选框状态
+            const checkboxes = document.querySelectorAll('#healthHistoryEndpoints input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                if (selectedNames.includes(cb.value)) {
+                    cb.checked = true;
+                }
+            });
+
+            // 如果有选中的端点，加载数据
+            if (selectedNames.length > 0) {
+                loadMultipleEndpointsHealthHistory();
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load selected endpoints:', error);
+    }
+}
+
+// 全选端点
+window.selectAllEndpoints = function() {
+    const checkboxes = document.querySelectorAll('#healthHistoryEndpoints input[type="checkbox"]');
+    const maxEndpoints = 5;
+    let count = 0;
+
+    checkboxes.forEach(cb => {
+        if (count < maxEndpoints) {
+            cb.checked = true;
+            count++;
+        }
+    });
+
+    saveSelectedEndpoints();
+    loadMultipleEndpointsHealthHistory();
+};
+
+// 取消全选
+window.deselectAllEndpoints = function() {
+    const checkboxes = document.querySelectorAll('#healthHistoryEndpoints input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        cb.checked = false;
+    });
+
+    saveSelectedEndpoints();
+    renderHealthHistoryEmpty();
+};
+
+// 处理复选框变化
+window.handleEndpointCheckboxChange = function(checkbox) {
+    const selectedCount = getSelectedEndpoints().length;
+    const maxEndpoints = 5;
+
+    if (checkbox.checked && selectedCount > maxEndpoints) {
+        checkbox.checked = false;
+        const message = t('monitor.maxEndpointsWarning').replace('{max}', maxEndpoints);
+        // 显示提示（如果有通知系统）
+        if (window.showNotification) {
+            window.showNotification(message, 'warning');
+        } else {
+            alert(message);
+        }
+        return;
+    }
+
+    saveSelectedEndpoints();
+    loadMultipleEndpointsHealthHistory();
+};
+
+// 转换统计周期为小时数
+function convertPeriodToHours(period) {
+    const mapping = {
+        'daily': 24,
+        'yesterday': 24,
+        'weekly': 168,
+        'monthly': 720
+    };
+    return mapping[period] || 24;
+}
+
+// 同步健康历史时间范围与统计周期
+function syncHealthHistoryWithStatsPeriod(period) {
+    if (!syncWithStatsPeriod) return;
+
+    const hours = convertPeriodToHours(period);
+    selectedHistoryHours = hours;
+
+    // 更新小时选择器
+    const hoursSelect = document.getElementById('healthHistoryHours');
+    if (hoursSelect) {
+        // 如果选项中有对应的值，选中它
+        const option = Array.from(hoursSelect.options).find(opt => parseInt(opt.value) === hours);
+        if (option) {
+            hoursSelect.value = hours;
+        } else {
+            // 如果没有对应选项，添加一个临时选项
+            const tempOption = document.createElement('option');
+            tempOption.value = hours;
+            tempOption.text = hours + ' ' + t('monitor.hours');
+            tempOption.selected = true;
+            hoursSelect.appendChild(tempOption);
+        }
+        hoursSelect.disabled = true;
+    }
+
+    // 重新加载数据
+    if (getSelectedEndpoints().length > 0) {
+        loadMultipleEndpointsHealthHistory();
+    }
 }
 
 // Load health history data from backend
@@ -884,6 +1091,50 @@ async function loadHealthHistory() {
     }
 }
 
+// 加载多个端点的健康历史数据
+async function loadMultipleEndpointsHealthHistory() {
+    const selectedEndpoints = getSelectedEndpoints();
+
+    if (selectedEndpoints.length === 0) {
+        renderHealthHistoryEmpty();
+        return;
+    }
+
+    try {
+        const clientType = getCurrentClientType() || 'claude';
+
+        // 并行加载所有端点的数据
+        const promises = selectedEndpoints.map(endpointName =>
+            window.go.main.App.GetHealthHistory(endpointName, clientType, selectedHistoryHours)
+                .then(data => ({ endpointName, data, error: null }))
+                .catch(error => ({ endpointName, data: [], error: error.message || 'Unknown error' }))
+        );
+
+        const results = await Promise.all(promises);
+
+        // 存储到 Map 中
+        healthHistoryDataMap.clear();
+        for (const result of results) {
+            if (result.data && result.data.length > 0) {
+                healthHistoryDataMap.set(result.endpointName, result.data);
+            } else if (result.error) {
+                console.warn(`Failed to load health history for ${result.endpointName}:`, result.error);
+            }
+        }
+
+        // 渲染时间轴
+        renderMultipleEndpointTimelines();
+
+        // 渲染延迟图表（如果启用）
+        if (showLatencyChart) {
+            renderLatencyChartForMultipleEndpoints();
+        }
+    } catch (error) {
+        console.error('Failed to load multiple endpoints health history:', error);
+        renderHealthHistoryEmpty(true);
+    }
+}
+
 // Render empty state for health history
 function renderHealthHistoryEmpty(noData = false) {
     const container = document.getElementById('healthHistoryChart');
@@ -892,7 +1143,7 @@ function renderHealthHistoryEmpty(noData = false) {
     container.innerHTML = `
         <div class="health-history-empty">
             <span class="health-history-empty-icon">${noData ? '📭' : '📊'}</span>
-            <span>${noData ? t('monitor.noHealthHistory') : t('monitor.selectEndpointToView')}</span>
+            <span>${noData ? t('monitor.noHealthHistory') : t('monitor.noEndpointSelected')}</span>
         </div>
     `;
 }
@@ -946,6 +1197,85 @@ function renderHealthHistoryChart() {
 
     html += '</div>';
     container.innerHTML = html;
+}
+
+// 渲染多个端点的时间轴
+function renderMultipleEndpointTimelines() {
+    const container = document.getElementById('healthHistoryChart');
+    if (!container) return;
+
+    const selectedEndpoints = getSelectedEndpoints();
+
+    if (selectedEndpoints.length === 0) {
+        renderHealthHistoryEmpty();
+        return;
+    }
+
+    let html = '<div class="health-timelines-container">';
+
+    // 为每个选中的端点生成时间轴
+    for (const endpointName of selectedEndpoints) {
+        const endpointData = healthHistoryDataMap.get(endpointName);
+        if (!endpointData || endpointData.length === 0) {
+            // 显示无数据状态
+            html += renderSingleEndpointTimeline(endpointName, []);
+            continue;
+        }
+
+        const segments = processHealthHistoryData(endpointData, selectedHistoryHours);
+        html += renderSingleEndpointTimeline(endpointName, segments);
+    }
+
+    html += '</div>';
+
+    // 添加延迟图表容器
+    html += '<div id="latencyChartContainer" class="latency-chart-container" style="display: ' + (showLatencyChart ? 'block' : 'none') + '"></div>';
+
+    container.innerHTML = html;
+
+    // 如果启用延迟图表，渲染它
+    if (showLatencyChart) {
+        renderLatencyChartForMultipleEndpoints();
+    }
+}
+
+// 渲染单个端点的时间轴
+function renderSingleEndpointTimeline(endpointName, segments) {
+    const totalDuration = selectedHistoryHours * 60 * 60 * 1000; // in ms
+    const truncatedName = truncateEndpointName(endpointName, 12);
+
+    let html = '<div class="timeline-row" data-endpoint="' + escapeHtml(endpointName) + '">';
+    html += '<span class="timeline-label" title="' + escapeHtml(endpointName) + '">' + escapeHtml(truncatedName) + '</span>';
+    html += '<div class="timeline-bar">';
+
+    if (segments.length === 0) {
+        // 无数据状态
+        html += '<div class="timeline-segment status-unknown" style="width: 100%" title="' + t('monitor.noHealthHistory') + '"></div>';
+    } else {
+        for (const segment of segments) {
+            const widthPercent = (segment.duration / totalDuration) * 100;
+            const statusClass = `status-${segment.status}`;
+            const tooltipTime = new Date(segment.startTime).toLocaleString();
+            const tooltipLatency = segment.latencyMs > 0 ? ` | ${Math.round(segment.latencyMs)}ms` : '';
+            const tooltipError = segment.errorMessage ? ` | ${segment.errorMessage}` : '';
+
+            html += `
+                <div class="timeline-segment ${statusClass}"
+                     style="width: ${Math.max(widthPercent, 0.5)}%"
+                     title="${tooltipTime}${tooltipLatency}${tooltipError}">
+                </div>
+            `;
+        }
+    }
+
+    html += '</div></div>';
+    return html;
+}
+
+// 截断端点名称
+function truncateEndpointName(name, maxLength = 12) {
+    if (name.length <= maxLength) return name;
+    return name.substring(0, maxLength - 3) + '...';
 }
 
 // Process health history data into timeline segments
@@ -1091,6 +1421,129 @@ function renderLatencyChart(latencyData) {
             </div>
         </div>
     `;
+}
+
+// 渲染多端点延迟图表
+function renderLatencyChartForMultipleEndpoints() {
+    const container = document.getElementById('latencyChartContainer');
+    if (!container) return;
+
+    const selectedEndpoints = getSelectedEndpoints();
+    const colors = ['#667eea', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6'];
+
+    // 收集所有端点的延迟数据
+    const endpointLatencyData = [];
+    for (const endpointName of selectedEndpoints) {
+        const data = healthHistoryDataMap.get(endpointName);
+        if (data && data.length > 0) {
+            const latencyData = data.filter(d => d.latencyMs > 0);
+            if (latencyData.length > 1) {
+                endpointLatencyData.push({ name: endpointName, data: latencyData });
+            }
+        }
+    }
+
+    if (endpointLatencyData.length === 0) {
+        container.innerHTML = '<div class="health-history-empty-text">' + t('monitor.noHealthHistory') + '</div>';
+        return;
+    }
+
+    const width = 100;
+    const height = 120;
+    const padding = 5;
+
+    // 找到所有数据的最小和最大延迟
+    let globalMinLatency = Infinity;
+    let globalMaxLatency = -Infinity;
+
+    for (const endpoint of endpointLatencyData) {
+        const latencies = endpoint.data.map(d => d.latencyMs);
+        globalMinLatency = Math.min(globalMinLatency, ...latencies);
+        globalMaxLatency = Math.max(globalMaxLatency, ...latencies);
+    }
+
+    const range = globalMaxLatency - globalMinLatency || 1;
+
+    let html = '<div class="multi-latency-chart">';
+    html += '<h5 style="margin: 0 0 8px 0; font-size: 13px; color: var(--text-primary);">' + t('monitor.latencyChartTitle') + '</h5>';
+
+    // 水平图例
+    html += '<div class="latency-legend-horizontal">';
+    endpointLatencyData.forEach((endpoint, index) => {
+        const color = colors[index % colors.length];
+        const truncatedName = truncateEndpointName(endpoint.name, 15);
+        html += `
+            <div class="legend-item">
+                <span class="legend-dot" style="background: ${color}"></span>
+                <span title="${escapeHtml(endpoint.name)}">${escapeHtml(truncatedName)}</span>
+            </div>
+        `;
+    });
+    html += '</div>';
+
+    // SVG 图表
+    html += `<svg class="latency-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">`;
+
+    // 为每个端点绘制曲线
+    endpointLatencyData.forEach((endpoint, index) => {
+        const color = colors[index % colors.length];
+        const latencyData = endpoint.data;
+
+        // 采样数据点
+        const maxPoints = 30;
+        let filteredData = latencyData;
+        if (latencyData.length > maxPoints) {
+            const step = Math.ceil(latencyData.length / maxPoints);
+            filteredData = latencyData.filter((_, i) => i % step === 0);
+            if (filteredData[filteredData.length - 1] !== latencyData[latencyData.length - 1]) {
+                filteredData.push(latencyData[latencyData.length - 1]);
+            }
+        }
+
+        // 计算点坐标
+        const points = filteredData.map((d, i) => {
+            const x = (i / (filteredData.length - 1)) * (width - padding * 2) + padding;
+            const y = height - padding - ((d.latencyMs - globalMinLatency) / range) * (height - padding * 2);
+            return { x, y, latency: d.latencyMs, time: d.timestamp };
+        });
+
+        // 创建路径
+        const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+        html += `<path class="latency-line" d="${pathD}" stroke="${color}" fill="none" stroke-width="2" />`;
+
+        // 添加数据点
+        points.forEach((p, i) => {
+            if (i % 3 === 0) {
+                html += `
+                    <circle cx="${p.x}" cy="${p.y}" r="2" fill="${color}">
+                        <title>${escapeHtml(endpoint.name)} - ${new Date(p.time).toLocaleTimeString()} - ${Math.round(p.latency)}ms</title>
+                    </circle>
+                `;
+            }
+        });
+    });
+
+    html += '</svg>';
+
+    // 时间和数值轴
+    if (endpointLatencyData.length > 0 && endpointLatencyData[0].data.length > 0) {
+        const firstData = endpointLatencyData[0].data;
+        const startTime = new Date(firstData[0].timestamp);
+        const endTime = new Date(firstData[firstData.length - 1].timestamp);
+        const timeFormat = (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        html += `
+            <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-tertiary); margin-top: 4px;">
+                <span>${timeFormat(startTime)}</span>
+                <span>${Math.round(globalMinLatency)}-${Math.round(globalMaxLatency)}ms</span>
+                <span>${timeFormat(endTime)}</span>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
 }
 
 // Refresh health history (called when endpoint health is updated)
