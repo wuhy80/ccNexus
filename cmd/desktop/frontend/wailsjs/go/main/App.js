@@ -254,6 +254,10 @@ export function GetRecentRequests(arg1) {
   return window['go']['main']['App']['GetRecentRequests'](arg1);
 }
 
+export function GetRecentRequestsByEndpoint(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetRecentRequestsByEndpoint'](arg1, arg2, arg3);
+}
+
 export function GetRequestTimeout() {
   return window['go']['main']['App']['GetRequestTimeout']();
 }

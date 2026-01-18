@@ -127,6 +127,8 @@ export function GetRateLimitStats():Promise<string>;
 
 export function GetRecentRequests(arg1:number):Promise<string>;
 
+export function GetRecentRequestsByEndpoint(arg1:string,arg2:string,arg3:number):Promise<string>;
+
 export function GetRequestTimeout():Promise<number>;
 
 export function GetRoutingConfig():Promise<string>;
