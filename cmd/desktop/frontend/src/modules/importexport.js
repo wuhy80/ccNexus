@@ -29,11 +29,11 @@ function createImportExportModal() {
                 <!-- Export Tab -->
                 <div id="exportTab" class="tab-content active">
                     <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="exportIncludeKeys" />
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="exportIncludeKeys" style="margin: 0;" />
                             <span id="includeApiKeysLabel"></span>
                         </label>
-                        <small class="form-help" style="color: var(--warning-color);" id="includeApiKeysHelp"></small>
+                        <small class="form-help" style="color: var(--warning-color); display: block; margin-top: 5px;" id="includeApiKeysHelp"></small>
                     </div>
                     <div class="form-group" style="margin-top: 15px;">
                         <div style="display: flex; gap: 10px;">

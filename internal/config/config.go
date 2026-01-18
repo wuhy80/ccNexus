@@ -202,9 +202,11 @@ func (c *Config) CopyFrom(other *Config) {
 
 	if other.WebDAV != nil {
 		c.WebDAV = &WebDAVConfig{
-			URL:      other.WebDAV.URL,
-			Username: other.WebDAV.Username,
-			Password: other.WebDAV.Password,
+			URL:        other.WebDAV.URL,
+			Username:   other.WebDAV.Username,
+			Password:   other.WebDAV.Password,
+			ConfigPath: other.WebDAV.ConfigPath,
+			StatsPath:  other.WebDAV.StatsPath,
 		}
 	} else {
 		c.WebDAV = nil
@@ -243,14 +245,16 @@ func (c *Config) CopyFrom(other *Config) {
 
 	if other.Alert != nil {
 		c.Alert = &AlertConfig{
-			Enabled:                   other.Alert.Enabled,
-			ConsecutiveFailures:       other.Alert.ConsecutiveFailures,
-			NotifyOnRecovery:          other.Alert.NotifyOnRecovery,
-			SystemNotification:        other.Alert.SystemNotification,
-			AlertCooldownMinutes:      other.Alert.AlertCooldownMinutes,
-			PerformanceAlertEnabled:   other.Alert.PerformanceAlertEnabled,
-			LatencyThresholdMs:        other.Alert.LatencyThresholdMs,
-			LatencyIncreasePercent:    other.Alert.LatencyIncreasePercent,
+			Enabled:                    other.Alert.Enabled,
+			ConsecutiveFailures:        other.Alert.ConsecutiveFailures,
+			NotifyOnRecovery:           other.Alert.NotifyOnRecovery,
+			SystemNotification:         other.Alert.SystemNotification,
+			AlertCooldownMinutes:       other.Alert.AlertCooldownMinutes,
+			PerformanceAlertEnabled:    other.Alert.PerformanceAlertEnabled,
+			LatencyThresholdMs:         other.Alert.LatencyThresholdMs,
+			LatencyIncreasePercent:     other.Alert.LatencyIncreasePercent,
+			AutoEnableOnRecovery:       other.Alert.AutoEnableOnRecovery,
+			AutoEnableSuccessThreshold: other.Alert.AutoEnableSuccessThreshold,
 		}
 	} else {
 		c.Alert = nil
@@ -1210,6 +1214,58 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 				config.Alert.AutoEnableSuccessThreshold = threshold
 			}
 		}
+		// Load performance alert fields
+		if perfAlertEnabled, err := storage.GetConfig("alert_performanceAlertEnabled"); err == nil && perfAlertEnabled != "" {
+			config.Alert.PerformanceAlertEnabled = perfAlertEnabled == "true"
+		}
+		if latencyThresholdStr, err := storage.GetConfig("alert_latencyThresholdMs"); err == nil && latencyThresholdStr != "" {
+			if latencyThreshold, err := strconv.Atoi(latencyThresholdStr); err == nil {
+				config.Alert.LatencyThresholdMs = latencyThreshold
+			}
+		}
+		if latencyIncreaseStr, err := storage.GetConfig("alert_latencyIncreasePercent"); err == nil && latencyIncreaseStr != "" {
+			if latencyIncrease, err := strconv.Atoi(latencyIncreaseStr); err == nil {
+				config.Alert.LatencyIncreasePercent = latencyIncrease
+			}
+		}
+	}
+
+	// Load cache config
+	if cacheEnabled, err := storage.GetConfig("cache_enabled"); err == nil && cacheEnabled != "" {
+		config.Cache = &CacheConfig{
+			Enabled:    cacheEnabled == "true",
+			TTLSeconds: 300,
+			MaxEntries: 1000,
+		}
+		if ttlStr, err := storage.GetConfig("cache_ttlSeconds"); err == nil && ttlStr != "" {
+			if ttl, err := strconv.Atoi(ttlStr); err == nil {
+				config.Cache.TTLSeconds = ttl
+			}
+		}
+		if maxEntriesStr, err := storage.GetConfig("cache_maxEntries"); err == nil && maxEntriesStr != "" {
+			if maxEntries, err := strconv.Atoi(maxEntriesStr); err == nil {
+				config.Cache.MaxEntries = maxEntries
+			}
+		}
+	}
+
+	// Load rate limit config
+	if rateLimitEnabled, err := storage.GetConfig("rateLimit_enabled"); err == nil && rateLimitEnabled != "" {
+		config.RateLimit = &RateLimitConfig{
+			Enabled:          rateLimitEnabled == "true",
+			GlobalLimit:      60,
+			PerEndpointLimit: 30,
+		}
+		if globalLimitStr, err := storage.GetConfig("rateLimit_globalLimit"); err == nil && globalLimitStr != "" {
+			if globalLimit, err := strconv.Atoi(globalLimitStr); err == nil {
+				config.RateLimit.GlobalLimit = globalLimit
+			}
+		}
+		if perEndpointLimitStr, err := storage.GetConfig("rateLimit_perEndpointLimit"); err == nil && perEndpointLimitStr != "" {
+			if perEndpointLimit, err := strconv.Atoi(perEndpointLimitStr); err == nil {
+				config.RateLimit.PerEndpointLimit = perEndpointLimit
+			}
+		}
 	}
 
 	// Load routing config
@@ -1389,6 +1445,23 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 		storage.SetConfig("alert_cooldownMinutes", strconv.Itoa(c.Alert.AlertCooldownMinutes))
 		storage.SetConfig("alert_autoEnableOnRecovery", strconv.FormatBool(c.Alert.AutoEnableOnRecovery))
 		storage.SetConfig("alert_autoEnableSuccessThreshold", strconv.Itoa(c.Alert.AutoEnableSuccessThreshold))
+		storage.SetConfig("alert_performanceAlertEnabled", strconv.FormatBool(c.Alert.PerformanceAlertEnabled))
+		storage.SetConfig("alert_latencyThresholdMs", strconv.Itoa(c.Alert.LatencyThresholdMs))
+		storage.SetConfig("alert_latencyIncreasePercent", strconv.Itoa(c.Alert.LatencyIncreasePercent))
+	}
+
+	// Save cache config
+	if c.Cache != nil {
+		storage.SetConfig("cache_enabled", strconv.FormatBool(c.Cache.Enabled))
+		storage.SetConfig("cache_ttlSeconds", strconv.Itoa(c.Cache.TTLSeconds))
+		storage.SetConfig("cache_maxEntries", strconv.Itoa(c.Cache.MaxEntries))
+	}
+
+	// Save rate limit config
+	if c.RateLimit != nil {
+		storage.SetConfig("rateLimit_enabled", strconv.FormatBool(c.RateLimit.Enabled))
+		storage.SetConfig("rateLimit_globalLimit", strconv.Itoa(c.RateLimit.GlobalLimit))
+		storage.SetConfig("rateLimit_perEndpointLimit", strconv.Itoa(c.RateLimit.PerEndpointLimit))
 	}
 
 	// Save routing config

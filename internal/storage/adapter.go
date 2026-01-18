@@ -22,15 +22,23 @@ func (a *ConfigStorageAdapter) GetEndpoints() ([]config.StorageEndpoint, error) 
 	result := make([]config.StorageEndpoint, len(endpoints))
 	for i, ep := range endpoints {
 		result[i] = config.StorageEndpoint{
-			Name:        ep.Name,
-			ClientType:  ep.ClientType,
-			APIUrl:      ep.APIUrl,
-			APIKey:      ep.APIKey,
-			Enabled:     ep.Enabled,
-			Transformer: ep.Transformer,
-			Model:       ep.Model,
-			Remark:      ep.Remark,
-			SortOrder:   ep.SortOrder,
+			Name:               ep.Name,
+			ClientType:         ep.ClientType,
+			APIUrl:             ep.APIUrl,
+			APIKey:             ep.APIKey,
+			Status:             config.EndpointStatus(ep.Status),
+			Enabled:            ep.Enabled,
+			Transformer:        ep.Transformer,
+			Model:              ep.Model,
+			Remark:             ep.Remark,
+			Tags:               ep.Tags,
+			SortOrder:          ep.SortOrder,
+			ModelPatterns:      ep.ModelPatterns,
+			CostPerInputToken:  ep.CostPerInputToken,
+			CostPerOutputToken: ep.CostPerOutputToken,
+			QuotaLimit:         ep.QuotaLimit,
+			QuotaResetCycle:    ep.QuotaResetCycle,
+			Priority:           ep.Priority,
 		}
 	}
 	return result, nil
@@ -46,15 +54,23 @@ func (a *ConfigStorageAdapter) GetEndpointsByClient(clientType string) ([]config
 	result := make([]config.StorageEndpoint, len(endpoints))
 	for i, ep := range endpoints {
 		result[i] = config.StorageEndpoint{
-			Name:        ep.Name,
-			ClientType:  ep.ClientType,
-			APIUrl:      ep.APIUrl,
-			APIKey:      ep.APIKey,
-			Enabled:     ep.Enabled,
-			Transformer: ep.Transformer,
-			Model:       ep.Model,
-			Remark:      ep.Remark,
-			SortOrder:   ep.SortOrder,
+			Name:               ep.Name,
+			ClientType:         ep.ClientType,
+			APIUrl:             ep.APIUrl,
+			APIKey:             ep.APIKey,
+			Status:             config.EndpointStatus(ep.Status),
+			Enabled:            ep.Enabled,
+			Transformer:        ep.Transformer,
+			Model:              ep.Model,
+			Remark:             ep.Remark,
+			Tags:               ep.Tags,
+			SortOrder:          ep.SortOrder,
+			ModelPatterns:      ep.ModelPatterns,
+			CostPerInputToken:  ep.CostPerInputToken,
+			CostPerOutputToken: ep.CostPerOutputToken,
+			QuotaLimit:         ep.QuotaLimit,
+			QuotaResetCycle:    ep.QuotaResetCycle,
+			Priority:           ep.Priority,
 		}
 	}
 	return result, nil
@@ -63,15 +79,23 @@ func (a *ConfigStorageAdapter) GetEndpointsByClient(clientType string) ([]config
 // SaveEndpoint saves an endpoint
 func (a *ConfigStorageAdapter) SaveEndpoint(ep *config.StorageEndpoint) error {
 	endpoint := &Endpoint{
-		Name:        ep.Name,
-		ClientType:  ep.ClientType,
-		APIUrl:      ep.APIUrl,
-		APIKey:      ep.APIKey,
-		Enabled:     ep.Enabled,
-		Transformer: ep.Transformer,
-		Model:       ep.Model,
-		Remark:      ep.Remark,
-		SortOrder:   ep.SortOrder,
+		Name:               ep.Name,
+		ClientType:         ep.ClientType,
+		APIUrl:             ep.APIUrl,
+		APIKey:             ep.APIKey,
+		Status:             string(ep.Status),
+		Enabled:            ep.Enabled,
+		Transformer:        ep.Transformer,
+		Model:              ep.Model,
+		Remark:             ep.Remark,
+		Tags:               ep.Tags,
+		SortOrder:          ep.SortOrder,
+		ModelPatterns:      ep.ModelPatterns,
+		CostPerInputToken:  ep.CostPerInputToken,
+		CostPerOutputToken: ep.CostPerOutputToken,
+		QuotaLimit:         ep.QuotaLimit,
+		QuotaResetCycle:    ep.QuotaResetCycle,
+		Priority:           ep.Priority,
 	}
 	return a.storage.SaveEndpoint(endpoint)
 }
@@ -79,15 +103,23 @@ func (a *ConfigStorageAdapter) SaveEndpoint(ep *config.StorageEndpoint) error {
 // UpdateEndpoint updates an endpoint
 func (a *ConfigStorageAdapter) UpdateEndpoint(ep *config.StorageEndpoint) error {
 	endpoint := &Endpoint{
-		Name:        ep.Name,
-		ClientType:  ep.ClientType,
-		APIUrl:      ep.APIUrl,
-		APIKey:      ep.APIKey,
-		Enabled:     ep.Enabled,
-		Transformer: ep.Transformer,
-		Model:       ep.Model,
-		Remark:      ep.Remark,
-		SortOrder:   ep.SortOrder,
+		Name:               ep.Name,
+		ClientType:         ep.ClientType,
+		APIUrl:             ep.APIUrl,
+		APIKey:             ep.APIKey,
+		Status:             string(ep.Status),
+		Enabled:            ep.Enabled,
+		Transformer:        ep.Transformer,
+		Model:              ep.Model,
+		Remark:             ep.Remark,
+		Tags:               ep.Tags,
+		SortOrder:          ep.SortOrder,
+		ModelPatterns:      ep.ModelPatterns,
+		CostPerInputToken:  ep.CostPerInputToken,
+		CostPerOutputToken: ep.CostPerOutputToken,
+		QuotaLimit:         ep.QuotaLimit,
+		QuotaResetCycle:    ep.QuotaResetCycle,
+		Priority:           ep.Priority,
 	}
 	return a.storage.UpdateEndpoint(endpoint)
 }
