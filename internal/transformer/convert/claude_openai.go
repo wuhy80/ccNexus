@@ -543,14 +543,24 @@ func OpenAIStreamToClaude(event []byte, ctx *transformer.StreamContext) ([]byte,
 		if *choice.FinishReason == "tool_calls" {
 			stopReason = "tool_use"
 		}
-		// 从 OpenAI chunk 中提取 output_tokens（如果有）
+		// 从 OpenAI chunk 中提取 input_tokens 和 output_tokens（如果有）
+		// OpenAI API 在最后一个 chunk 中返回完整的 Usage 信息
+		inputTokens := 0
 		outputTokens := 0
-		if chunk.Usage != nil && chunk.Usage.CompletionTokens > 0 {
-			outputTokens = chunk.Usage.CompletionTokens
+		if chunk.Usage != nil {
+			if chunk.Usage.PromptTokens > 0 {
+				inputTokens = chunk.Usage.PromptTokens
+			}
+			if chunk.Usage.CompletionTokens > 0 {
+				outputTokens = chunk.Usage.CompletionTokens
+			}
 		}
 		result = append(result, buildClaudeEvent("message_delta", map[string]interface{}{
 			"delta": map[string]interface{}{"stop_reason": stopReason, "stop_sequence": nil},
-			"usage": map[string]interface{}{"output_tokens": outputTokens},
+			"usage": map[string]interface{}{
+				"input_tokens":  inputTokens,
+				"output_tokens": outputTokens,
+			},
 		})...)
 		ctx.FinishReasonSent = true
 	}

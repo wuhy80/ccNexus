@@ -501,14 +501,24 @@ func OpenAI2StreamToClaude(event []byte, ctx *transformer.StreamContext) ([]byte
 		if ctx.ToolIndex > 0 || ctx.CurrentToolID != "" {
 			stopReason = "tool_use"
 		}
-		// 从 OpenAI2 response 中提取 output_tokens（如果有）
+		// 从 OpenAI2 response 中提取 input_tokens 和 output_tokens（如果有）
+		// OpenAI2 API 在 response.completed 事件中返回完整的 Usage 信息
+		inputTokens := 0
 		outputTokens := 0
-		if evt.Response != nil && evt.Response.Usage.OutputTokens > 0 {
-			outputTokens = evt.Response.Usage.OutputTokens
+		if evt.Response != nil {
+			if evt.Response.Usage.InputTokens > 0 {
+				inputTokens = evt.Response.Usage.InputTokens
+			}
+			if evt.Response.Usage.OutputTokens > 0 {
+				outputTokens = evt.Response.Usage.OutputTokens
+			}
 		}
 		result = append(result, buildClaudeEvent("message_delta", map[string]interface{}{
 			"delta": map[string]interface{}{"stop_reason": stopReason, "stop_sequence": nil},
-			"usage": map[string]interface{}{"output_tokens": outputTokens},
+			"usage": map[string]interface{}{
+				"input_tokens":  inputTokens,
+				"output_tokens": outputTokens,
+			},
 		})...)
 	}
 

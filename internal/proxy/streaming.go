@@ -278,8 +278,21 @@ func (p *Proxy) extractTokensFromEvent(eventData []byte, usage *transformer.Toke
 			}
 		} else if eventType == "message_delta" {
 			if usageMap, ok := event["usage"].(map[string]interface{}); ok {
+				// 提取 input_tokens（如果有）
+				if input, ok := usageMap["input_tokens"].(float64); ok && int(input) > 0 {
+					usage.InputTokens = int(input)
+				}
+				// 提取 output_tokens（如果有）
 				if output, ok := usageMap["output_tokens"].(float64); ok {
 					usage.OutputTokens = int(output)
+				}
+				// 提取 cache tokens（如果有）
+				detail := transformer.ExtractTokenUsageDetail(usageMap)
+				if detail.CacheCreationInputTokens > 0 {
+					usage.CacheCreationInputTokens = detail.CacheCreationInputTokens
+				}
+				if detail.CacheReadInputTokens > 0 {
+					usage.CacheReadInputTokens = detail.CacheReadInputTokens
 				}
 			}
 		}

@@ -442,14 +442,24 @@ func GeminiStreamToClaude(event []byte, ctx *transformer.StreamContext) ([]byte,
 		if hasFunctionCall || candidate.FinishReason == "TOOL_CODE" {
 			stopReason = "tool_use"
 		}
-		// 从 Gemini response 中提取 output_tokens（如果有）
+		// 从 Gemini response 中提取 input_tokens 和 output_tokens（如果有）
+		// Gemini API 在最后的 chunk 中返回完整的 UsageMetadata 信息
+		inputTokens := 0
 		outputTokens := 0
-		if resp.UsageMetadata != nil && resp.UsageMetadata.CandidatesTokenCount > 0 {
-			outputTokens = resp.UsageMetadata.CandidatesTokenCount
+		if resp.UsageMetadata != nil {
+			if resp.UsageMetadata.PromptTokenCount > 0 {
+				inputTokens = resp.UsageMetadata.PromptTokenCount
+			}
+			if resp.UsageMetadata.CandidatesTokenCount > 0 {
+				outputTokens = resp.UsageMetadata.CandidatesTokenCount
+			}
 		}
 		result = append(result, buildClaudeEvent("message_delta", map[string]interface{}{
 			"delta": map[string]interface{}{"stop_reason": stopReason, "stop_sequence": nil},
-			"usage": map[string]interface{}{"output_tokens": outputTokens},
+			"usage": map[string]interface{}{
+				"input_tokens":  inputTokens,
+				"output_tokens": outputTokens,
+			},
 		})...)
 		result = append(result, buildClaudeEvent("message_stop", map[string]interface{}{})...)
 		ctx.FinishReasonSent = true
