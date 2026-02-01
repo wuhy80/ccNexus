@@ -434,11 +434,16 @@ func OpenAI2StreamToClaude(event []byte, ctx *transformer.StreamContext) ([]byte
 		if evt.Response != nil {
 			ctx.MessageID = evt.Response.ID
 		}
+		// 从 OpenAI2 response 中提取 input_tokens（如果有）
+		inputTokens := ctx.InputTokens // 使用预估的 input tokens 作为后备
+		if evt.Response != nil && evt.Response.Usage.InputTokens > 0 {
+			inputTokens = evt.Response.Usage.InputTokens
+		}
 		result = append(result, buildClaudeEvent("message_start", map[string]interface{}{
 			"message": map[string]interface{}{
 				"id": ctx.MessageID, "type": "message", "role": "assistant", "content": []interface{}{},
 				"model": ctx.ModelName, "stop_reason": nil, "stop_sequence": nil,
-				"usage": map[string]interface{}{"input_tokens": 0, "output_tokens": 0},
+				"usage": map[string]interface{}{"input_tokens": inputTokens, "output_tokens": 0},
 			},
 		})...)
 
@@ -496,9 +501,14 @@ func OpenAI2StreamToClaude(event []byte, ctx *transformer.StreamContext) ([]byte
 		if ctx.ToolIndex > 0 || ctx.CurrentToolID != "" {
 			stopReason = "tool_use"
 		}
+		// 从 OpenAI2 response 中提取 output_tokens（如果有）
+		outputTokens := 0
+		if evt.Response != nil && evt.Response.Usage.OutputTokens > 0 {
+			outputTokens = evt.Response.Usage.OutputTokens
+		}
 		result = append(result, buildClaudeEvent("message_delta", map[string]interface{}{
 			"delta": map[string]interface{}{"stop_reason": stopReason, "stop_sequence": nil},
-			"usage": map[string]interface{}{"output_tokens": 0},
+			"usage": map[string]interface{}{"output_tokens": outputTokens},
 		})...)
 	}
 

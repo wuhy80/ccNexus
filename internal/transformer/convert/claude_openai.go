@@ -441,6 +441,8 @@ func OpenAIStreamToClaude(event []byte, ctx *transformer.StreamContext) ([]byte,
 				ctx.ToolBlockStarted = false
 			}
 			// Send message_delta with stop_reason if not sent
+			// 注意：[DONE] 事件通常不包含 usage 信息，所以这里保持为 0
+			// 真实的 usage 应该在之前的 chunk 中已经发送
 			if !ctx.FinishReasonSent {
 				result = append(result, buildClaudeEvent("message_delta", map[string]interface{}{
 					"delta": map[string]interface{}{"stop_reason": "end_turn", "stop_sequence": nil},
@@ -464,12 +466,17 @@ func OpenAIStreamToClaude(event []byte, ctx *transformer.StreamContext) ([]byte,
 	if !ctx.MessageStartSent {
 		ctx.MessageStartSent = true
 		ctx.MessageID = chunk.ID
+		// 从 OpenAI chunk 中提取 input_tokens（如果有）
+		inputTokens := ctx.InputTokens // 使用预估的 input tokens 作为后备
+		if chunk.Usage != nil && chunk.Usage.PromptTokens > 0 {
+			inputTokens = chunk.Usage.PromptTokens
+		}
 		result = append(result, buildClaudeEvent("message_start", map[string]interface{}{
 			"message": map[string]interface{}{
 				"id": chunk.ID, "type": "message", "role": "assistant",
 				"content": []interface{}{}, "model": ctx.ModelName,
 				"stop_reason": nil, "stop_sequence": nil,
-				"usage": map[string]interface{}{"input_tokens": 0, "output_tokens": 0},
+				"usage": map[string]interface{}{"input_tokens": inputTokens, "output_tokens": 0},
 			},
 		})...)
 	}
@@ -536,9 +543,14 @@ func OpenAIStreamToClaude(event []byte, ctx *transformer.StreamContext) ([]byte,
 		if *choice.FinishReason == "tool_calls" {
 			stopReason = "tool_use"
 		}
+		// 从 OpenAI chunk 中提取 output_tokens（如果有）
+		outputTokens := 0
+		if chunk.Usage != nil && chunk.Usage.CompletionTokens > 0 {
+			outputTokens = chunk.Usage.CompletionTokens
+		}
 		result = append(result, buildClaudeEvent("message_delta", map[string]interface{}{
 			"delta": map[string]interface{}{"stop_reason": stopReason, "stop_sequence": nil},
-			"usage": map[string]interface{}{"output_tokens": 0},
+			"usage": map[string]interface{}{"output_tokens": outputTokens},
 		})...)
 		ctx.FinishReasonSent = true
 	}

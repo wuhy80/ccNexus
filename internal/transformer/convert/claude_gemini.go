@@ -351,6 +351,8 @@ func GeminiStreamToClaude(event []byte, ctx *transformer.StreamContext) ([]byte,
 				result = append(result, buildClaudeEvent("content_block_stop", map[string]interface{}{"index": ctx.ContentIndex})...)
 				ctx.ContentBlockStarted = false
 			}
+			// 注意：[DONE] 事件通常不包含 usage 信息，所以这里保持为 0
+			// 真实的 usage 应该在之前的 chunk 中已经发送
 			if !ctx.FinishReasonSent {
 				result = append(result, buildClaudeEvent("message_delta", map[string]interface{}{
 					"delta": map[string]interface{}{"stop_reason": "end_turn", "stop_sequence": nil},
@@ -374,11 +376,16 @@ func GeminiStreamToClaude(event []byte, ctx *transformer.StreamContext) ([]byte,
 	if !ctx.MessageStartSent {
 		ctx.MessageStartSent = true
 		ctx.MessageID = "gemini-msg"
+		// 从 Gemini response 中提取 input_tokens（如果有）
+		inputTokens := ctx.InputTokens // 使用预估的 input tokens 作为后备
+		if resp.UsageMetadata != nil && resp.UsageMetadata.PromptTokenCount > 0 {
+			inputTokens = resp.UsageMetadata.PromptTokenCount
+		}
 		result = append(result, buildClaudeEvent("message_start", map[string]interface{}{
 			"message": map[string]interface{}{
 				"id": ctx.MessageID, "type": "message", "role": "assistant", "content": []interface{}{},
 				"model": ctx.ModelName, "stop_reason": nil, "stop_sequence": nil,
-				"usage": map[string]interface{}{"input_tokens": 0, "output_tokens": 0},
+				"usage": map[string]interface{}{"input_tokens": inputTokens, "output_tokens": 0},
 			},
 		})...)
 	}
@@ -435,9 +442,14 @@ func GeminiStreamToClaude(event []byte, ctx *transformer.StreamContext) ([]byte,
 		if hasFunctionCall || candidate.FinishReason == "TOOL_CODE" {
 			stopReason = "tool_use"
 		}
+		// 从 Gemini response 中提取 output_tokens（如果有）
+		outputTokens := 0
+		if resp.UsageMetadata != nil && resp.UsageMetadata.CandidatesTokenCount > 0 {
+			outputTokens = resp.UsageMetadata.CandidatesTokenCount
+		}
 		result = append(result, buildClaudeEvent("message_delta", map[string]interface{}{
 			"delta": map[string]interface{}{"stop_reason": stopReason, "stop_sequence": nil},
-			"usage": map[string]interface{}{"output_tokens": 0},
+			"usage": map[string]interface{}{"output_tokens": outputTokens},
 		})...)
 		result = append(result, buildClaudeEvent("message_stop", map[string]interface{}{})...)
 		ctx.FinishReasonSent = true
