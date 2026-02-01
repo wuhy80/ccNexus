@@ -246,7 +246,7 @@ span.compact-badge-btn:hover {
     color: var(--text-secondary, #666);
     font-size: 12px;
     flex-shrink: 0;
-    width: 120px;
+    width: 240px;
     cursor: help;
     transition: color 0.2s ease;
 }

@@ -21,6 +21,7 @@ export default {
         errors: 'Errors',
         tokens: 'Tokens',
         successRate: 'Success Rate',
+        avgLatency: 'Latency',
         actions: 'Actions',
         test: 'Test',
         edit: 'Edit',

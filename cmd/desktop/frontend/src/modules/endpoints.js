@@ -343,6 +343,17 @@ export async function renderEndpoints(endpoints) {
             testTip: t('endpoints.testTipUnknown')
         };
 
+        // 计算成功率
+        const successRate = stats.requests > 0
+            ? ((stats.requests - stats.errors) / stats.requests * 100).toFixed(1)
+            : '0.0';
+
+        // 获取延时数据
+        let latencyDisplay = '-';
+        if (statusInfo.latencyMs) {
+            latencyDisplay = formatLatency(statusInfo.latencyMs);
+        }
+
         const status = statusInfo.status;
         const testStatusIcon = statusInfo.testIcon;
         const testStatusTip = statusInfo.testTip || t('endpoints.testTipUnknown');
@@ -373,7 +384,7 @@ export async function renderEndpoints(endpoints) {
                 <p style="display: flex; align-items: center; gap: 8px; min-width: 0;"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🌐 ${ep.apiUrl}</span> <button class="copy-btn" data-copy="${ep.apiUrl}" aria-label="${t('endpoints.copy')}" title="${t('endpoints.copy')}"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em"><path d="M7 4c0-1.1.9-2 2-2h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-1V8c0-2-1-3-3-3H7V4Z" fill="currentColor"></path><path d="M5 7a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h10a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5Z" fill="currentColor"></path></svg></button></p>
                 <p style="display: flex; align-items: center; gap: 8px; min-width: 0;"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🔑 ${maskApiKey(ep.apiKey)}</span> <button class="copy-btn" data-copy="${ep.apiKey}" aria-label="${t('endpoints.copy')}" title="${t('endpoints.copy')}"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em"><path d="M7 4c0-1.1.9-2 2-2h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-1V8c0-2-1-3-3-3H7V4Z" fill="currentColor"></path><path d="M5 7a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h10a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5Z" fill="currentColor"></path></svg></button></p>
                 <p style="color: #666; font-size: 14px; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🔄 ${t('endpoints.transformer')}: ${transformer}${model ? ` (${model})` : ''}</p>
-                <p style="color: #666; font-size: 14px; margin-top: 3px;">📊 ${t('endpoints.requests')}: ${stats.requests} | ${t('endpoints.errors')}: ${stats.errors}</p>
+                <p style="color: #666; font-size: 14px; margin-top: 3px;">📊 ${t('endpoints.requests')}: ${stats.requests} | ❌ ${t('endpoints.errors')}: ${stats.errors} | ✅ ${t('endpoints.successRate')}: ${successRate}% | ⚡ ${t('endpoints.avgLatency')}: ${latencyDisplay}</p>
                 <p style="color: #666; font-size: 14px; margin-top: 3px;">🎯 ${t('endpoints.tokens')}: ${formatTokens(totalTokens)} (${t('statistics.in')}: ${formatTokens(totalInputWithCache)}, ${t('statistics.out')}: ${formatTokens(stats.outputTokens)})</p>
                 ${ep.remark ? `<p style="color: #888; font-size: 13px; margin-top: 5px; font-style: italic;" title="${ep.remark}">💬 ${ep.remark.length > 20 ? ep.remark.substring(0, 20) + '...' : ep.remark}</p>` : ''}
                 ${ep.tags ? `<div class="endpoint-tags">${ep.tags.split(',').map(tag => tag.trim()).filter(tag => tag).map(tag => `<span class="endpoint-tag">${tag}</span>`).join('')}</div>` : ''}
@@ -679,12 +690,23 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
         const model = ep.model || '';
         const isCurrentEndpoint = ep.name === currentEndpointName;
 
+        // 计算成功率
+        const successRate = stats.requests > 0
+            ? ((stats.requests - stats.errors) / stats.requests * 100).toFixed(1)
+            : '0.0';
+
         // 使用统一状态管理获取状态
         const statusInfo = getEndpointStatus(ep.name) || {
             status: ep.status || (enabled ? 'available' : 'disabled'),
             testIcon: '⚠️',
             testTip: t('endpoints.testTipUnknown')
         };
+
+        // 获取延时数据
+        let latencyDisplay = '-';
+        if (statusInfo.latencyMs) {
+            latencyDisplay = formatLatency(statusInfo.latencyMs);
+        }
 
         const status = statusInfo.status;
         const testStatusIcon = statusInfo.testIcon;
@@ -716,7 +738,10 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
         // Include cache tokens in total (cache_creation + cache_read are part of input)
         const totalInputWithCache = (stats.inputTokens || 0) + (stats.cacheCreationTokens || 0) + (stats.cacheReadTokens || 0);
         const totalTokens = totalInputWithCache + (stats.outputTokens || 0);
-        let statsTooltip = `${t('endpoints.requests')}: ${stats.requests} | ${t('endpoints.errors')}: ${stats.errors}\n${t('statistics.in')}: ${formatTokens(totalInputWithCache)} | ${t('statistics.out')}: ${formatTokens(stats.outputTokens)}`;
+        let statsTooltip = `${t('endpoints.requests')}: ${stats.requests} | ${t('endpoints.errors')}: ${stats.errors}\n`;
+        statsTooltip += `${t('endpoints.successRate')}: ${successRate}%\n`;
+        statsTooltip += `${t('endpoints.avgLatency')}: ${latencyDisplay}\n`;
+        statsTooltip += `${t('statistics.in')}: ${formatTokens(totalInputWithCache)} | ${t('statistics.out')}: ${formatTokens(stats.outputTokens)}`;
         if (model) {
             statsTooltip += `\n${t('modal.model')}: ${model}`;
         }
@@ -743,7 +768,7 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
             ${isCurrentEndpoint ? '<span class="btn btn-primary compact-badge-btn">' + t('endpoints.current') + '</span>' : (status === 'available' ? '<button class="btn btn-primary compact-badge-btn" data-action="switch" data-name="' + ep.name + '">' + t('endpoints.switchTo') + '</button>' : '')}
             <span class="compact-url" title="${ep.apiUrl}"><span class="compact-url-icon">🌐</span>${displayUrl}</span>
             <span class="compact-transformer">🔄 ${transformer}</span>
-            <span class="compact-stats" title="${statsTooltip}">📊 ${stats.requests} | 🎯 ${formatTokens(totalTokens)}</span>
+            <span class="compact-stats" title="${statsTooltip}">📊 ${stats.requests} | ✅ ${successRate}% | ⚡ ${latencyDisplay} | 🎯 ${formatTokens(totalTokens)}</span>
             <div class="compact-actions">
                 <label class="toggle-switch">
                     <input type="checkbox" data-index="${index}" ${enabled ? 'checked' : ''}>
@@ -1092,5 +1117,18 @@ async function handleContainerDrop(e) {
             alert(t('endpoints.reorderFailed') + ': ' + error);
             window.loadConfig();
         }
+    }
+}
+
+// 格式化延时显示
+function formatLatency(ms) {
+    if (!ms || ms <= 0) return '-';
+
+    if (ms < 1000) {
+        return `${Math.round(ms)}ms`;
+    } else if (ms < 10000) {
+        return `${(ms / 1000).toFixed(1)}s`;
+    } else {
+        return `${Math.round(ms / 1000)}s`;
     }
 }

@@ -21,6 +21,7 @@ export default {
         errors: '错误数',
         tokens: 'Token 数',
         successRate: '成功率',
+        avgLatency: '延时',
         actions: '操作',
         test: '测试',
         edit: '编辑',
