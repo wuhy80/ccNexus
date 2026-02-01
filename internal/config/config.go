@@ -10,9 +10,10 @@ import (
 type EndpointStatus string
 
 const (
-	EndpointStatusAvailable   EndpointStatus = "available"   // 可用 - 健康检查通过，可接收请求
-	EndpointStatusUnavailable EndpointStatus = "unavailable" // 不可用 - 健康检查失败，不接收请求但继续检查
+	EndpointStatusAvailable   EndpointStatus = "available"   // 可用 - 已验证可用，可接收请求
+	EndpointStatusUnavailable EndpointStatus = "unavailable" // 不可用 - 已验证不可用，不接收请求但继续检查
 	EndpointStatusDisabled    EndpointStatus = "disabled"    // 禁用 - 用户手动禁用，停止所有检查和请求
+	EndpointStatusUntested    EndpointStatus = "untested"    // 未检测 - 未经验证，可以尝试使用
 )
 
 // Endpoint represents a single API endpoint configuration
@@ -43,8 +44,9 @@ func (e *Endpoint) IsEnabled() bool {
 }
 
 // IsAvailable 返回端点是否可用（可接收请求）
+// 包括已验证可用和未检测状态
 func (e *Endpoint) IsAvailable() bool {
-	return e.Status == EndpointStatusAvailable
+	return e.Status == EndpointStatusAvailable || e.Status == EndpointStatusUntested
 }
 
 // SetDisabled 设置为禁用状态
@@ -53,9 +55,9 @@ func (e *Endpoint) SetDisabled() {
 	e.Enabled = false
 }
 
-// SetEnabled 设置为启用状态（初始为不可用，等待健康检查）
+// SetEnabled 设置为启用状态（初始为未检测，可以尝试使用）
 func (e *Endpoint) SetEnabled() {
-	e.Status = EndpointStatusUnavailable
+	e.Status = EndpointStatusUntested
 	e.Enabled = true
 }
 
@@ -317,7 +319,7 @@ func DefaultConfig() *Config {
 				ClientType:  "claude",
 				APIUrl:      "api.anthropic.com",
 				APIKey:      "your-api-key-here",
-				Status:      EndpointStatusAvailable, // 默认为可用状态
+				Status:      EndpointStatusUntested, // 默认为未检测状态
 				Enabled:     true,
 				Transformer: "claude",
 			},
@@ -417,7 +419,7 @@ func (c *Config) GetEnabledEndpointsByClient(clientType string) []Endpoint {
 	return filtered
 }
 
-// GetAvailableEndpointsByClient 返回可用状态的端点（只包含健康检查通过的端点）
+// GetAvailableEndpointsByClient 返回可用状态的端点（包括已验证可用和未检测的端点）
 func (c *Config) GetAvailableEndpointsByClient(clientType string) []Endpoint {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -432,7 +434,8 @@ func (c *Config) GetAvailableEndpointsByClient(clientType string) []Endpoint {
 		if epClientType == "" {
 			epClientType = "claude"
 		}
-		if epClientType == clientType && ep.Status == EndpointStatusAvailable {
+		// 允许使用 available 和 untested 状态的端点
+		if epClientType == clientType && (ep.Status == EndpointStatusAvailable || ep.Status == EndpointStatusUntested) {
 			available = append(available, ep)
 		}
 	}
@@ -993,7 +996,7 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 		// 兼容处理：如果 status 为空，从 enabled 推断
 		if endpoint.Status == "" {
 			if endpoint.Enabled {
-				endpoint.Status = EndpointStatusAvailable
+				endpoint.Status = EndpointStatusUntested // 旧配置迁移：启用的端点设为未检测状态
 			} else {
 				endpoint.Status = EndpointStatusDisabled
 			}

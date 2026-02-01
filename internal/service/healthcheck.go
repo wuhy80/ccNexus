@@ -209,8 +209,9 @@ func (h *HealthCheckService) checkEndpoint(endpoint config.Endpoint) {
 		status = "healthy"
 		isHealthy = true
 
-		// 自动设置为可用状态
-		if endpoint.Status != config.EndpointStatusAvailable {
+		// 自动设置为可用状态（包括 untested 和 unavailable）
+		if endpoint.Status == config.EndpointStatusUntested ||
+			endpoint.Status == config.EndpointStatusUnavailable {
 			h.setEndpointAvailable(endpoint.Name, clientType)
 		}
 	} else if statusCode == 401 || statusCode == 403 {
@@ -228,8 +229,9 @@ func (h *HealthCheckService) checkEndpoint(endpoint config.Endpoint) {
 			errorMsg = err.Error()
 		}
 
-		// 自动设置为不可用状态
-		if endpoint.Status == config.EndpointStatusAvailable {
+		// 自动设置为不可用状态（包括 untested 和 available）
+		if endpoint.Status == config.EndpointStatusUntested ||
+			endpoint.Status == config.EndpointStatusAvailable {
 			h.setEndpointUnavailable(endpoint.Name, clientType)
 		}
 	}

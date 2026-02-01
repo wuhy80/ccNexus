@@ -355,6 +355,8 @@ export async function renderEndpoints(endpoints) {
             statusBadge = '<span class="status-badge status-warning" title="' + t('endpoints.statusWarning') + '">●</span>';
         } else if (status === 'unavailable') {
             statusBadge = '<span class="status-badge status-unavailable" title="' + t('endpoints.statusUnavailable') + '">●</span>';
+        } else if (status === 'untested') {
+            statusBadge = '<span class="status-badge status-untested" title="' + t('endpoints.statusUntested') + '">●</span>';
         } else if (status === 'disabled') {
             statusBadge = '<span class="status-badge status-disabled" title="' + t('endpoints.statusDisabled') + '">●</span>';
         }
@@ -696,6 +698,8 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
             statusBadge = '<span class="status-badge status-warning" title="' + t('endpoints.statusWarning') + '">●</span>';
         } else if (status === 'unavailable') {
             statusBadge = '<span class="status-badge status-unavailable" title="' + t('endpoints.statusUnavailable') + '">●</span>';
+        } else if (status === 'untested') {
+            statusBadge = '<span class="status-badge status-untested" title="' + t('endpoints.statusUntested') + '">●</span>';
         } else if (status === 'disabled') {
             statusBadge = '<span class="status-badge status-disabled" title="' + t('endpoints.statusDisabled') + '">●</span>';
         }

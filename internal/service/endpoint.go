@@ -134,6 +134,7 @@ func (e *EndpointService) AddEndpoint(clientType, name, apiUrl, apiKey, transfor
         ClientType:         clientType,
         APIUrl:             apiUrl,
         APIKey:             apiKey,
+        Status:             config.EndpointStatusUntested, // 新端点默认为未检测状态
         Enabled:            true,
         Transformer:        transformer,
         Model:              model,
@@ -327,8 +328,8 @@ func (e *EndpointService) ToggleEndpoint(clientType string, index int, enabled b
     // 根据 enabled 参数设置状态
     var newStatus config.EndpointStatus
     if enabled {
-        // 启用：设置为不可用，等待健康检查
-        newStatus = config.EndpointStatusUnavailable
+        // 启用：设置为未检测状态，允许尝试使用
+        newStatus = config.EndpointStatusUntested
     } else {
         // 禁用
         newStatus = config.EndpointStatusDisabled
@@ -353,7 +354,7 @@ func (e *EndpointService) ToggleEndpoint(clientType string, index int, enabled b
     }
 
     if enabled {
-        logger.Info("Endpoint enabled: %s (client: %s), waiting for health check", endpointName, clientType)
+        logger.Info("Endpoint enabled: %s (client: %s), status set to untested", endpointName, clientType)
     } else {
         logger.Info("Endpoint disabled: %s (client: %s)", endpointName, clientType)
     }
@@ -1549,14 +1550,29 @@ func (e *EndpointService) TestAllEndpointsAndOptimize(clientType string) string 
 	enabledCount := 0
 	disabledCount := 0
 
+	// 应用更改：根据检测结果设置状态
+	// 注意：跳过禁用状态的端点，不自动启用
 	for i, r := range results {
 		action := "unchanged"
-		wasEnabled := r.endpoint.Enabled
+		wasEnabled := r.endpoint.IsEnabled()
+
+		// 跳过禁用状态的端点
+		if r.endpoint.Status == config.EndpointStatusDisabled {
+			testResults[i] = EndpointTestResult{
+				Name:         r.endpoint.Name,
+				Success:      r.success,
+				LatencyMs:    r.latencyMs,
+				ErrorMessage: r.errorMsg,
+				Action:       action,
+				WasEnabled:   wasEnabled,
+			}
+			continue
+		}
 
 		if r.success {
-			// 检测成功
-			if !r.endpoint.Enabled {
-				// 之前禁用的，现在启用
+			// 检测成功：设置为可用（包括 untested 和 unavailable）
+			if r.endpoint.Status != config.EndpointStatusAvailable {
+				e.config.SetEndpointStatus(r.endpoint.Name, clientType, config.EndpointStatusAvailable)
 				action = "enabled"
 				enabledCount++
 			}
@@ -1564,9 +1580,9 @@ func (e *EndpointService) TestAllEndpointsAndOptimize(clientType string) string 
 				action = "set_current"
 			}
 		} else {
-			// 检测失败
-			if r.endpoint.Enabled {
-				// 之前启用的，现在禁用
+			// 检测失败：设置为不可用（包括 untested 和 available）
+			if r.endpoint.Status != config.EndpointStatusUnavailable {
+				e.config.SetEndpointStatus(r.endpoint.Name, clientType, config.EndpointStatusUnavailable)
 				action = "disabled"
 				disabledCount++
 			}
@@ -1579,25 +1595,6 @@ func (e *EndpointService) TestAllEndpointsAndOptimize(clientType string) string 
 			ErrorMessage: r.errorMsg,
 			Action:       action,
 			WasEnabled:   wasEnabled,
-		}
-	}
-
-	// 应用更改：根据检测结果设置状态
-	// 注意：跳过禁用状态的端点，不自动启用
-	for _, r := range results {
-		// 跳过禁用状态的端点
-		if r.endpoint.Status == config.EndpointStatusDisabled {
-			continue
-		}
-
-		if r.success {
-			// 检测成功：设置为可用
-			e.config.SetEndpointStatus(r.endpoint.Name, clientType, config.EndpointStatusAvailable)
-		} else {
-			// 检测失败：设置为不可用（如果之前是可用的）
-			if r.endpoint.Status == config.EndpointStatusAvailable {
-				e.config.SetEndpointStatus(r.endpoint.Name, clientType, config.EndpointStatusUnavailable)
-			}
 		}
 	}
 

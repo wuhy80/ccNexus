@@ -272,7 +272,8 @@ func (p *Proxy) getEnabledEndpoints() []config.Endpoint {
 	allEndpoints := p.config.GetEndpoints()
 	available := make([]config.Endpoint, 0)
 	for _, ep := range allEndpoints {
-		if ep.Status == config.EndpointStatusAvailable {
+		// 允许使用 available 和 untested 状态的端点
+		if ep.Status == config.EndpointStatusAvailable || ep.Status == config.EndpointStatusUntested {
 			available = append(available, ep)
 		}
 	}
@@ -280,7 +281,7 @@ func (p *Proxy) getEnabledEndpoints() []config.Endpoint {
 }
 
 // getEnabledEndpointsForClient returns available endpoints for a specific client type
-// 注意：此方法已改为只返回可用状态的端点
+// 注意：此方法返回可用状态和未检测状态的端点
 func (p *Proxy) getEnabledEndpointsForClient(clientType ClientType) []config.Endpoint {
 	return p.config.GetAvailableEndpointsByClient(string(clientType))
 }
@@ -1293,6 +1294,12 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 func (p *Proxy) handleEndpointRotation(fixedEndpoint *config.Endpoint, clientType ClientType, endpoint config.Endpoint, attempts int) bool {
 	if attempts < 2 {
 		return false
+	}
+
+	// 请求失败时，将 untested 状态的端点标记为 unavailable
+	if endpoint.Status == config.EndpointStatusUntested {
+		p.config.SetEndpointStatus(endpoint.Name, string(clientType), config.EndpointStatusUnavailable)
+		logger.Info("Endpoint %s (client: %s) marked as UNAVAILABLE after failed attempt", endpoint.Name, clientType)
 	}
 
 	if fixedEndpoint == nil {

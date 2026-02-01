@@ -604,7 +604,7 @@ func (s *SQLiteStorage) GetEndpoints() ([]Endpoint, error) {
 			ep.Status = status
 		} else {
 			if ep.Enabled {
-				ep.Status = "available"
+				ep.Status = "untested" // 旧数据迁移：启用的端点设为未检测状态
 			} else {
 				ep.Status = "disabled"
 			}
@@ -638,7 +638,7 @@ func (s *SQLiteStorage) GetEndpointsByClient(clientType string) ([]Endpoint, err
 			ep.Status = status
 		} else {
 			if ep.Enabled {
-				ep.Status = "available"
+				ep.Status = "untested" // 旧数据迁移：启用的端点设为未检测状态
 			} else {
 				ep.Status = "disabled"
 			}

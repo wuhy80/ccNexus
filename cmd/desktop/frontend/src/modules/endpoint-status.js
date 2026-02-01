@@ -165,7 +165,17 @@ async function calculateEndpointStatus(endpoint, checkResults) {
         };
     }
 
-    // 5. 使用配置文件状态（兜底）
+    // 5. 检查未检测状态
+    if (endpoint.status === 'untested') {
+        return {
+            status: 'untested',
+            source: 'config',
+            testIcon: '❓',
+            testTip: t('monitor.untested')
+        };
+    }
+
+    // 6. 使用配置文件状态（兜底）
     return {
         status: endpoint.status || 'unknown',
         source: 'config',

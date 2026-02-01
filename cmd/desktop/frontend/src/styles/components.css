@@ -725,6 +725,10 @@
     color: #ef4444;
 }
 
+.status-untested {
+    color: #9ca3af;
+}
+
 .status-disabled {
     color: #6b7280;
 }
