@@ -255,6 +255,27 @@ span.compact-badge-btn:hover {
     color: var(--primary-color, #667eea);
 }
 
+.compact-tokens {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: var(--primary-color, #4a90e2);
+    font-size: 13px;
+    flex-shrink: 0;
+    min-width: 180px;
+    cursor: help;
+    transition: all 0.2s ease;
+    padding: 4px 8px;
+    background: var(--bg-tertiary, rgba(74, 144, 226, 0.08));
+    border-radius: 4px;
+}
+
+.compact-tokens:hover {
+    background: var(--bg-tertiary, rgba(74, 144, 226, 0.15));
+    transform: translateY(-1px);
+}
+
 .compact-actions {
     display: flex;
     align-items: center;

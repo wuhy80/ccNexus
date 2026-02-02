@@ -385,7 +385,17 @@ export async function renderEndpoints(endpoints) {
                 <p style="display: flex; align-items: center; gap: 8px; min-width: 0;"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🔑 ${maskApiKey(ep.apiKey)}</span> <button class="copy-btn" data-copy="${ep.apiKey}" aria-label="${t('endpoints.copy')}" title="${t('endpoints.copy')}"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em"><path d="M7 4c0-1.1.9-2 2-2h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-1V8c0-2-1-3-3-3H7V4Z" fill="currentColor"></path><path d="M5 7a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h10a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5Z" fill="currentColor"></path></svg></button></p>
                 <p style="color: #666; font-size: 14px; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🔄 ${t('endpoints.transformer')}: ${transformer}${model ? ` (${model})` : ''}</p>
                 <p style="color: #666; font-size: 14px; margin-top: 3px;">📊 ${t('endpoints.requests')}: ${stats.requests} | ❌ ${t('endpoints.errors')}: ${stats.errors} | ✅ ${t('endpoints.successRate')}: ${successRate}% | ⚡ ${t('endpoints.avgLatency')}: ${latencyDisplay}</p>
-                <p style="color: #666; font-size: 14px; margin-top: 3px;">🎯 ${t('endpoints.tokens')}: ${formatTokens(totalTokens)} (${t('statistics.in')}: ${formatTokens(totalInputWithCache)}, ${t('statistics.out')}: ${formatTokens(stats.outputTokens)})</p>
+                <div style="background: var(--bg-secondary, #f5f5f5); border-radius: 6px; padding: 10px; margin-top: 8px; border-left: 3px solid var(--primary-color, #4a90e2);">
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                        <span style="font-size: 16px;">🎯</span>
+                        <span style="font-weight: 600; color: var(--text-primary, #333); font-size: 14px;">${t('endpoints.tokens')}:</span>
+                        <span style="font-weight: 700; color: var(--primary-color, #4a90e2); font-size: 16px;">${formatTokens(totalTokens)}</span>
+                    </div>
+                    <div style="display: flex; gap: 16px; font-size: 13px; color: var(--text-secondary, #666); padding-left: 22px;">
+                        <span>📥 ${t('statistics.in')}: <strong style="color: var(--success-color, #10b981);">${formatTokens(totalInputWithCache)}</strong></span>
+                        <span>📤 ${t('statistics.out')}: <strong style="color: var(--warning-color, #f59e0b);">${formatTokens(stats.outputTokens)}</strong></span>
+                    </div>
+                </div>
                 ${ep.remark ? `<p style="color: #888; font-size: 13px; margin-top: 5px; font-style: italic;" title="${ep.remark}">💬 ${ep.remark.length > 20 ? ep.remark.substring(0, 20) + '...' : ep.remark}</p>` : ''}
                 ${ep.tags ? `<div class="endpoint-tags">${ep.tags.split(',').map(tag => tag.trim()).filter(tag => tag).map(tag => `<span class="endpoint-tag">${tag}</span>`).join('')}</div>` : ''}
             </div>
@@ -741,7 +751,9 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
         let statsTooltip = `${t('endpoints.requests')}: ${stats.requests} | ${t('endpoints.errors')}: ${stats.errors}\n`;
         statsTooltip += `${t('endpoints.successRate')}: ${successRate}%\n`;
         statsTooltip += `${t('endpoints.avgLatency')}: ${latencyDisplay}\n`;
-        statsTooltip += `${t('statistics.in')}: ${formatTokens(totalInputWithCache)} | ${t('statistics.out')}: ${formatTokens(stats.outputTokens)}`;
+        statsTooltip += `${t('endpoints.tokens')}: ${formatTokens(totalTokens)}\n`;
+        statsTooltip += `  📥 ${t('statistics.in')}: ${formatTokens(totalInputWithCache)}\n`;
+        statsTooltip += `  📤 ${t('statistics.out')}: ${formatTokens(stats.outputTokens)}`;
         if (model) {
             statsTooltip += `\n${t('modal.model')}: ${model}`;
         }
@@ -768,7 +780,8 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
             ${isCurrentEndpoint ? '<span class="btn btn-primary compact-badge-btn">' + t('endpoints.current') + '</span>' : (status === 'available' ? '<button class="btn btn-primary compact-badge-btn" data-action="switch" data-name="' + ep.name + '">' + t('endpoints.switchTo') + '</button>' : '')}
             <span class="compact-url" title="${ep.apiUrl}"><span class="compact-url-icon">🌐</span>${displayUrl}</span>
             <span class="compact-transformer">🔄 ${transformer}</span>
-            <span class="compact-stats" title="${statsTooltip}">📊 ${stats.requests} | ✅ ${successRate}% | ⚡ ${latencyDisplay} | 🎯 ${formatTokens(totalTokens)}</span>
+            <span class="compact-stats" title="${statsTooltip}">📊 ${stats.requests} | ✅ ${successRate}% | ⚡ ${latencyDisplay}</span>
+            <span class="compact-tokens" title="${statsTooltip}" style="font-weight: 600; color: var(--primary-color, #4a90e2);">🎯 ${formatTokens(totalTokens)} <span style="font-size: 11px; color: var(--text-secondary, #666);">(📥${formatTokens(totalInputWithCache)} 📤${formatTokens(stats.outputTokens)})</span></span>
             <div class="compact-actions">
                 <label class="toggle-switch">
                     <input type="checkbox" data-index="${index}" ${enabled ? 'checked' : ''}>
