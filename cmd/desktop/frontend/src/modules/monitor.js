@@ -79,8 +79,11 @@ function handleMonitorEvent(event) {
                 activeRequests.delete(event.request.requestId);
                 renderActiveRequests();
 
-                // Add to recent requests history
-                addToRecentRequests(event.request);
+                // 从后端重新加载最近请求列表，以获取完整的 token 统计信息
+                // 使用异步加载，避免阻塞事件处理
+                loadRecentRequests().catch(err => {
+                    console.error('Failed to reload recent requests:', err);
+                });
 
                 // Update throughput statistics
                 updateThroughputOnCompletion(event.request);
