@@ -266,24 +266,26 @@ func (p *Proxy) Stop() error {
 	return nil
 }
 
-// getEnabledEndpoints returns available endpoints (only endpoints with status=available)
-// 注意：此方法已改为只返回可用状态的端点，不再返回所有启用的端点
+// getEnabledEndpoints returns all non-disabled endpoints
+// 返回所有非禁用状态的端点，包括 available、untested 和 unavailable
+// unavailable 状态的端点也会被返回，以便在没有其他可用端点时尝试使用
 func (p *Proxy) getEnabledEndpoints() []config.Endpoint {
 	allEndpoints := p.config.GetEndpoints()
-	available := make([]config.Endpoint, 0)
+	enabled := make([]config.Endpoint, 0)
 	for _, ep := range allEndpoints {
-		// 允许使用 available 和 untested 状态的端点
-		if ep.Status == config.EndpointStatusAvailable || ep.Status == config.EndpointStatusUntested {
-			available = append(available, ep)
+		// 返回所有非禁用状态的端点
+		if ep.Status != config.EndpointStatusDisabled {
+			enabled = append(enabled, ep)
 		}
 	}
-	return available
+	return enabled
 }
 
-// getEnabledEndpointsForClient returns available endpoints for a specific client type
-// 注意：此方法返回可用状态和未检测状态的端点
+// getEnabledEndpointsForClient returns all non-disabled endpoints for a specific client type
+// 返回所有非禁用状态的端点，包括 available、untested 和 unavailable
+// unavailable 状态的端点也会被返回，以便在没有其他可用端点时尝试使用
 func (p *Proxy) getEnabledEndpointsForClient(clientType ClientType) []config.Endpoint {
-	return p.config.GetAvailableEndpointsByClient(string(clientType))
+	return p.config.GetEnabledEndpointsByClient(string(clientType))
 }
 
 // getCurrentEndpoint returns the current endpoint (thread-safe) - legacy for backward compatibility
@@ -321,15 +323,15 @@ func (p *Proxy) selectEndpointForRequest(clientType ClientType, requestModel str
 	// 1. 检查会话亲和性
 	if p.sessionAffinity != nil && sessionID != "" {
 		if endpointName, exists := p.sessionAffinity.GetEndpointForSession(sessionID, string(clientType)); exists {
-			// 验证端点仍然可用（必须是 available 状态）
+			// 验证端点仍然可用（非禁用状态即可尝试使用）
 			endpoint := p.config.GetEndpointByName(endpointName, string(clientType))
-			if endpoint != nil && endpoint.Status == config.EndpointStatusAvailable {
+			if endpoint != nil && endpoint.Status != config.EndpointStatusDisabled {
 				logger.Debug("[SESSION:%s] Using bound endpoint: %s", sessionID, endpointName)
 				return *endpoint
 			} else {
-				// 端点不可用，解除绑定
+				// 端点已禁用，解除绑定
 				p.sessionAffinity.UnbindSession(sessionID)
-				logger.Debug("[SESSION:%s] Endpoint %s unavailable, unbinding", sessionID, endpointName)
+				logger.Debug("[SESSION:%s] Endpoint %s disabled, unbinding", sessionID, endpointName)
 			}
 		}
 	}
@@ -359,7 +361,7 @@ func (p *Proxy) selectEndpointForRequest(clientType ClientType, requestModel str
 	// 3. 回退到优先级选择（默认行为）
 	// 即使没有启用高级路由策略，也应该按优先级选择端点
 	if p.router != nil {
-		endpoint, err := p.router.selectByPriority(p.config.GetAvailableEndpointsByClient(string(clientType)))
+		endpoint, err := p.router.selectByPriority(p.config.GetEnabledEndpointsByClient(string(clientType)))
 		if err == nil {
 			logger.Debug("[PRIORITY:%s] Selected endpoint: %s", clientType, endpoint.Name)
 			selectedEndpoint = endpoint

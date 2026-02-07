@@ -419,29 +419,6 @@ func (c *Config) GetEnabledEndpointsByClient(clientType string) []Endpoint {
 	return filtered
 }
 
-// GetAvailableEndpointsByClient 返回可用状态的端点（包括已验证可用和未检测的端点）
-func (c *Config) GetAvailableEndpointsByClient(clientType string) []Endpoint {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	if clientType == "" {
-		clientType = "claude"
-	}
-
-	var available []Endpoint
-	for _, ep := range c.Endpoints {
-		epClientType := ep.ClientType
-		if epClientType == "" {
-			epClientType = "claude"
-		}
-		// 允许使用 available 和 untested 状态的端点
-		if epClientType == clientType && (ep.Status == EndpointStatusAvailable || ep.Status == EndpointStatusUntested) {
-			available = append(available, ep)
-		}
-	}
-	return available
-}
-
 // GetPort returns the configured port (thread-safe)
 func (c *Config) GetPort() int {
 	c.mu.RLock()

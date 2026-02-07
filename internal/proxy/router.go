@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/rand"
 	"sort"
@@ -38,13 +39,14 @@ func NewRouter(cfg *config.Config, monitor *Monitor) *Router {
 
 // SelectEndpoint 选择端点（组合策略）
 // 1. 模型匹配过滤 → 2. 配额过滤 → 3. 按成本/负载/优先级排序选择
-// 注意：只从可用状态(available)的端点中选择
+// 注意：从所有非禁用状态的端点中选择，包括 available、untested 和 unavailable
+// 这样即使端点未经健康检查验证，也可以尝试使用
 func (r *Router) SelectEndpoint(clientType ClientType, requestModel string, quotaTracker *QuotaTracker) (config.Endpoint, error) {
 	routingCfg := r.config.GetRoutingConfig()
-	endpoints := r.config.GetAvailableEndpointsByClient(string(clientType))
+	endpoints := r.config.GetEnabledEndpointsByClient(string(clientType))
 
 	if len(endpoints) == 0 {
-		return config.Endpoint{}, errors.New("no available endpoints for client type")
+		return config.Endpoint{}, fmt.Errorf("没有可用的 %s 类型端点，请检查端点配置", clientType)
 	}
 
 	// 记录初始可用端点
@@ -65,10 +67,14 @@ func (r *Router) SelectEndpoint(clientType ClientType, requestModel string, quot
 	}
 
 	if len(endpoints) == 0 {
-		return config.Endpoint{}, errors.New("no available endpoints after filtering")
+		return config.Endpoint{}, fmt.Errorf("过滤后没有可用端点（模型=%s）", requestModel)
 	}
 
-	// 步骤3: 排序选择
+	// 步骤3: 状态优先级过滤
+	// 优先选择 available 状态的端点，其次是 untested，最后是 unavailable
+	endpoints = r.filterByStatusPriority(endpoints)
+
+	// 步骤4: 排序选择
 	var selectedEndpoint config.Endpoint
 	var err error
 	var selectionMethod string
@@ -161,6 +167,43 @@ func (r *Router) filterByQuota(endpoints []config.Endpoint, clientType ClientTyp
 		return endpoints // 所有端点配额用尽时返回全部（让请求继续但可能失败）
 	}
 	return available
+}
+
+// filterByStatusPriority 按状态优先级过滤端点
+// 优先级：available > untested > unavailable
+// 如果有 available 状态的端点，只返回 available 的
+// 如果没有 available 但有 untested，只返回 untested 的
+// 如果都没有，返回 unavailable 的（作为最后备选）
+func (r *Router) filterByStatusPriority(endpoints []config.Endpoint) []config.Endpoint {
+	var available, untested, unavailable []config.Endpoint
+
+	for _, ep := range endpoints {
+		switch ep.Status {
+		case config.EndpointStatusAvailable:
+			available = append(available, ep)
+		case config.EndpointStatusUntested:
+			untested = append(untested, ep)
+		case config.EndpointStatusUnavailable:
+			unavailable = append(unavailable, ep)
+		}
+	}
+
+	// 按优先级返回
+	if len(available) > 0 {
+		logger.Debug("[路由选择] 状态过滤: 使用 %d 个 available 状态端点", len(available))
+		return available
+	}
+	if len(untested) > 0 {
+		logger.Debug("[路由选择] 状态过滤: 使用 %d 个 untested 状态端点", len(untested))
+		return untested
+	}
+	if len(unavailable) > 0 {
+		logger.Debug("[路由选择] 状态过滤: 使用 %d 个 unavailable 状态端点（备选）", len(unavailable))
+		return unavailable
+	}
+
+	// 不应该到达这里，但为了安全返回原列表
+	return endpoints
 }
 
 // selectByCost 按成本排序选择（成本越低越优先）
